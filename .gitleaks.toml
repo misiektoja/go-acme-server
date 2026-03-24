@@ -2,3 +2,12 @@ title = "go-acme-server"
 
 [extend]
 useDefault = true
+
+[[allowlists]]
+description = "Paths that never enter the repository or that hold build output only"
+paths = [
+  # Ignored directories checked for tracked files by the gitleaks Make target.
+  '''^local/''',
+  # Downloaded tool binaries.
+  '''^bin/''',
+]
