@@ -1,0 +1,54 @@
+version: "2"
+run:
+  allow-parallel-runners: true
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - copyloopvar
+    - dupl
+    - errcheck
+    - errorlint
+    - exhaustive
+    - gocritic
+    - goconst
+    - gocyclo
+    - gosec
+    - govet
+    - ineffassign
+    - lll
+    - misspell
+    - modernize
+    - nakedret
+    - noctx
+    - prealloc
+    - revive
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+  settings:
+    revive:
+      rules:
+        - name: comment-spacings
+        - name: import-shadowing
+  exclusions:
+    generated: lax
+    rules:
+      # Test code closes bodies, ignores errors and repeats setup on purpose.
+      - linters:
+          - bodyclose
+          - dupl
+          - errcheck
+          - gosec
+          - lll
+          - noctx
+        path: _test\.go$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/misiektoja/go-acme-server
