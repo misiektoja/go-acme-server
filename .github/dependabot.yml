@@ -1,0 +1,42 @@
+# Keeps dependencies current without letting updates arrive faster than they can be reviewed.
+#
+# Go modules and GitHub Actions are grouped so one pull request carries a whole ecosystem's patch and
+# minor updates. Major updates stay separate, because they need their own validation run.
+version: 2
+
+updates:
+  - package-ecosystem: gomod
+    directory: "/"
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: build
+      include: scope
+    groups:
+      go-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      actions-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
