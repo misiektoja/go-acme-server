@@ -203,6 +203,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.serveNewNonce(w, r)
 	case resourceNewAccount:
 		s.servePOST(w, r, s.serveNewAccount)
+	case resourceNewOrder:
+		s.servePOST(w, r, s.serveNewOrder)
 	case resourceKeyChange:
 		s.servePOST(w, r, s.serveKeyChange)
 	default:
@@ -228,6 +230,12 @@ func (s *Server) serveResource(w http.ResponseWriter, r *http.Request, rel strin
 		handler = func(w http.ResponseWriter, r *http.Request) { s.serveAccount(w, r, id) }
 	case kind+"/" == accountPathPrefix && suffix == "orders":
 		handler = func(w http.ResponseWriter, r *http.Request) { s.serveAccountOrders(w, r, id) }
+	case kind+"/" == orderPathPrefix && suffix == "":
+		handler = func(w http.ResponseWriter, r *http.Request) { s.serveOrder(w, r, id) }
+	case kind+"/" == authzPathPrefix && suffix == "":
+		handler = func(w http.ResponseWriter, r *http.Request) { s.serveAuthorization(w, r, id) }
+	case kind+"/" == challengePathPrefix && suffix == "":
+		handler = func(w http.ResponseWriter, r *http.Request) { s.serveChallenge(w, r, id) }
 	default:
 		s.writeProblem(r.Context(), w, notFound())
 		return
@@ -256,6 +264,7 @@ func (s *Server) serveDirectory(w http.ResponseWriter, r *http.Request) {
 	directory := map[string]any{
 		"newNonce":   s.resourceURL(resourceNewNonce),
 		"newAccount": s.resourceURL(resourceNewAccount),
+		"newOrder":   s.resourceURL(resourceNewOrder),
 		"keyChange":  s.resourceURL(resourceKeyChange),
 	}
 	if s.hasMeta {
