@@ -205,6 +205,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.servePOST(w, r, s.serveNewAccount)
 	case resourceNewOrder:
 		s.servePOST(w, r, s.serveNewOrder)
+	case resourceRevokeCert:
+		s.servePOST(w, r, s.serveRevokeCert)
 	case resourceKeyChange:
 		s.servePOST(w, r, s.serveKeyChange)
 	default:
@@ -232,10 +234,14 @@ func (s *Server) serveResource(w http.ResponseWriter, r *http.Request, rel strin
 		handler = func(w http.ResponseWriter, r *http.Request) { s.serveAccountOrders(w, r, id) }
 	case kind+"/" == orderPathPrefix && suffix == "":
 		handler = func(w http.ResponseWriter, r *http.Request) { s.serveOrder(w, r, id) }
+	case kind+"/" == orderPathPrefix && suffix == "finalize":
+		handler = func(w http.ResponseWriter, r *http.Request) { s.serveFinalize(w, r, id) }
 	case kind+"/" == authzPathPrefix && suffix == "":
 		handler = func(w http.ResponseWriter, r *http.Request) { s.serveAuthorization(w, r, id) }
 	case kind+"/" == challengePathPrefix && suffix == "":
 		handler = func(w http.ResponseWriter, r *http.Request) { s.serveChallenge(w, r, id) }
+	case kind+"/" == certPathPrefix && suffix == "":
+		handler = func(w http.ResponseWriter, r *http.Request) { s.serveCertificate(w, r, id) }
 	default:
 		s.writeProblem(r.Context(), w, notFound())
 		return
@@ -265,6 +271,7 @@ func (s *Server) serveDirectory(w http.ResponseWriter, r *http.Request) {
 		"newNonce":   s.resourceURL(resourceNewNonce),
 		"newAccount": s.resourceURL(resourceNewAccount),
 		"newOrder":   s.resourceURL(resourceNewOrder),
+		"revokeCert": s.resourceURL(resourceRevokeCert),
 		"keyChange":  s.resourceURL(resourceKeyChange),
 	}
 	if s.hasMeta {
