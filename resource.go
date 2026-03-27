@@ -55,10 +55,11 @@ type Order struct {
 	Revision  uint64
 }
 
-// A stored authorization resource.
+// A stored authorization resource. Each authorization belongs to exactly one order.
 type Authorization struct {
 	ID         string
 	AccountID  string
+	OrderID    string
 	Identifier Identifier
 	Status     AuthorizationStatus
 	Expires    time.Time
@@ -99,6 +100,15 @@ type Certificate struct {
 	RevokedAt time.Time
 	// The CRL reason code recorded at revocation.
 	RevocationReason int
-	CreatedAt        time.Time
-	Revision         uint64
+	// The validation evidence the issuer received, kept for host audit needs.
+	Validations []Validation
+	CreatedAt   time.Time
+	Revision    uint64
+}
+
+// Records how one identifier of an order was validated.
+type Validation struct {
+	Identifier Identifier
+	Type       ChallengeType
+	Validated  time.Time
 }
