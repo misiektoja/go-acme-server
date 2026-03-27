@@ -6,10 +6,38 @@ import (
 	"log/slog"
 	"net/url"
 	"strings"
+	"time"
 )
 
-// Bounds request bodies when Config.MaxRequestBody is zero.
-const DefaultMaxRequestBody = 64 << 10
+// Defaults used when Config leaves a field zero.
+const (
+	DefaultMaxRequestBody        = 64 << 10
+	DefaultOrderLifetime         = 7 * 24 * time.Hour
+	DefaultAuthorizationLifetime = 30 * 24 * time.Hour
+	DefaultMaxIdentifiers        = 100
+)
+
+// Configures Run. Zero values select the defaults.
+type WorkerConfig struct {
+	// The number of tasks processed at the same time. Defaults to 4.
+	Concurrency int
+	// How often an idle worker looks for work. Defaults to one second.
+	PollInterval time.Duration
+	// How long a claimed task stays leased. Defaults to two minutes.
+	Lease time.Duration
+	// The time limit of one validator or issuer call. Defaults to 30 seconds.
+	TaskTimeout time.Duration
+	// The number of claims after which a failing task gives up. Defaults to 5.
+	MaxAttempts int
+	// The first retry delay, doubled on every further attempt. Defaults to five seconds.
+	RetryDelay time.Duration
+	// How long accepted work may wait unclaimed before Ready reports a problem. Defaults to
+	// one minute.
+	StaleAfter time.Duration
+	// Marks that another process runs Run against the same store, which silences the warning
+	// logged when work is accepted while Run is inactive here.
+	External bool
+}
 
 // The optional metadata object of the directory, see RFC 8555 section 7.1.1.
 type DirectoryMeta struct {
@@ -19,7 +47,7 @@ type DirectoryMeta struct {
 	ExternalAccountRequired bool
 }
 
-// Configures a Server. Store and Nonces are required.
+// Configures a Server. Store, Nonces, Issuer, Revoker and at least one validator are required.
 type Config struct {
 	// The absolute URL the handler is served under, including any path prefix.
 	// It must use https unless AllowInsecureBaseURL is set.
@@ -35,6 +63,25 @@ type Config struct {
 	Meta   DirectoryMeta
 	// Bounds the size of a request body in bytes. Zero selects DefaultMaxRequestBody.
 	MaxRequestBody int64
+	Issuer         Issuer
+	Revoker        Revoker
+	// The challenge types offered to clients. Only configured types appear in authorizations.
+	Validators map[ChallengeType]Validator
+	// Verifies external account bindings. Required when Meta.ExternalAccountRequired is set.
+	ExternalAccounts ExternalAccountKeys
+	// Reviews new accounts and orders. Defaults to AllowAll.
+	Policy Policy
+	// Refuses new accounts that do not agree to Meta.TermsOfService.
+	RequireTermsOfServiceAgreed bool
+	// Accepts IP identifiers as specified in RFC 8738.
+	IPIdentifiers bool
+	// How long a new order and its pending authorizations stay valid.
+	OrderLifetime time.Duration
+	// How long a validated authorization stays valid.
+	AuthorizationLifetime time.Duration
+	// Bounds the identifiers of one order.
+	MaxIdentifiers int
+	Workers        WorkerConfig
 }
 
 // Validates the base URL and returns it with a trailing slash.
