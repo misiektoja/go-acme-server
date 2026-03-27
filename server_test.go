@@ -19,7 +19,9 @@ func newTestServer(t *testing.T, meta DirectoryMeta) (*Server, *testStore, *nonc
 	t.Helper()
 	store := newTestStore()
 	nonces := nonce.New(nonce.Options{})
-	s, err := New(Config{BaseURL: testBaseURL, Store: store, Nonces: nonces, Meta: meta})
+	cfg := stubConfig(store, nonces)
+	cfg.Meta = meta
+	s, err := New(cfg)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -28,34 +30,58 @@ func newTestServer(t *testing.T, meta DirectoryMeta) (*Server, *testStore, *nonc
 
 func TestNewValidatesConfig(t *testing.T) {
 	store, nonces := newTestStore(), nonce.New(nonce.Options{})
-	cases := map[string]Config{
-		"missing store":        {BaseURL: testBaseURL, Nonces: nonces},
-		"missing nonces":       {BaseURL: testBaseURL, Store: store},
-		"missing base url":     {Store: store, Nonces: nonces},
-		"relative base url":    {BaseURL: "/acme/", Store: store, Nonces: nonces},
-		"http base url":        {BaseURL: "http://acme.example/acme/", Store: store, Nonces: nonces},
-		"ftp base url":         {BaseURL: "ftp://acme.example/acme/", Store: store, Nonces: nonces},
-		"query in base url":    {BaseURL: "https://acme.example/acme/?x=1", Store: store, Nonces: nonces},
-		"fragment in base url": {BaseURL: "https://acme.example/acme/#x", Store: store, Nonces: nonces},
-		"user in base url":     {BaseURL: "https://user@acme.example/acme/", Store: store, Nonces: nonces},
-		"escaped path":         {BaseURL: "https://acme.example/ac%2Fme/", Store: store, Nonces: nonces},
-		"negative body limit":  {BaseURL: testBaseURL, Store: store, Nonces: nonces, MaxRequestBody: -1},
+	valid := func() Config {
+		cfg := stubConfig(store, nonces)
+		cfg.ExternalAccounts = nil
+		return cfg
 	}
-	for name, cfg := range cases {
+	cases := map[string]func(c *Config){
+		"missing store":        func(c *Config) { c.Store = nil },
+		"missing nonces":       func(c *Config) { c.Nonces = nil },
+		"missing issuer":       func(c *Config) { c.Issuer = nil },
+		"missing revoker":      func(c *Config) { c.Revoker = nil },
+		"missing validators":   func(c *Config) { c.Validators = nil },
+		"nil validator":        func(c *Config) { c.Validators = map[ChallengeType]Validator{ChallengeDNS01: nil} },
+		"unknown challenge":    func(c *Config) { c.Validators = map[ChallengeType]Validator{"x-01": stubValidator{}} },
+		"eab required no keys": func(c *Config) { c.Meta.ExternalAccountRequired = true },
+		"tos required no url":  func(c *Config) { c.RequireTermsOfServiceAgreed = true },
+		"missing base url":     func(c *Config) { c.BaseURL = "" },
+		"relative base url":    func(c *Config) { c.BaseURL = "/acme/" },
+		"http base url":        func(c *Config) { c.BaseURL = "http://acme.example/acme/" },
+		"ftp base url":         func(c *Config) { c.BaseURL = "ftp://acme.example/acme/" },
+		"query in base url":    func(c *Config) { c.BaseURL = "https://acme.example/acme/?x=1" },
+		"fragment in base url": func(c *Config) { c.BaseURL = "https://acme.example/acme/#x" },
+		"user in base url":     func(c *Config) { c.BaseURL = "https://user@acme.example/acme/" },
+		"escaped path":         func(c *Config) { c.BaseURL = "https://acme.example/ac%2Fme/" },
+		"negative body limit":  func(c *Config) { c.MaxRequestBody = -1 },
+		"negative lifetime":    func(c *Config) { c.OrderLifetime = -1 },
+		"negative workers":     func(c *Config) { c.Workers.Concurrency = -1 },
+	}
+	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
+			cfg := valid()
+			mutate(&cfg)
 			if _, err := New(cfg); err == nil {
 				t.Fatal("New accepted an invalid config")
 			}
 		})
 	}
-	s, err := New(Config{BaseURL: "https://acme.example/acme", Store: store, Nonces: nonces})
+	cfg := valid()
+	cfg.BaseURL = "https://acme.example/acme"
+	s, err := New(cfg)
 	if err != nil || s.baseURL != testBaseURL || s.basePath != "/acme/" {
 		t.Fatalf("New without trailing slash = %+v, %v", s, err)
 	}
-	if s.maxBody != DefaultMaxRequestBody || s.clock == nil || s.log == nil {
+	if s.maxBody != DefaultMaxRequestBody || s.clock == nil || s.log == nil || s.policy == nil {
 		t.Fatalf("defaults not applied: %+v", s)
 	}
-	if _, err := New(Config{BaseURL: "http://localhost:8080/", AllowInsecureBaseURL: true, Store: store, Nonces: nonces}); err != nil {
+	if s.orderLifetime != DefaultOrderLifetime || s.authzLifetime != DefaultAuthorizationLifetime ||
+		s.maxIdentifiers != DefaultMaxIdentifiers || s.workers.Concurrency != 4 || s.workers.MaxAttempts != 5 {
+		t.Fatalf("limit defaults not applied: %+v", s)
+	}
+	cfg = valid()
+	cfg.BaseURL, cfg.AllowInsecureBaseURL = "http://localhost:8080/", true
+	if _, err := New(cfg); err != nil {
 		t.Fatalf("New with AllowInsecureBaseURL: %v", err)
 	}
 }
@@ -70,8 +96,14 @@ func TestDirectory(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &dir); err != nil {
 		t.Fatalf("directory body: %v", err)
 	}
-	if dir["newNonce"] != testBaseURL+"new-nonce" {
-		t.Fatalf("newNonce = %v", dir["newNonce"])
+	for key, rel := range map[string]string{"newNonce": "new-nonce", "newAccount": "new-account", "newOrder": "new-order",
+		"revokeCert": "revoke-cert", "keyChange": "key-change"} {
+		if dir[key] != testBaseURL+rel {
+			t.Fatalf("%s = %v", key, dir[key])
+		}
+	}
+	if _, ok := dir["newAuthz"]; ok {
+		t.Fatal("directory advertises newAuthz without pre-authorization support")
 	}
 	if _, ok := dir["meta"]; ok {
 		t.Fatalf("meta present without configuration: %v", dir["meta"])
@@ -149,7 +181,8 @@ func TestNewNonce(t *testing.T) {
 
 func TestUnknownResource(t *testing.T) {
 	s, _, _ := newTestServer(t, DirectoryMeta{})
-	for _, path := range []string{testBaseURL + "missing", testBaseURL + "acct/", "https://acme.example/other", "https://acme.example/acme"} {
+	for _, path := range []string{testBaseURL + "missing", testBaseURL + "acct/", testBaseURL + "acct/a/b",
+		testBaseURL + "order/x/other", testBaseURL + "cert/bad.id", "https://acme.example/other", "https://acme.example/acme"} {
 		rec := do(s, httptest.NewRequest(http.MethodGet, path, nil))
 		assertProblem(t, rec, http.StatusNotFound, ErrorMalformed)
 		if rec.Header().Get("Replay-Nonce") == "" {
