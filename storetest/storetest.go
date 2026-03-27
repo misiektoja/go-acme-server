@@ -28,6 +28,16 @@ func Run(t *testing.T, open func(t *testing.T) acmeserver.Store) {
 	t.Run("ReturnsCopies", func(t *testing.T) { testCopies(t, open(t)) })
 	t.Run("ConcurrentCreateSameKey", func(t *testing.T) { testConcurrentCreate(t, open(t)) })
 	t.Run("CanceledContext", func(t *testing.T) { testCanceledContext(t, open(t)) })
+	t.Run("CreateOrder", func(t *testing.T) { testCreateOrder(t, open(t)) })
+	t.Run("CreateOrderConflicts", func(t *testing.T) { testCreateOrderConflicts(t, open(t)) })
+	t.Run("OrderIDs", func(t *testing.T) { testOrderIDs(t, open(t)) })
+	t.Run("UpdateAuthorization", func(t *testing.T) { testUpdateAuthorization(t, open(t)) })
+	t.Run("AcceptChallenge", func(t *testing.T) { testAcceptChallenge(t, open(t)) })
+	t.Run("ClaimTask", func(t *testing.T) { testClaimTask(t, open(t)) })
+	t.Run("ConcurrentClaim", func(t *testing.T) { testConcurrentClaim(t, open(t)) })
+	t.Run("CompleteValidation", func(t *testing.T) { testCompleteValidation(t, open(t)) })
+	t.Run("FinalizeAndIssue", func(t *testing.T) { testFinalizeAndIssue(t, open(t)) })
+	t.Run("IssuanceFailureAndDuplicate", func(t *testing.T) { testIssuanceFailureAndDuplicate(t, open(t)) })
 }
 
 // Returns a valid account with a fresh P-256 key.

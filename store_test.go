@@ -5,8 +5,10 @@ import (
 	"sync"
 )
 
-// A minimal in-memory account store for white-box tests.
+// A minimal in-memory account store for white-box tests. The embedded Store stays nil, so any
+// other method panics.
 type testStore struct {
+	Store
 	mu       sync.Mutex
 	accounts map[string]*Account
 	byKey    map[string]string

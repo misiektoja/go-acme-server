@@ -433,8 +433,8 @@ func assertProblemType(t *testing.T, p *Problem, typ ErrorType, status int) {
 	}
 }
 
-// Fails every operation with a backend error.
-type failingStore struct{}
+// Fails every account operation with a backend error. Other methods are never reached.
+type failingStore struct{ Store }
 
 var errBackend = errors.New("backend unavailable")
 
