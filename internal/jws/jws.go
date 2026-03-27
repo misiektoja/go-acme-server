@@ -6,11 +6,13 @@ import (
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
+	"crypto/hmac"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/json"
 	"fmt"
+	"hash"
 	"math/big"
 	"slices"
 )
@@ -38,6 +40,9 @@ func (e *Error) Error() string { return e.Detail }
 
 // Lists the JWS algorithms the server accepts in the order they are advertised.
 var Algorithms = []string{"ES256", "ES384", "RS256", "EdDSA"}
+
+// Lists the HMAC algorithms accepted for external account bindings.
+var MACAlgorithms = []string{"HS256", "HS384", "HS512"}
 
 // Holds the protected header parameters that ACME requires.
 type Header struct {
@@ -79,8 +84,38 @@ type headerJSON struct {
 	B64   json.RawMessage `json:"b64"`
 }
 
+// States which header shape a JWS must have.
+type profile struct {
+	// Requires a nonce when true and forbids one when false.
+	nonce bool
+	// Requires jwk when true and kid when false. Nil accepts exactly one of them.
+	embeddedKey *bool
+	// The accepted algorithms.
+	algorithms []string
+}
+
+// The header shapes of the three JWS uses in ACME.
+var (
+	trueValue      = true
+	falseValue     = false
+	requestProfile = profile{nonce: true, algorithms: Algorithms}
+	innerProfile   = profile{nonce: false, embeddedKey: &trueValue, algorithms: Algorithms}
+	macProfile     = profile{nonce: false, embeddedKey: &falseValue, algorithms: MACAlgorithms}
+)
+
 // Decodes a flattened JWS and checks the protected header rules. It does not verify the signature.
-func Parse(body []byte) (*Message, error) {
+func Parse(body []byte) (*Message, error) { return parse(body, requestProfile) }
+
+// Decodes the inner JWS of a key change request, see RFC 8555 section 7.3.5. It must carry the
+// new key in jwk and no nonce.
+func ParseInner(body []byte) (*Message, error) { return parse(body, innerProfile) }
+
+// Decodes an external account binding, see RFC 8555 section 7.3.4. It must carry the key
+// identifier in kid, an HMAC algorithm and no nonce.
+func ParseMAC(body []byte) (*Message, error) { return parse(body, macProfile) }
+
+// Decodes a flattened JWS against the header profile.
+func parse(body []byte, prof profile) (*Message, error) {
 	var env envelopeJSON
 	if err := UnmarshalStrict(body, &env); err != nil {
 		return nil, malformed("invalid JWS: " + detailOf(err))
@@ -106,7 +141,7 @@ func Parse(body []byte) (*Message, error) {
 	if err != nil || len(signature) == 0 {
 		return nil, malformed("JWS signature is not valid base64url")
 	}
-	header, err := parseHeader(protected)
+	header, err := parseHeader(protected, prof)
 	if err != nil {
 		return nil, err
 	}
@@ -118,8 +153,8 @@ func Parse(body []byte) (*Message, error) {
 	}, nil
 }
 
-// Decodes the protected header and checks the ACME parameter rules.
-func parseHeader(protected []byte) (Header, error) {
+// Decodes the protected header and checks the ACME parameter rules of the profile.
+func parseHeader(protected []byte, prof profile) (Header, error) {
 	var hdr headerJSON
 	if err := UnmarshalStrict(protected, &hdr); err != nil {
 		return Header{}, malformed("JWS protected header: " + detailOf(err))
@@ -133,7 +168,7 @@ func parseHeader(protected []byte) (Header, error) {
 	if hdr.Alg == nil || *hdr.Alg == "" {
 		return Header{}, malformed("JWS protected header has no alg")
 	}
-	if !slices.Contains(Algorithms, *hdr.Alg) {
+	if !slices.Contains(prof.algorithms, *hdr.Alg) {
 		return Header{}, &Error{
 			Code:   CodeBadSignatureAlgorithm,
 			Detail: fmt.Sprintf("JWS algorithm %q is not supported", *hdr.Alg),
@@ -142,18 +177,27 @@ func parseHeader(protected []byte) (Header, error) {
 	if hdr.URL == nil || *hdr.URL == "" {
 		return Header{}, malformed("JWS protected header has no url")
 	}
-	if hdr.Nonce == nil || *hdr.Nonce == "" {
+	header := Header{Algorithm: *hdr.Alg, URL: *hdr.URL}
+	switch {
+	case prof.nonce && (hdr.Nonce == nil || *hdr.Nonce == ""):
 		return Header{}, &Error{Code: CodeBadNonce, Detail: "JWS protected header has no nonce"}
-	}
-	if !isBase64URL(*hdr.Nonce) {
+	case prof.nonce && !isBase64URL(*hdr.Nonce):
 		return Header{}, malformed("JWS nonce is not valid base64url")
+	case prof.nonce:
+		header.Nonce = *hdr.Nonce
+	case hdr.Nonce != nil:
+		return Header{}, malformed("JWS protected header must not have a nonce here")
 	}
 	hasKID := hdr.KID != nil
 	hasJWK := hdr.JWK != nil
-	if hasKID == hasJWK {
+	switch {
+	case hasKID == hasJWK:
 		return Header{}, malformed("JWS protected header must have exactly one of jwk and kid")
+	case prof.embeddedKey != nil && *prof.embeddedKey && !hasJWK:
+		return Header{}, malformed("JWS protected header must carry the key in jwk here")
+	case prof.embeddedKey != nil && !*prof.embeddedKey && !hasKID:
+		return Header{}, malformed("JWS protected header must name the key in kid here")
 	}
-	header := Header{Algorithm: *hdr.Alg, Nonce: *hdr.Nonce, URL: *hdr.URL}
 	if hasKID {
 		if *hdr.KID == "" {
 			return Header{}, malformed("JWS kid is empty")
@@ -172,6 +216,29 @@ func parseHeader(protected []byte) (Header, error) {
 // Checks the signature with a public key that must match the declared algorithm.
 func (m *Message) Verify(key crypto.PublicKey) error {
 	return verifySignature(m.Header.Algorithm, key, m.signingInput, m.signature)
+}
+
+// Checks an HMAC signature with the shared key.
+func (m *Message) VerifyMAC(key []byte) error {
+	var mac hash.Hash
+	switch m.Header.Algorithm {
+	case "HS256":
+		mac = hmac.New(sha256.New, key)
+	case "HS384":
+		mac = hmac.New(sha512.New384, key)
+	case "HS512":
+		mac = hmac.New(sha512.New, key)
+	default:
+		return &Error{
+			Code:   CodeBadSignatureAlgorithm,
+			Detail: fmt.Sprintf("JWS algorithm %q is not an HMAC", m.Header.Algorithm),
+		}
+	}
+	mac.Write(m.signingInput)
+	if !hmac.Equal(mac.Sum(nil), m.signature) {
+		return badSignature()
+	}
+	return nil
 }
 
 // Verifies a JWS signature over the signing input with the named algorithm.
