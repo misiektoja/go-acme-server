@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -13,6 +14,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"hash"
 	"math/big"
 	"strings"
 	"testing"
@@ -69,7 +71,7 @@ func TestVerifySignatureVectors(t *testing.T) {
 			}
 		})
 	}
-	if !isCode(verifySignature("ES256", rsaKey, []byte("x"), make([]byte, 64)), CodeMalformed) {
+	if !isCode(verifySignature(algES256, rsaKey, []byte("x"), make([]byte, 64)), CodeMalformed) {
 		t.Fatal("RSA key accepted for ES256")
 	}
 	if !isCode(verifySignature("RS256", ecKey, []byte("x"), make([]byte, 256)), CodeMalformed) {
@@ -78,10 +80,10 @@ func TestVerifySignatureVectors(t *testing.T) {
 	if !isCode(verifySignature("EdDSA", ecKey, []byte("x"), make([]byte, 64)), CodeMalformed) {
 		t.Fatal("EC key accepted for EdDSA")
 	}
-	if !isCode(verifySignature("ES256", ecKey, []byte("x"), make([]byte, 63)), CodeBadSignature) {
+	if !isCode(verifySignature(algES256, ecKey, []byte("x"), make([]byte, 63)), CodeBadSignature) {
 		t.Fatal("short ECDSA signature accepted")
 	}
-	if !isCode(verifySignature("HS256", ecKey, []byte("x"), make([]byte, 32)), CodeBadSignatureAlgorithm) {
+	if !isCode(verifySignature(algHS256, ecKey, []byte("x"), make([]byte, 32)), CodeBadSignatureAlgorithm) {
 		t.Fatal("HS256 accepted")
 	}
 }
@@ -96,7 +98,7 @@ func TestParseAndVerifyAllAlgorithms(t *testing.T) {
 		priv crypto.Signer
 		pub  crypto.PublicKey
 	}{
-		{"ES256", es256, &es256.PublicKey},
+		{algES256, es256, &es256.PublicKey},
 		{"ES384", es384, &es384.PublicKey},
 		{"RS256", rs256, &rs256.PublicKey},
 		{"EdDSA", edPriv, edPub},
@@ -120,7 +122,7 @@ func TestParseAndVerifyAllAlgorithms(t *testing.T) {
 				t.Fatalf("Verify: %v", err)
 			}
 			other, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-			if tc.alg == "ES256" && !isCode(msg.Verify(&other.PublicKey), CodeBadSignature) {
+			if tc.alg == algES256 && !isCode(msg.Verify(&other.PublicKey), CodeBadSignature) {
 				t.Fatal("wrong key verified")
 			}
 		})
@@ -129,8 +131,8 @@ func TestParseAndVerifyAllAlgorithms(t *testing.T) {
 
 func TestParseKeyIDAndEmptyPayload(t *testing.T) {
 	priv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	header := map[string]any{"alg": "ES256", "nonce": "bm9uY2U", "url": "https://acme.test/acme/acct/1", "kid": "https://acme.test/acme/acct/1"}
-	msg, err := Parse(sign(t, priv, "ES256", header, nil))
+	header := map[string]any{"alg": algES256, "nonce": "bm9uY2U", "url": "https://acme.test/acme/acct/1", "kid": "https://acme.test/acme/acct/1"}
+	msg, err := Parse(sign(t, priv, algES256, header, nil))
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
@@ -143,7 +145,7 @@ func TestParseKeyIDAndEmptyPayload(t *testing.T) {
 	if err := msg.Verify(&priv.PublicKey); err != nil {
 		t.Fatalf("Verify: %v", err)
 	}
-	msg, err = Parse(sign(t, priv, "ES256", header, []byte("{}")))
+	msg, err = Parse(sign(t, priv, algES256, header, []byte("{}")))
 	if err != nil || string(msg.Payload) != "{}" {
 		t.Fatalf("Parse({}) = %v, %v", msg, err)
 	}
@@ -153,9 +155,9 @@ func TestParseRejects(t *testing.T) {
 	priv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	jwk := json.RawMessage(mustMarshalJWK(t, &priv.PublicKey))
 	base := func() map[string]any {
-		return map[string]any{"alg": "ES256", "nonce": "bm9uY2U", "url": "https://acme.test/acme/new-account", "jwk": jwk}
+		return map[string]any{"alg": algES256, "nonce": "bm9uY2U", "url": "https://acme.test/acme/new-account", "jwk": jwk}
 	}
-	valid := sign(t, priv, "ES256", base(), []byte("{}"))
+	valid := sign(t, priv, algES256, base(), []byte("{}"))
 	var env map[string]string
 	if err := json.Unmarshal(valid, &env); err != nil {
 		t.Fatal(err)
@@ -183,7 +185,7 @@ func TestParseRejects(t *testing.T) {
 		}), CodeMalformed},
 		{"missing alg", withHeader(t, priv, base(), func(h map[string]any) { delete(h, "alg") }), CodeMalformed},
 		{"alg none", withHeader(t, priv, base(), func(h map[string]any) { h["alg"] = "none" }), CodeBadSignatureAlgorithm},
-		{"alg HS256", withHeader(t, priv, base(), func(h map[string]any) { h["alg"] = "HS256" }), CodeBadSignatureAlgorithm},
+		{"alg HS256", withHeader(t, priv, base(), func(h map[string]any) { h["alg"] = algHS256 }), CodeBadSignatureAlgorithm},
 		{"alg PS256", withHeader(t, priv, base(), func(h map[string]any) { h["alg"] = "PS256" }), CodeBadSignatureAlgorithm},
 		{"alg lowercase", withHeader(t, priv, base(), func(h map[string]any) { h["alg"] = "es256" }), CodeBadSignatureAlgorithm},
 		{"missing nonce", withHeader(t, priv, base(), func(h map[string]any) { delete(h, "nonce") }), CodeBadNonce},
@@ -212,10 +214,144 @@ func TestParseRejects(t *testing.T) {
 	}
 }
 
+// RFC 7515 appendix A.1 HMAC key and signature.
+const (
+	algES256        = "ES256"
+	algHS256        = "HS256"
+	rfc7515HS256Key = "AyM1SysPpbyDfgZld3umj1qzKObwVMkoqQ-EstJQLr_T-1qS0gZH75aKtMN3Yj0iPS4hcgUuTwjAzZr1Z9CAow"
+	rfc7515HS256In  = "eyJ0eXAiOiJKV1QiLA0KICJhbGciOiJIUzI1NiJ9." + rfc7515Payload
+	rfc7515HS256Sig = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+)
+
+func TestVerifyMACVector(t *testing.T) {
+	key := decode(t, rfc7515HS256Key)
+	msg := &Message{Header: Header{Algorithm: "HS256"}, signingInput: []byte(rfc7515HS256In), signature: decode(t, rfc7515HS256Sig)}
+	if err := msg.VerifyMAC(key); err != nil {
+		t.Fatalf("VerifyMAC: %v", err)
+	}
+	if !isCode(msg.VerifyMAC([]byte("wrong")), CodeBadSignature) {
+		t.Fatal("wrong key verified")
+	}
+	msg.signature[0] ^= 1
+	if !isCode(msg.VerifyMAC(key), CodeBadSignature) {
+		t.Fatal("tampered signature verified")
+	}
+	msg.Header.Algorithm = algES256
+	if !isCode(msg.VerifyMAC(key), CodeBadSignatureAlgorithm) {
+		t.Fatal("non-HMAC algorithm accepted by VerifyMAC")
+	}
+}
+
+func TestParseMAC(t *testing.T) {
+	key := []byte("0123456789abcdef0123456789abcdef")
+	header := map[string]any{"alg": algHS256, "kid": "eab-1", "url": "https://acme.test/acme/new-account"}
+	body := signMAC(t, key, header, []byte(`{"kty":"EC"}`), sha256.New)
+	msg, err := ParseMAC(body)
+	if err != nil {
+		t.Fatalf("ParseMAC: %v", err)
+	}
+	if msg.Header.KeyID != "eab-1" || msg.Header.Algorithm != "HS256" || msg.Header.Nonce != "" || string(msg.Payload) != `{"kty":"EC"}` {
+		t.Fatalf("header = %+v payload %s", msg.Header, msg.Payload)
+	}
+	if err := msg.VerifyMAC(key); err != nil {
+		t.Fatalf("VerifyMAC: %v", err)
+	}
+	for _, alg := range []string{"HS384", "HS512"} {
+		h := map[string]any{"alg": alg, "kid": "eab-1", "url": "u"}
+		newHash := sha512.New384
+		if alg == "HS512" {
+			newHash = sha512.New
+		}
+		msg, err := ParseMAC(signMAC(t, key, h, nil, newHash))
+		if err != nil {
+			t.Fatalf("ParseMAC(%s): %v", alg, err)
+		}
+		if err := msg.VerifyMAC(key); err != nil {
+			t.Fatalf("VerifyMAC(%s): %v", alg, err)
+		}
+	}
+	priv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	cases := []struct {
+		name string
+		body []byte
+		code Code
+	}{
+		{"with nonce", signMAC(t, key, map[string]any{"alg": algHS256, "kid": "k", "url": "u", "nonce": "n"}, nil, sha256.New), CodeMalformed},
+		{"with jwk", signMAC(t, key, map[string]any{"alg": algHS256, "jwk": json.RawMessage(mustMarshalJWK(t, &priv.PublicKey)), "url": "u"}, nil, sha256.New), CodeMalformed},
+		{"signature alg", sign(t, priv, algES256, map[string]any{"alg": algES256, "kid": "k", "url": "u"}, nil), CodeBadSignatureAlgorithm},
+		{"missing url", signMAC(t, key, map[string]any{"alg": algHS256, "kid": "k"}, nil, sha256.New), CodeMalformed},
+		{"missing kid", signMAC(t, key, map[string]any{"alg": algHS256, "url": "u"}, nil, sha256.New), CodeMalformed},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := ParseMAC(tc.body); !isCode(err, tc.code) {
+				t.Fatalf("ParseMAC error = %v, want code %d", err, tc.code)
+			}
+		})
+	}
+	if _, err := Parse(body); !isCode(err, CodeBadSignatureAlgorithm) {
+		t.Fatalf("Parse accepted an HMAC JWS: %v", err)
+	}
+}
+
+func TestParseInner(t *testing.T) {
+	priv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	jwk := json.RawMessage(mustMarshalJWK(t, &priv.PublicKey))
+	body := sign(t, priv, "ES256", map[string]any{"alg": "ES256", "jwk": jwk, "url": "https://acme.test/acme/key-change"}, []byte(`{"account":"a"}`))
+	msg, err := ParseInner(body)
+	if err != nil {
+		t.Fatalf("ParseInner: %v", err)
+	}
+	if msg.Header.Key == nil || msg.Header.KeyID != "" || msg.Header.Nonce != "" {
+		t.Fatalf("header = %+v", msg.Header)
+	}
+	if err := msg.Verify(msg.Header.Key); err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if _, err := Parse(body); !isCode(err, CodeBadNonce) {
+		t.Fatalf("Parse accepted an inner JWS without nonce: %v", err)
+	}
+	cases := []struct {
+		name string
+		body []byte
+		code Code
+	}{
+		{"with nonce", sign(t, priv, algES256, map[string]any{"alg": algES256, "jwk": jwk, "url": "u", "nonce": "n"}, nil), CodeMalformed},
+		{"with kid", sign(t, priv, algES256, map[string]any{"alg": algES256, "kid": "k", "url": "u"}, nil), CodeMalformed},
+		{"mac alg", signMAC(t, []byte("k"), map[string]any{"alg": algHS256, "jwk": jwk, "url": "u"}, nil, sha256.New), CodeBadSignatureAlgorithm},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := ParseInner(tc.body); !isCode(err, tc.code) {
+				t.Fatalf("ParseInner error = %v, want code %d", err, tc.code)
+			}
+		})
+	}
+}
+
+// Builds a flattened JWS signed with an HMAC over the header and payload.
+func signMAC(t *testing.T, key []byte, header map[string]any, payload []byte, newHash func() hash.Hash) []byte {
+	t.Helper()
+	protected, err := json.Marshal(header)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := base64.RawURLEncoding.EncodeToString(protected)
+	pl := base64.RawURLEncoding.EncodeToString(payload)
+	mac := hmac.New(newHash, key)
+	mac.Write([]byte(p + "." + pl))
+	body, err := json.Marshal(map[string]string{"protected": p, "payload": pl,
+		"signature": base64.RawURLEncoding.EncodeToString(mac.Sum(nil))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return body
+}
+
 func TestParseIgnoresUnknownMembers(t *testing.T) {
 	priv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	header := map[string]any{"alg": "ES256", "nonce": "bm9uY2U", "url": "u", "kid": "k", "typ": "JOSE+JSON", "x-extra": 1}
-	body := sign(t, priv, "ES256", header, nil)
+	header := map[string]any{"alg": algES256, "nonce": "bm9uY2U", "url": "u", "kid": "k", "typ": "JOSE+JSON", "x-extra": 1}
+	body := sign(t, priv, algES256, header, nil)
 	var env map[string]any
 	if err := json.Unmarshal(body, &env); err != nil {
 		t.Fatal(err)
@@ -233,8 +369,8 @@ func TestParseIgnoresUnknownMembers(t *testing.T) {
 
 func FuzzParse(f *testing.F) {
 	priv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	header := map[string]any{"alg": "ES256", "nonce": "bm9uY2U", "url": "u", "jwk": json.RawMessage(mustMarshalJWK(f, &priv.PublicKey))}
-	f.Add(sign(f, priv, "ES256", header, []byte("{}")))
+	header := map[string]any{"alg": algES256, "nonce": "bm9uY2U", "url": "u", "jwk": json.RawMessage(mustMarshalJWK(f, &priv.PublicKey))}
+	f.Add(sign(f, priv, algES256, header, []byte("{}")))
 	f.Add([]byte(`{"protected":"","payload":"","signature":""}`))
 	f.Add([]byte(`{"protected":"e30","payload":"e30","signature":"AA"}`))
 	f.Add([]byte(`{"signatures":[]}`))
@@ -315,7 +451,7 @@ func sign(tb testing.TB, key crypto.Signer, alg string, header map[string]any, p
 func withHeader(t *testing.T, key crypto.Signer, header map[string]any, fn func(map[string]any)) []byte {
 	t.Helper()
 	fn(header)
-	return sign(t, key, "ES256", header, []byte("{}"))
+	return sign(t, key, algES256, header, []byte("{}"))
 }
 
 // Re-encodes a valid envelope after fn changed it.
