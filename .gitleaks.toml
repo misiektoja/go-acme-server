@@ -11,3 +11,9 @@ paths = [
   # Downloaded tool binaries.
   '''^bin/''',
 ]
+
+[[allowlists]]
+description = "Published RFC 7515 appendix A.1 HMAC test vector used by the JWS tests"
+regexes = [
+  '''AyM1SysPpbyDfgZld3umj1qzKObwVMkoqQ-EstJQLr_T-1qS0gZH75aKtMN3Yj0iPS4hcgUuTwjAzZr1Z9CAow''',
+]
