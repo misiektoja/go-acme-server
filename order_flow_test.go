@@ -424,7 +424,8 @@ func TestIssuerPendingRetryAndRejection(t *testing.T) {
 	}
 }
 
-func TestIssuerGivesUpAfterRepeatedErrors(t *testing.T) {
+// Recovers an uncertain issuance even after the validation retry limit has passed.
+func TestIssuerRetriesUncertainOutcome(t *testing.T) {
 	f := newFlow(t, nil)
 	f.ca.failures = 10
 	f.runWorker()
@@ -434,12 +435,9 @@ func TestIssuerGivesUpAfterRepeatedErrors(t *testing.T) {
 	c.respondHTTP01(order)
 	c.waitOrder(location, statusReady)
 	c.finalize(order, newKey(t))
-	invalid := c.waitOrder(location, statusInvalid)
-	if invalid.Error == nil || invalid.Error.Type != acmeserver.ErrorServerInternal {
-		t.Fatalf("order after issuer failures = %+v", invalid)
-	}
-	if n := f.ca.callCount(); n != 3 {
-		t.Fatalf("issuer called %d times, want MaxAttempts 3", n)
+	c.waitOrder(location, statusValid)
+	if n := f.ca.callCount(); n != 11 {
+		t.Fatalf("issuer called %d times, want 11", n)
 	}
 }
 
