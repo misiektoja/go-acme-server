@@ -63,10 +63,10 @@ func (s *Server) readSignedRequest(r *http.Request, rel string, mode keyMode) (*
 		return nil, NewProblem(ErrorBadNonce, "JWS nonce is unknown or was already used")
 	}
 	expected := s.resourceURL(rel)
-	if r.URL.RawQuery != "" {
+	if r.URL.RawQuery != "" || r.URL.ForceQuery {
 		expected += "?" + r.URL.RawQuery
 	}
-	if msg.Header.URL != expected {
+	if msg.Header.URL != expected || r.URL.EscapedPath() != s.basePath+rel {
 		return nil, NewProblem(ErrorUnauthorized, "JWS url does not match the request URL")
 	}
 	req := &signedRequest{Payload: msg.Payload}
