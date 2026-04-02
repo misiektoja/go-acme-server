@@ -191,6 +191,22 @@ func TestReadSignedRequestPostAsGet(t *testing.T) {
 	}
 }
 
+// Rejects request target changes that decoded routing would otherwise hide.
+func TestSignedRequestBindsExactTarget(t *testing.T) {
+	for _, target := range []string{"new-%6frder", "new-order?", "new-order/"} {
+		t.Run(target, func(t *testing.T) {
+			s, store, _ := newTestServer(t, DirectoryMeta{})
+			sig := newSigner(t, "ES256")
+			seedAccount(t, store, sig, AccountValid)
+			body := sig.sign(t, accountHeader(s, "new-order", freshNonce(t, s)), []byte(`{}`))
+			_, p := s.readSignedRequest(postJOSE(s.resourceURL(target), body), "new-order", keyModeAccount)
+			if p == nil || p.Type != ErrorUnauthorized {
+				t.Fatalf("altered request target accepted: %v", p)
+			}
+		})
+	}
+}
+
 func TestReadSignedRequestWithEmbeddedKey(t *testing.T) {
 	s, _, _ := newTestServer(t, DirectoryMeta{})
 	sig := newSigner(t, "ES256")
