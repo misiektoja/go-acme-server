@@ -145,12 +145,19 @@ func (m *Manager) evictOldest() {
 	m.compact()
 }
 
-// Reclaims the consumed front of the queue once it dominates the slice.
+// Compacts consumed entries once either the prefix or retained tombstones reach the bound.
 func (m *Manager) compact() {
-	if m.head == 0 || m.head < len(m.queue)/2 {
+	if m.head < len(m.queue)/2 && len(m.queue)-len(m.live) < m.capacity {
 		return
 	}
-	n := copy(m.queue, m.queue[m.head:])
+	n := 0
+	for _, e := range m.queue[m.head:] {
+		if expires, ok := m.live[e.value]; ok && expires.Equal(e.expires) {
+			m.queue[n] = e
+			n++
+		}
+	}
+	clear(m.queue[n:])
 	m.queue = m.queue[:n]
 	m.head = 0
 }
