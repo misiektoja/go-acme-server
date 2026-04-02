@@ -2,6 +2,7 @@ package acmeserver
 
 import (
 	"bytes"
+	"context"
 	"crypto/x509"
 	"encoding/base64"
 	"errors"
@@ -62,7 +63,7 @@ func (s *Server) serveRevokeCert(w http.ResponseWriter, r *http.Request) {
 			WithStatus(http.StatusNotFound))
 		return
 	}
-	if p := s.authorizeRevocation(req, cert, leaf); p != nil {
+	if p := s.authorizeRevocation(ctx, req, cert, leaf); p != nil {
 		s.writeProblem(ctx, w, p)
 		return
 	}
@@ -92,13 +93,24 @@ func (s *Server) serveRevokeCert(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// Checks that the request comes from the certificate's account or is signed with its key.
-func (s *Server) authorizeRevocation(req *signedRequest, cert *Certificate, leaf *x509.Certificate) *Problem {
+// Accepts the issuing account, an account authorized for every identifier or the certificate key.
+func (s *Server) authorizeRevocation(ctx context.Context, req *signedRequest, cert *Certificate, leaf *x509.Certificate) *Problem {
 	if req.Account != nil {
-		if req.Account.ID != cert.AccountID {
-			return NewProblem(ErrorUnauthorized, "the signing account did not request this certificate")
+		if req.Account.ID == cert.AccountID {
+			return nil
 		}
-		return nil
+		ids, err := certificateIdentifiers(leaf)
+		if err != nil {
+			return NewProblem(ErrorUnauthorized, "certificate identifiers cannot be authorized")
+		}
+		allowed, err := s.store.AuthorizedFor(ctx, req.Account.ID, ids, s.clock.Now())
+		if err != nil {
+			return s.storeProblem(ctx, err, "authorization")
+		}
+		if allowed {
+			return nil
+		}
+		return NewProblem(ErrorUnauthorized, "the signing account is not authorized for every certificate identifier")
 	}
 	signer, err := jws.Thumbprint(req.Key)
 	if err != nil {
