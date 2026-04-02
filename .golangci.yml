@@ -35,6 +35,10 @@ linters:
   exclusions:
     generated: lax
     rules:
+      # Function declarations stay on one physical line.
+      - linters:
+          - lll
+        source: '^func '
       # Test code closes bodies, ignores errors and repeats setup on purpose.
       - linters:
           - bodyclose
