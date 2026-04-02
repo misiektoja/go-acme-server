@@ -140,6 +140,30 @@ func TestQueueCompaction(t *testing.T) {
 	}
 }
 
+// Keeps retained nonce history bounded when the oldest nonce is never consumed.
+func TestQueueBoundWithOutstandingOldest(t *testing.T) {
+	m := New(Options{Capacity: 8})
+	oldest, err := m.Issue(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 1000 {
+		value, err := m.Issue(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ok, err := m.Consume(t.Context(), value); err != nil || !ok {
+			t.Fatalf("Consume = %v, %v", ok, err)
+		}
+		if len(m.queue) > 2*m.capacity {
+			t.Fatalf("retained %d entries with capacity %d", len(m.queue), m.capacity)
+		}
+	}
+	if ok, err := m.Consume(t.Context(), oldest); err != nil || !ok {
+		t.Fatalf("oldest nonce = %v, %v", ok, err)
+	}
+}
+
 func TestConcurrentUse(t *testing.T) {
 	ctx := context.Background()
 	m := New(Options{Capacity: 10_000})
