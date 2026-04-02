@@ -231,6 +231,13 @@ func (s *Server) readOwnedOrder(r *http.Request, id, rel string) (*signedRequest
 	if order.AccountID != req.Account.ID {
 		return nil, nil, NewProblem(ErrorUnauthorized, "the signing account does not own this order")
 	}
+	if order.Status == OrderPending || order.Status == OrderReady {
+		status, err := s.deriveOrderStatus(r.Context(), order, nil)
+		if err != nil {
+			return nil, nil, s.storeProblem(r.Context(), err, "authorization")
+		}
+		order.Status = status
+	}
 	return req, order, nil
 }
 

@@ -71,6 +71,8 @@ type Config struct {
 	ExternalAccounts ExternalAccountKeys
 	// Reviews new accounts and orders. Defaults to AllowAll.
 	Policy Policy
+	// Reviews current issuance policy before dispatch, with the accepted CSR and validation evidence.
+	IssuancePolicy IssuancePolicy
 	// Refuses new accounts that do not agree to Meta.TermsOfService.
 	RequireTermsOfServiceAgreed bool
 	// Accepts IP identifiers as specified in RFC 8738.

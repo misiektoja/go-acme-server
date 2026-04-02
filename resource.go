@@ -47,6 +47,10 @@ type Order struct {
 	// The DER request accepted at finalization. It never changes once set.
 	CSR           []byte
 	CertificateID string
+	// The durable authorization decision made before the first CA call.
+	Issuance *IssuanceState
+	// A CA result withheld from clients and retained for host reconciliation.
+	UnpublishedResult *IssueResult
 	// The selected certificate profile when the host enables that extension.
 	Profile string
 	// The RFC 9773 identifier of the certificate this order renews.
@@ -92,6 +96,8 @@ type Certificate struct {
 	ID        string
 	AccountID string
 	OrderID   string
+	// The opaque reference returned by the host CA.
+	CAReference string
 	// Holds the DER leaf certificate followed by the DER issuer chain the client receives.
 	Chain     [][]byte
 	NotBefore time.Time
@@ -104,6 +110,14 @@ type Certificate struct {
 	Validations []Validation
 	CreatedAt   time.Time
 	Revision    uint64
+}
+
+// Preserves the authorization deadline and evidence across uncertain issuance attempts.
+type IssuanceState struct {
+	OperationID  string
+	AuthorizedAt time.Time
+	Deadline     time.Time
+	Validations  []Validation
 }
 
 // Records how one identifier of an order was validated.

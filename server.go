@@ -54,6 +54,7 @@ type Server struct {
 	validators     map[ChallengeType]Validator
 	eabKeys        ExternalAccountKeys
 	policy         Policy
+	issuancePolicy IssuancePolicy
 	requireTOS     bool
 	ipIdentifiers  bool
 	orderLifetime  time.Duration
@@ -92,6 +93,7 @@ func New(cfg Config) (*Server, error) {
 		validators:     make(map[ChallengeType]Validator, len(cfg.Validators)),
 		eabKeys:        cfg.ExternalAccounts,
 		policy:         cfg.Policy,
+		issuancePolicy: cfg.IssuancePolicy,
 		requireTOS:     cfg.RequireTermsOfServiceAgreed,
 		ipIdentifiers:  cfg.IPIdentifiers,
 		orderLifetime:  cfg.OrderLifetime,

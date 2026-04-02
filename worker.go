@@ -2,7 +2,6 @@ package acmeserver
 
 import (
 	"context"
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -130,6 +129,10 @@ func (s *Server) runValidation(ctx context.Context, task *Task) {
 		AccountKeyThumbprint: ch.KeyThumbprint,
 	}
 	err = validator.Validate(ctx, req)
+	now = s.clock.Now()
+	if !authz.Expires.After(now) {
+		err = NewProblem(ErrorUnauthorized, "authorization expired during validation")
+	}
 	if err == nil {
 		ch.Status = ChallengeValid
 		ch.Validated = now
@@ -200,11 +203,14 @@ func (s *Server) completeValidation(ctx context.Context, task *Task, ch *Challen
 // stored copy.
 func (s *Server) deriveOrderStatus(ctx context.Context, order *Order, updated *Authorization) (OrderStatus, error) {
 	now := s.clock.Now()
+	if !order.Expires.After(now) {
+		return OrderInvalid, nil
+	}
 	allValid := true
 	for _, id := range order.AuthorizationIDs {
 		var status AuthorizationStatus
-		if id == updated.ID {
-			status = updated.Status
+		if updated != nil && id == updated.ID {
+			status = effectiveAuthzStatus(updated, now)
 		} else {
 			authz, err := s.store.Authorization(ctx, id)
 			if err != nil {
@@ -224,166 +230,6 @@ func (s *Server) deriveOrderStatus(ctx context.Context, order *Order, updated *A
 		return OrderReady, nil
 	}
 	return OrderPending, nil
-}
-
-// Issues the certificate for a processing order and records the result.
-func (s *Server) runIssuance(ctx context.Context, task *Task) {
-	order, err := s.store.Order(ctx, task.TargetID)
-	if err != nil {
-		s.dropOnNotFound(ctx, task, err, "order")
-		return
-	}
-	if order.Status != OrderProcessing {
-		s.finishTask(ctx, task)
-		return
-	}
-	now := s.clock.Now()
-	account, err := s.store.Account(ctx, order.AccountID)
-	if err != nil {
-		s.dropOnNotFound(ctx, task, err, "account")
-		return
-	}
-	if account.Status != AccountValid {
-		s.failOrder(ctx, task, order, Problemf(ErrorUnauthorized, "account is %s", string(account.Status)))
-		return
-	}
-	validations, p, err := s.collectValidations(ctx, order, now)
-	if err != nil {
-		s.dropOnNotFound(ctx, task, err, "authorization")
-		return
-	}
-	if p != nil {
-		s.failOrder(ctx, task, order, p)
-		return
-	}
-	csr, err := x509.ParseCertificateRequest(order.CSR)
-	if err != nil {
-		s.failOrder(ctx, task, order, NewProblem(ErrorServerInternal, "stored CSR could not be parsed"))
-		return
-	}
-	result, err := s.issuer.Issue(ctx, IssueRequest{
-		OperationID: task.ID,
-		AccountID:   order.AccountID,
-		OrderID:     order.ID,
-		CSR:         csr,
-		CSRDER:      order.CSR,
-		Identifiers: order.Identifiers,
-		NotBefore:   order.NotBefore,
-		NotAfter:    order.NotAfter,
-		Validations: validations,
-		Deadline:    order.Expires,
-	})
-	switch {
-	case err != nil && task.Attempts < s.workers.MaxAttempts && order.Expires.After(now):
-		s.log.LogAttrs(ctx, slog.LevelWarn, "issuance will be retried", slog.String("order", order.ID),
-			slog.String("operation", task.ID), slog.Int("attempt", task.Attempts), slog.Any("error", err))
-		s.reschedule(ctx, task, now)
-		return
-	case err != nil:
-		s.logError(ctx, "issuance gave up", err, slog.String("order", order.ID), slog.String("operation", task.ID))
-		s.failOrder(ctx, task, order, NewProblem(ErrorServerInternal, "issuance failed"))
-		return
-	case result.Rejected != nil:
-		s.failOrder(ctx, task, order, result.Rejected)
-		return
-	case result.Pending:
-		retryAt := now.Add(max(result.RetryAfter, s.workers.PollInterval))
-		if !retryAt.Before(order.Expires) {
-			s.failOrder(ctx, task, order, NewProblem(ErrorServerInternal, "issuance did not complete before the order expired"))
-			return
-		}
-		task.RunAt = retryAt
-		s.storeReschedule(ctx, task)
-		return
-	}
-	leaf, err := checkChain(result.Chain, csr, order, now)
-	if err != nil {
-		s.logError(ctx, "issuer returned an unacceptable certificate", err, slog.String("order", order.ID),
-			slog.String("operation", task.ID))
-		s.failOrder(ctx, task, order, NewProblem(ErrorServerInternal, "issuer returned an unacceptable certificate"))
-		return
-	}
-	cert := &Certificate{
-		ID:          certificateID(result.Chain[0]),
-		AccountID:   order.AccountID,
-		OrderID:     order.ID,
-		Chain:       result.Chain,
-		NotBefore:   leaf.NotBefore,
-		NotAfter:    leaf.NotAfter,
-		Validations: validations,
-		CreatedAt:   now,
-	}
-	s.publishCertificate(ctx, task, order, cert)
-}
-
-// Returns the validation evidence of every authorization or a problem when one is not valid.
-func (s *Server) collectValidations(ctx context.Context, order *Order, now time.Time) ([]Validation, *Problem, error) {
-	validations := make([]Validation, 0, len(order.AuthorizationIDs))
-	for _, id := range order.AuthorizationIDs {
-		authz, err := s.store.Authorization(ctx, id)
-		if err != nil {
-			return nil, nil, err
-		}
-		if status := effectiveAuthzStatus(authz, now); status != AuthorizationValid {
-			return nil, Problemf(ErrorUnauthorized, "authorization for %s is %s", authz.Identifier.String(), string(status)), nil
-		}
-		v := Validation{Identifier: authz.Identifier}
-		if authz.Wildcard {
-			v.Identifier.Value = "*." + v.Identifier.Value
-		}
-		for _, chID := range authz.ChallengeIDs {
-			ch, err := s.store.Challenge(ctx, chID)
-			if err != nil {
-				return nil, nil, err
-			}
-			if ch.Status == ChallengeValid {
-				v.Type, v.Validated = ch.Type, ch.Validated
-				break
-			}
-		}
-		validations = append(validations, v)
-	}
-	return validations, nil, nil
-}
-
-// Records an issued certificate with the valid order. A certificate that this order already
-// published is accepted as the recovered result of an earlier attempt.
-func (s *Server) publishCertificate(ctx context.Context, task *Task, order *Order, cert *Certificate) {
-	order.Status = OrderValid
-	order.CertificateID = cert.ID
-	order.Error = nil
-	err := s.store.CompleteIssuance(ctx, task, order, cert)
-	if errors.Is(err, ErrConflict) {
-		existing, lookupErr := s.store.Certificate(ctx, cert.ID)
-		if lookupErr == nil && existing.OrderID == order.ID {
-			err = s.store.CompleteIssuance(ctx, task, order, nil)
-		} else {
-			s.logError(ctx, "issuer returned a certificate that another order already published", err,
-				slog.String("order", order.ID), slog.String("certificate", cert.ID))
-			s.failOrder(ctx, task, order, NewProblem(ErrorServerInternal, "issuer returned a duplicate certificate"))
-			return
-		}
-	}
-	s.handleIssuanceCommit(ctx, order, err)
-}
-
-// Records a failed issuance on the order.
-func (s *Server) failOrder(ctx context.Context, task *Task, order *Order, p *Problem) {
-	order.Status = OrderInvalid
-	order.Error = p
-	s.handleIssuanceCommit(ctx, order, s.store.CompleteIssuance(ctx, task, order, nil))
-}
-
-// Logs a failed issuance commit. A revision mismatch means the order left processing elsewhere.
-func (s *Server) handleIssuanceCommit(ctx context.Context, order *Order, err error) {
-	switch {
-	case err == nil:
-	case errors.Is(err, ErrRevisionMismatch):
-		s.log.LogAttrs(ctx, slog.LevelWarn, "issuance result superseded by a concurrent change",
-			slog.String("order", order.ID))
-	default:
-		s.logError(ctx, "issuance result could not be stored", err, slog.String("order", order.ID))
-	}
 }
 
 // Releases the task for a later attempt with exponential backoff.

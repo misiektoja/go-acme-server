@@ -11,6 +11,7 @@ import (
 type IssueRequest struct {
 	OperationID string
 	AccountID   string
+	AccountURL  string
 	OrderID     string
 	// The parsed certificate request and its DER encoding. The signature and the identifier
 	// set were already checked against the order.
@@ -23,14 +24,18 @@ type IssueRequest struct {
 	NotAfter  time.Time
 	// How each identifier was validated.
 	Validations []Validation
-	// The time after which the order expires. Deferred signing must not complete after it.
+	// The earliest order or authorization expiry, after which new signing is forbidden.
 	Deadline time.Time
+	// Allows only recovery of an existing result, never a new signing operation.
+	RecoveryOnly bool
 }
 
 // The outcome of an issuance attempt. Exactly one of Chain, Pending and Rejected is set.
 type IssueResult struct {
 	// The DER leaf certificate followed by the DER issuer chain.
 	Chain [][]byte
+	// An opaque host CA reference retained with issued or unpublished results.
+	CAReference string
 	// Reports that the CA has not decided yet. The worker asks again after RetryAfter.
 	Pending    bool
 	RetryAfter time.Duration
@@ -38,10 +43,14 @@ type IssueResult struct {
 	Rejected *Problem
 }
 
-// Issues certificates for finalized orders. Errors report transport or infrastructure failure
-// and lead to a retry with the same OperationID.
+// Issues or recovers one durable result per operation ID, enforcing Deadline and RecoveryOnly for new signing.
 type Issuer interface {
 	Issue(ctx context.Context, req IssueRequest) (IssueResult, error)
+}
+
+// Reviews current policy before the first durable issuance dispatch.
+type IssuancePolicy interface {
+	AuthorizeIssuance(ctx context.Context, req IssueRequest) error
 }
 
 // What the host CA receives for a revocation.

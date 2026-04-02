@@ -24,11 +24,18 @@ type Store struct {
 	orders        map[string]*acmeserver.Order
 	orderIDs      map[string][]string
 	authzs        map[string]*acmeserver.Authorization
+	authzIndex    map[authorizationKey][]string
 	challenges    map[string]*acmeserver.Challenge
 	certificates  map[string]*acmeserver.Certificate
 	tasks         map[string]*acmeserver.Task
 	taskSequence  uint64
 	taskInsertion map[string]uint64
+}
+
+// Indexes authorizations by account and complete identifier, including wildcard scope.
+type authorizationKey struct {
+	accountID  string
+	identifier acmeserver.Identifier
 }
 
 // Returns an empty Store.
@@ -39,6 +46,7 @@ func New() *Store {
 		orders:        make(map[string]*acmeserver.Order),
 		orderIDs:      make(map[string][]string),
 		authzs:        make(map[string]*acmeserver.Authorization),
+		authzIndex:    make(map[authorizationKey][]string),
 		challenges:    make(map[string]*acmeserver.Challenge),
 		certificates:  make(map[string]*acmeserver.Certificate),
 		tasks:         make(map[string]*acmeserver.Task),
@@ -155,6 +163,8 @@ func (s *Store) CreateOrder(ctx context.Context, order *acmeserver.Order, authzs
 	for _, a := range authzs {
 		a.Revision = 1
 		s.authzs[a.ID] = cloneAuthorization(a)
+		key := authorizationIndexKey(a)
+		s.authzIndex[key] = append(s.authzIndex[key], a.ID)
 	}
 	for _, c := range challenges {
 		c.Revision = 1
@@ -226,7 +236,86 @@ func (s *Store) UpdateAuthorization(ctx context.Context, authz *acmeserver.Autho
 	}
 	authz.Revision++
 	s.authzs[authz.ID] = cloneAuthorization(authz)
+	if authz.Status.Terminal() {
+		order := s.orders[authz.OrderID]
+		if order != nil && (order.Status == acmeserver.OrderPending || order.Status == acmeserver.OrderReady ||
+			(order.Status == acmeserver.OrderProcessing && order.Issuance == nil)) {
+			order.Status = acmeserver.OrderInvalid
+			order.Revision++
+		}
+	}
 	return nil
+}
+
+// Records a fenced dispatch only while the account, order and authorizations match the checked snapshot.
+func (s *Store) BeginIssuance(ctx context.Context, task *acmeserver.Task, order *acmeserver.Order, account *acmeserver.Account, authzs []*acmeserver.Authorization) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, err := s.checkTask(task); err != nil {
+		return err
+	}
+	if err := s.checkOrder(order); err != nil {
+		return err
+	}
+	stored := s.accounts[account.ID]
+	if stored == nil || stored.Revision != account.Revision || stored.Status != acmeserver.AccountValid {
+		return acmeserver.ErrRevisionMismatch
+	}
+	if order.Issuance == nil || s.orders[order.ID].Status != acmeserver.OrderProcessing ||
+		s.orders[order.ID].Issuance != nil || len(authzs) != len(order.AuthorizationIDs) {
+		return acmeserver.ErrRevisionMismatch
+	}
+	for i, a := range authzs {
+		if err := s.checkAuthorization(a); err != nil {
+			return err
+		}
+		if a.ID != order.AuthorizationIDs[i] || a.Status != acmeserver.AuthorizationValid ||
+			!a.Expires.After(order.Issuance.AuthorizedAt) {
+			return acmeserver.ErrRevisionMismatch
+		}
+	}
+	order.Revision++
+	s.orders[order.ID] = cloneOrder(order)
+	return nil
+}
+
+// Returns the index key for the complete scope of an authorization.
+func authorizationIndexKey(a *acmeserver.Authorization) authorizationKey {
+	id := a.Identifier
+	if a.Wildcard {
+		id.Value = "*." + id.Value
+	}
+	return authorizationKey{accountID: a.AccountID, identifier: id}
+}
+
+// Checks every identifier against one consistent snapshot of current authorization state.
+func (s *Store) AuthorizedFor(ctx context.Context, accountID string, identifiers []acmeserver.Identifier, now time.Time) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	account, ok := s.accounts[accountID]
+	if !ok || account.Status != acmeserver.AccountValid || len(identifiers) == 0 {
+		return false, nil
+	}
+	for _, identifier := range identifiers {
+		valid := false
+		for _, id := range s.authzIndex[authorizationKey{accountID: accountID, identifier: identifier}] {
+			a := s.authzs[id]
+			if a.Status == acmeserver.AuthorizationValid && a.Expires.After(now) {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // Returns a copy of the challenge with the given ID.
@@ -537,6 +626,17 @@ func cloneOrder(o *acmeserver.Order) *acmeserver.Order {
 	c.AuthorizationIDs = slices.Clone(o.AuthorizationIDs)
 	c.CSR = slices.Clone(o.CSR)
 	c.Error = cloneProblem(o.Error)
+	if o.Issuance != nil {
+		state := *o.Issuance
+		state.Validations = slices.Clone(state.Validations)
+		c.Issuance = &state
+	}
+	if o.UnpublishedResult != nil {
+		result := *o.UnpublishedResult
+		result.Chain = cloneChain(result.Chain)
+		result.Rejected = cloneProblem(result.Rejected)
+		c.UnpublishedResult = &result
+	}
 	return &c
 }
 
@@ -557,12 +657,18 @@ func cloneChallenge(ch *acmeserver.Challenge) *acmeserver.Challenge {
 // Returns a copy of the certificate with its own chain.
 func cloneCertificate(cert *acmeserver.Certificate) *acmeserver.Certificate {
 	c := *cert
-	c.Chain = make([][]byte, len(cert.Chain))
-	for i, der := range cert.Chain {
-		c.Chain[i] = slices.Clone(der)
-	}
+	c.Chain = cloneChain(cert.Chain)
 	c.Validations = slices.Clone(cert.Validations)
 	return &c
+}
+
+// Copies every certificate byte slice in a chain.
+func cloneChain(chain [][]byte) [][]byte {
+	copyOf := make([][]byte, len(chain))
+	for i, der := range chain {
+		copyOf[i] = slices.Clone(der)
+	}
+	return copyOf
 }
 
 // Returns a copy of the task.
