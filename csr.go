@@ -31,7 +31,7 @@ func checkCSR(der []byte, order *Order, account *Account) (*x509.CertificateRequ
 	if thumbprint == account.KeyThumbprint {
 		return nil, NewProblem(ErrorBadCSR, "CSR key must not be the account key")
 	}
-	if len(csr.EmailAddresses) > 0 || len(csr.URIs) > 0 {
+	if err := checkSANExtensions(csr.Extensions); err != nil {
 		return nil, NewProblem(ErrorBadCSR, "CSR requests unsupported subject alternative name types")
 	}
 	requested, p := csrIdentifiers(csr)
@@ -66,7 +66,7 @@ func checkCSRKey(key any) *Problem {
 func csrIdentifiers(csr *x509.CertificateRequest) ([]Identifier, *Problem) {
 	var raw []Identifier
 	if csr.Subject.CommonName != "" {
-		raw = append(raw, Identifier{Type: IdentifierDNS, Value: csr.Subject.CommonName})
+		raw = append(raw, commonNameIdentifier(csr.Subject.CommonName))
 	}
 	for _, name := range csr.DNSNames {
 		raw = append(raw, Identifier{Type: IdentifierDNS, Value: name})

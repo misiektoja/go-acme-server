@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/netip"
 	"sync"
 	"time"
 )
@@ -345,57 +344,6 @@ func (s *Server) collectValidations(ctx context.Context, order *Order, now time.
 		validations = append(validations, v)
 	}
 	return validations, nil, nil
-}
-
-// Checks that the chain the issuer returned matches the CSR and the order.
-func checkChain(chain [][]byte, csr *x509.CertificateRequest, order *Order, now time.Time) (*x509.Certificate, error) {
-	if len(chain) == 0 {
-		return nil, errors.New("empty chain")
-	}
-	certs := make([]*x509.Certificate, len(chain))
-	for i, der := range chain {
-		cert, err := x509.ParseCertificate(der)
-		if err != nil {
-			return nil, fmt.Errorf("chain element %d: %w", i, err)
-		}
-		certs[i] = cert
-	}
-	leaf := certs[0]
-	leafKey, err := x509.MarshalPKIXPublicKey(leaf.PublicKey)
-	if err != nil {
-		return nil, fmt.Errorf("leaf key: %w", err)
-	}
-	csrKey, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
-	if err != nil {
-		return nil, fmt.Errorf("CSR key: %w", err)
-	}
-	if string(leafKey) != string(csrKey) {
-		return nil, errors.New("leaf public key does not match the CSR")
-	}
-	if !leaf.NotAfter.After(now) {
-		return nil, errors.New("leaf certificate is already expired")
-	}
-	var names []Identifier
-	for _, name := range leaf.DNSNames {
-		names = append(names, Identifier{Type: IdentifierDNS, Value: name})
-	}
-	for _, ip := range leaf.IPAddresses {
-		addr, ok := netip.AddrFromSlice(ip)
-		if !ok {
-			return nil, errors.New("leaf IP SAN is invalid")
-		}
-		names = append(names, Identifier{Type: IdentifierIP, Value: addr.Unmap().String()})
-	}
-	normalized, err := NormalizeIdentifiers(names)
-	if err != nil || !sameIdentifiers(normalized, order.Identifiers) {
-		return nil, errors.New("leaf identifiers do not match the order")
-	}
-	for i := 0; i+1 < len(certs); i++ {
-		if err := certs[i].CheckSignatureFrom(certs[i+1]); err != nil {
-			return nil, fmt.Errorf("chain element %d is not signed by element %d: %w", i, i+1, err)
-		}
-	}
-	return leaf, nil
 }
 
 // Records an issued certificate with the valid order. A certificate that this order already
