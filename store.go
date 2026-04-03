@@ -39,7 +39,7 @@ type OrderStore interface {
 	OrderIDs(ctx context.Context, accountID, after string, limit int) ([]string, error)
 	// Returns the authorization with the given ID or ErrNotFound.
 	Authorization(ctx context.Context, id string) (*Authorization, error)
-	// Replaces the authorization and invalidates its pending or ready order when authorization ends.
+	// Replaces the authorization and invalidates its order if authorization ends before issuance dispatch.
 	UpdateAuthorization(ctx context.Context, authz *Authorization) error
 	// Checks a valid account's unexpired authorizations for every identifier in one consistent read.
 	AuthorizedFor(ctx context.Context, accountID string, identifiers []Identifier, now time.Time) (bool, error)

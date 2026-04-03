@@ -17,9 +17,16 @@ Run these before submitting a change:
 ```bash
 make lint
 make test
+make test-interop
 ```
 
 `make test` runs `go vet` and the tests under the race detector. `make lint` runs golangci-lint at the version CI uses, installed under `bin/`. Run `make actionlint` when a workflow changes and `make govulncheck` when a dependency changes. `make help` lists every target.
+
+Test artifacts default to `.cache/acme-tests`. Set `ACME_TEST_SCRATCH` to an absolute path to use
+another directory. Generated keys, databases and client logs must not be committed or uploaded.
+Install the pinned Certbot environment as described in [the interoperability guide](test/interop/README.md)
+before running `make test-interop`. That gate requires both independent clients and the SQLite process
+tests. `make lint` and `make tidy-check` check both Go modules.
 
 Every target runs with the Go toolchain named in `go.mod`, which is downloaded on first use when the installed Go differs.
 

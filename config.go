@@ -27,7 +27,7 @@ type WorkerConfig struct {
 	Lease time.Duration
 	// The time limit of one validator or issuer call. Defaults to 30 seconds.
 	TaskTimeout time.Duration
-	// The number of claims after which a failing task gives up. Defaults to 5.
+	// Limits validation and pre-dispatch policy retries to five by default without limiting issuance recovery.
 	MaxAttempts int
 	// The first retry delay, doubled on every further attempt. Defaults to five seconds.
 	RetryDelay time.Duration
