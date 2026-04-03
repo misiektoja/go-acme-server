@@ -38,6 +38,8 @@ func Run(t *testing.T, open func(t *testing.T) acmeserver.Store) {
 	t.Run("CompleteValidation", func(t *testing.T) { testCompleteValidation(t, open(t)) })
 	t.Run("FinalizeAndIssue", func(t *testing.T) { testFinalizeAndIssue(t, open(t)) })
 	t.Run("IssuanceFailureAndDuplicate", func(t *testing.T) { testIssuanceFailureAndDuplicate(t, open(t)) })
+	t.Run("DispatchSnapshot", func(t *testing.T) { testDispatchSnapshot(t, open(t)) })
+	t.Run("AuthorizationScope", func(t *testing.T) { testAuthorizationScope(t, open(t)) })
 }
 
 // Returns a valid account with a fresh P-256 key.
