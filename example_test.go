@@ -5,10 +5,12 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"net/netip"
 	"os"
 	"os/signal"
 
 	acmeserver "github.com/misiektoja/go-acme-server"
+	"github.com/misiektoja/go-acme-server/challenge"
 	"github.com/misiektoja/go-acme-server/memstore"
 	"github.com/misiektoja/go-acme-server/nonce"
 )
@@ -26,17 +28,20 @@ func (exampleCA) Revoke(context.Context, acmeserver.RevokeRequest) error {
 	return errors.New("not implemented")
 }
 
-// A placeholder for a challenge validator. Validators for the standard challenge types are a
-// separate concern of the host or a later package.
-type exampleValidator struct{}
-
-// Refuses every challenge in this example.
-func (exampleValidator) Validate(context.Context, acmeserver.ValidationRequest) error {
-	return acmeserver.NewProblem(acmeserver.ErrorIncorrectResponse, "not implemented")
-}
-
 // Shows how a host mounts the handler and runs the worker. Both are required.
 func Example() {
+	resolver, err := challenge.NewResolver(challenge.ResolverOptions{
+		Servers: []netip.AddrPort{netip.MustParseAddrPort("192.0.2.53:53")},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	http01, err := challenge.NewHTTP01(challenge.HTTPOptions{
+		Network: challenge.NetworkOptions{Resolver: resolver},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
 	srv, err := acmeserver.New(acmeserver.Config{
 		BaseURL: "https://ca.example.com/acme/",
 		Store:   memstore.New(),
@@ -44,7 +49,7 @@ func Example() {
 		Issuer:  exampleCA{},
 		Revoker: exampleCA{},
 		Validators: map[acmeserver.ChallengeType]acmeserver.Validator{
-			acmeserver.ChallengeHTTP01: exampleValidator{},
+			acmeserver.ChallengeHTTP01: http01,
 		},
 		Meta: acmeserver.DirectoryMeta{Website: "https://ca.example.com"},
 	})
