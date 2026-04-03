@@ -8,6 +8,7 @@ description = "Paths that never enter the repository or that hold build output o
 paths = [
   # Ignored directories checked for tracked files by the gitleaks Make target.
   '''^local/''',
+  '''^\.cache/''',
   # Downloaded tool binaries.
   '''^bin/''',
 ]

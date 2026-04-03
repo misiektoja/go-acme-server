@@ -38,18 +38,35 @@ vet: ## Run go vet.
 
 .PHONY: tidy-check
 tidy-check: ## Fail when go.mod or go.sum is not tidy.
-	go mod tidy
-	git diff --exit-code -- go.mod go.sum
+	go mod tidy -diff
+	cd test/interop && go mod tidy -diff
+
+ACME_TEST_SCRATCH ?= $(CURDIR)/.cache/acme-tests
+export ACME_TEST_SCRATCH
+
+.PHONY: test-scratch
+test-scratch:
+	mkdir -p "$(ACME_TEST_SCRATCH)"
 
 .PHONY: test
-test: vet ## Run the tests under the race detector.
-	go test -race -count=1 -coverprofile cover.out ./...
+test: vet test-scratch ## Run the tests under the race detector.
+	go test -race -count=1 -coverprofile "$(ACME_TEST_SCRATCH)/root-cover.out" ./...
+
+.PHONY: test-interop
+test-interop: test-scratch ## Require acmez, Certbot, durable storage and process recovery tests.
+	cd test/interop && go vet ./...
+	cd test/interop && go run ./cmd/check
+
+.PHONY: test-recovery
+test-recovery: test-scratch ## Exercise two-process fencing and recovery after a killed worker.
+	cd test/interop && go test -race -count=1 -timeout=2m -run 'Test(CrashAfterIssuance|TwoProcessLeaseAndFence)$$' ./...
 
 ##@ Checks
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint.
 	"$(GOLANGCI_LINT)" run
+	cd test/interop && "$(GOLANGCI_LINT)" run
 
 .PHONY: lint-fix
 lint-fix: golangci-lint ## Run golangci-lint and apply the fixes it offers.
@@ -66,6 +83,7 @@ actionlint: actionlint-tool ## Lint the GitHub Actions workflows.
 .PHONY: govulncheck
 govulncheck: govulncheck-tool ## Report known vulnerabilities that reach the module or its dependencies.
 	"$(GOVULNCHECK)" ./...
+	cd test/interop && "$(GOVULNCHECK)" -test ./...
 
 # GITLEAKS_LOG_OPTS selects the history the commit scan walks.
 GITLEAKS_LOG_OPTS ?= --full-history --all
@@ -73,7 +91,7 @@ GITLEAKS_LOG_OPTS ?= --full-history --all
 .PHONY: gitleaks
 gitleaks: gitleaks-tool ## Scan the working tree and the commit history for leaked credentials.
 # Excluded artifact paths must not contain tracked files.
-	@test -z "$$(git ls-files local/ 2>/dev/null)" || { echo "error: tracked files under local/ are excluded from the gitleaks scan by .gitleaks.toml"; exit 1; }
+	@test -z "$$(git ls-files local .cache)" || { echo "error: tracked files are excluded from the gitleaks scan by .gitleaks.toml"; exit 1; }
 	"$(GITLEAKS)" dir . --config .gitleaks.toml --redact --no-banner
 	"$(GITLEAKS)" git . --config .gitleaks.toml --redact --no-banner --log-opts="$(GITLEAKS_LOG_OPTS)"
 
