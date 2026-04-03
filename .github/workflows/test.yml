@@ -41,4 +41,6 @@ jobs:
         run: make fmt-check
 
       - name: Run the tests
+        env:
+          ACME_TEST_SCRATCH: ${{ runner.temp }}/acme-tests
         run: make test
