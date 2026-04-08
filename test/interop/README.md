@@ -1,9 +1,19 @@
 # Interoperability tests
 
-This separate module tests go-acme-server with acmez v3.1.6 and Certbot 5.4.0. Both obtain a
-certificate over HTTPS using HTTP-01 on an unprivileged loopback port. Clients trust a generated
-root explicitly. Tests check the issued key, exact identifiers, validity, chain and stored resource
-state. An incorrect acmez proof must fail before any CA issuance.
+This separate module tests go-acme-server with acmez v3.1.6, Certbot 5.4.0 and go-jose v4.1.4.
+Clients reach the server over HTTPS and trust a generated root explicitly. Tests check the issued
+key, exact identifiers, validity, chain and stored resource state. An incorrect proof of any
+challenge type must leave the order invalid without any CA issuance.
+
+acmez obtains certificates through HTTP-01, DNS-01 and TLS-ALPN-01. The DNS-01 scenario orders a
+wildcard together with its base domain, so two proofs share one TXT owner name in the local TCP DNS
+responder. The TLS-ALPN-01 scenario serves the challenge certificates that acmez itself generates
+from a local TLS listener. Certbot uses its standalone HTTP-01 solver on an unprivileged port.
+
+go-jose signs requests independently of the server's JWS code. The cross-check creates accounts
+with every advertised algorithm, compares stored RFC 7638 thumbprints with go-jose, changes keys
+through an inner JWS, binds an external account with HS256 and confirms that refused signatures
+return the expected problem types, including a fresh nonce on every refusal.
 
 The SQLite adapter uses modernc.org/sqlite v1.48.1 with WAL, `synchronous=FULL`, foreign keys,
 a five-second busy timeout and `BEGIN IMMEDIATE` writes. It is test infrastructure with no schema
@@ -26,8 +36,9 @@ ACME_CERTBOT="$PWD/.cache/certbot/bin/certbot" make test-interop
 ```
 
 `ACME_CERTBOT` selects the executable. Its version must match the pin. Missing tools, failed tests
-and skipped required scenarios fail the gate. `make test-recovery` runs process recovery and fencing
-without needing Certbot. `make lint` and `make tidy-check` cover both modules.
+and skipped required scenarios fail the gate. The DNS, TLS and go-jose scenarios need no extra
+tools. `make test-recovery` runs process recovery and fencing without needing Certbot. `make lint`
+and `make tidy-check` cover both modules.
 
 `go.mod` and `go.sum` pin the Go dependencies. `requirements.txt` pins every Certbot dependency.
 CI uses Python 3.14.3 and the Go version from the root `go.mod`. Refresh these pins together and
@@ -41,6 +52,6 @@ these files. The gate prints diagnostics and writes `interop-summary.json` in th
 only Go version, operating system, architecture, test names, outcomes and elapsed times. CI uses
 its temporary directory and uploads only the summary, including after failure.
 
-These tests establish the named HTTP-01 interoperability and recovery scenarios. Local validator
+These tests establish the named acmez, Certbot, go-jose and recovery scenarios. Local validator
 tests separately check RFC 8555, RFC 8737 and RFC 8738 proof and egress rules. They do not establish
-complete RFC conformance or the broader client and challenge matrix.
+complete RFC conformance or the broader client matrix.

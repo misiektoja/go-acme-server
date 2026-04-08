@@ -22,6 +22,8 @@ make test-interop
 
 `make test` runs `go vet` and the tests under the race detector. `make lint` runs golangci-lint at the version CI uses, installed under `bin/`. Run `make actionlint` when a workflow changes and `make govulncheck` when a dependency changes. `make help` lists every target.
 
+Run `make fuzz` when parsing code changes. It fuzzes the JWS, JWK, JSON, identifier, DNS response and TLS-ALPN proof parsers for `FUZZ_TIME` each, 20 seconds by default. CI runs a shorter pass. Go writes a failing input under the package's `testdata/fuzz` directory. Commit that input with the fix so it stays a regression test.
+
 Test artifacts default to `.cache/acme-tests`. Set `ACME_TEST_SCRATCH` to an absolute path to use
 another directory. Generated keys, databases and client logs must not be committed or uploaded.
 Install the pinned Certbot environment as described in [the interoperability guide](test/interop/README.md)
