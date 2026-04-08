@@ -40,7 +40,7 @@ func (h *harness) workerProcess(t *testing.T, stop bool) (*exec.Cmd, *bufio.Scan
 	}
 	command := exec.CommandContext(t.Context(), executable, "-test.run=^TestWorkerProcess$")
 	command.Env = append(os.Environ(), "ACME_WORKER_DIR="+h.directory, "ACME_WORKER_BASE="+h.https.URL+"/acme/",
-		"ACME_WORKER_PORT="+strconv.Itoa(h.port), "ACME_STOP_PUBLICATION="+strconv.FormatBool(stop))
+		"ACME_WORKER_PORT="+strconv.Itoa(h.options.httpPort), "ACME_STOP_PUBLICATION="+strconv.FormatBool(stop))
 	output, err := command.StdoutPipe()
 	if err != nil {
 		t.Fatal(err)
@@ -61,8 +61,8 @@ func (h *harness) workerProcess(t *testing.T, stop bool) (*exec.Cmd, *bufio.Scan
 // Restarts a killed worker and recovers the exact CA result without a second signing operation.
 func TestCrashAfterIssuance(t *testing.T) {
 	s, port := newSolver(t, false)
-	h := newHarness(t, port, true)
-	client, account := h.acmez(t, s)
+	h := newHarness(t, harnessOptions{httpPort: port, external: true})
+	client, account := h.acmez(t, httpSolver(s))
 	key := newKey(t)
 	first, output := h.workerProcess(t, true)
 	type outcome struct {
@@ -73,7 +73,7 @@ func TestCrashAfterIssuance(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	go func() {
-		certificates, err := client.ObtainCertificateForSANs(ctx, account, key, []string{"issuance.test"})
+		certificates, err := client.ObtainCertificateForSANs(ctx, account, key, []string{testHost})
 		completed <- outcome{certificates, err}
 	}()
 	signal := make(chan string, 1)
@@ -117,7 +117,7 @@ func TestCrashAfterIssuance(t *testing.T) {
 		if result.err != nil || len(result.certificates) != 1 {
 			t.Fatalf("recovery = %d, %v", len(result.certificates), result.err)
 		}
-		after := h.verify(t, result.certificates[0].ChainPEM, &key.PublicKey)
+		after := h.verify(t, result.certificates[0].ChainPEM, &key.PublicKey, []string{testHost}, acmeserver.ChallengeHTTP01)
 		cert, err := h.store.Certificate(t.Context(), after.CertificateID)
 		if err != nil || !bytes.Equal(cert.Chain[0], issuedDER) || after.Issuance.OperationID != before.Issuance.OperationID {
 			t.Fatal("recovery changed the issued result or operation")
@@ -152,7 +152,7 @@ func TestWorkerProcess(t *testing.T) {
 	if os.Getenv("ACME_STOP_PUBLICATION") == "true" {
 		persistence = stoppedPublication{Store: store}
 	}
-	server := configuredServer(t, os.Getenv("ACME_WORKER_BASE"), port, true, persistence, ca)
+	server := configuredServer(t, os.Getenv("ACME_WORKER_BASE"), harnessOptions{httpPort: port, external: true}, persistence, ca)
 	if err := server.Run(t.Context()); err != nil {
 		t.Fatal(err)
 	}

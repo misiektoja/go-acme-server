@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -36,17 +37,46 @@ import (
 )
 
 // Names the versions every required client run must use.
-const certbotVersion = "certbot 5.4.0"
+const (
+	certbotVersion = "certbot 5.4.0"
+	clientVersions = "acmez=v3.1.6 Certbot=5.4.0 go-jose=v4.1.4 SQLite=v1.48.1"
+)
+
+// The only host name the harness resolves and issues for.
+const testHost = "issuance.test"
 
 // Routes only the harness identifier to its isolated responder.
 type localResolver struct{}
 
 // Refuses unexpected names instead of consulting external DNS.
 func (localResolver) LookupNetIP(_ context.Context, _, host string) ([]netip.Addr, error) {
-	if host != "issuance.test." {
+	if host != testHost+"." {
 		return nil, errors.New("unexpected test hostname")
 	}
 	return []netip.Addr{netip.MustParseAddr("127.0.0.1")}, nil
+}
+
+// Selects the isolated responders and worker mode of one scenario. A zero port or endpoint
+// leaves that challenge type unconfigured.
+type harnessOptions struct {
+	httpPort int
+	tlsPort  int
+	dns      netip.AddrPort
+	external bool
+	// External account MAC keys by key identifier.
+	eab map[string][]byte
+}
+
+// Returns the MAC key for a configured external account identifier.
+type eabKeys map[string][]byte
+
+// Looks up a MAC key or reports ErrNotFound.
+func (k eabKeys) MACKey(_ context.Context, id string) ([]byte, error) {
+	key, ok := k[id]
+	if !ok {
+		return nil, acmeserver.ErrNotFound
+	}
+	return key, nil
 }
 
 // Holds the HTTPS endpoint, independent CA and durable ACME state of one scenario.
@@ -56,13 +86,13 @@ type harness struct {
 	ca        *durableCA
 	server    *acmeserver.Server
 	https     *httptest.Server
-	port      int
+	options   harnessOptions
 	trustFile string
 	client    *http.Client
 }
 
-// Creates a real HTTPS endpoint whose certificate is trusted explicitly by both clients.
-func newHarness(t *testing.T, port int, external bool) *harness {
+// Creates a real HTTPS endpoint whose certificate is trusted explicitly by every client.
+func newHarness(t *testing.T, options harnessOptions) *harness {
 	t.Helper()
 	directory := testutil.Scratch(t)
 	createCA(t, directory)
@@ -78,7 +108,7 @@ func newHarness(t *testing.T, port int, external bool) *harness {
 	})
 	https := httptest.NewUnstartedServer(nil)
 	baseURL := "https://" + https.Listener.Addr().String() + "/acme/"
-	server := configuredServer(t, baseURL, port, external, store, ca)
+	server := configuredServer(t, baseURL, options, store, ca)
 	https.Config.Handler = server
 	key := newKey(t)
 	now := time.Now()
@@ -98,27 +128,53 @@ func newHarness(t *testing.T, port int, external bool) *harness {
 	t.Cleanup(transport.CloseIdleConnections)
 	trustFile := filepath.Join(directory, "trust.pem")
 	writePrivate(t, trustFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: ca.root.Raw}))
-	h := &harness{directory: directory, store: store, ca: ca, server: server, https: https, port: port,
+	h := &harness{directory: directory, store: store, ca: ca, server: server, https: https, options: options,
 		trustFile: trustFile, client: &http.Client{Transport: transport, Timeout: 10 * time.Second}}
-	t.Logf("Go=%s OS=%s arch=%s acmez=v3.1.6 Certbot=5.4.0 SQLite=v1.48.1", runtime.Version(), runtime.GOOS, runtime.GOARCH)
-	if !external {
+	t.Logf("Go=%s OS=%s arch=%s %s", runtime.Version(), runtime.GOOS, runtime.GOARCH, clientVersions)
+	if !options.external {
 		runWorker(t, server)
 	}
 	return h
 }
 
 // Applies the same worker and validator configuration in the HTTP and worker processes.
-func configuredServer(t *testing.T, baseURL string, port int, external bool, store acmeserver.Store, ca *durableCA) *acmeserver.Server {
+func configuredServer(t *testing.T, baseURL string, options harnessOptions, store acmeserver.Store, ca *durableCA) *acmeserver.Server {
 	t.Helper()
-	validator, err := challenge.NewHTTP01(challenge.HTTPOptions{TestPort: port, Network: challenge.NetworkOptions{
-		Resolver: localResolver{}, AllowedNetworks: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}}})
-	if err != nil {
-		t.Fatal(err)
+	network := challenge.NetworkOptions{Resolver: localResolver{}, AllowedNetworks: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}}
+	validators := make(map[acmeserver.ChallengeType]acmeserver.Validator)
+	if options.httpPort != 0 {
+		validator, err := challenge.NewHTTP01(challenge.HTTPOptions{TestPort: options.httpPort, Network: network})
+		if err != nil {
+			t.Fatal(err)
+		}
+		validators[acmeserver.ChallengeHTTP01] = validator
 	}
-	server, err := acmeserver.New(acmeserver.Config{BaseURL: baseURL, Store: store, Nonces: nonce.New(nonce.Options{}),
-		Issuer: ca, Revoker: ca, Validators: map[acmeserver.ChallengeType]acmeserver.Validator{acmeserver.ChallengeHTTP01: validator},
-		Workers: acmeserver.WorkerConfig{External: external, PollInterval: 10 * time.Millisecond, RetryDelay: 10 * time.Millisecond,
-			TaskTimeout: time.Second, Lease: 2 * time.Second}})
+	if options.tlsPort != 0 {
+		validator, err := challenge.NewTLSALPN01(challenge.TLSALPNOptions{TestPort: options.tlsPort, Network: network})
+		if err != nil {
+			t.Fatal(err)
+		}
+		validators[acmeserver.ChallengeTLSALPN01] = validator
+	}
+	if options.dns.IsValid() {
+		resolver, err := challenge.NewResolver(challenge.ResolverOptions{Servers: []netip.AddrPort{options.dns}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		validator, err := challenge.NewDNS01(challenge.DNSOptions{Resolver: resolver})
+		if err != nil {
+			t.Fatal(err)
+		}
+		validators[acmeserver.ChallengeDNS01] = validator
+	}
+	config := acmeserver.Config{BaseURL: baseURL, Store: store, Nonces: nonce.New(nonce.Options{}),
+		Issuer: ca, Revoker: ca, Validators: validators,
+		Workers: acmeserver.WorkerConfig{External: options.external, PollInterval: 10 * time.Millisecond, RetryDelay: 10 * time.Millisecond,
+			TaskTimeout: time.Second, Lease: 2 * time.Second}}
+	if options.eab != nil {
+		config.ExternalAccounts = eabKeys(options.eab)
+	}
+	server, err := acmeserver.New(config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +224,7 @@ func (s *solver) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	proof, ok := s.proofs[r.URL.Path]
-	if !ok || r.Host != "issuance.test" {
+	if !ok || r.Host != testHost {
 		http.NotFound(w, r)
 		return
 	}
@@ -189,10 +245,10 @@ func newSolver(t *testing.T, wrong bool) (*solver, int) {
 }
 
 // Registers an independent client account with the generated HTTPS trust root.
-func (h *harness) acmez(t *testing.T, s *solver) (*acmez.Client, acme.Account) {
+func (h *harness) acmez(t *testing.T, solvers map[string]acmez.Solver) (*acmez.Client, acme.Account) {
 	t.Helper()
 	client := &acmez.Client{Client: &acme.Client{Directory: h.https.URL + "/acme/directory", HTTPClient: h.client},
-		ChallengeSolvers: map[string]acmez.Solver{acme.ChallengeTypeHTTP01: s}}
+		ChallengeSolvers: solvers}
 	account, err := client.NewAccount(t.Context(), acme.Account{PrivateKey: newKey(t), TermsOfServiceAgreed: true})
 	if err != nil {
 		t.Fatal(err)
@@ -200,8 +256,8 @@ func (h *harness) acmez(t *testing.T, s *solver) (*acmez.Client, acme.Account) {
 	return client, account
 }
 
-// Checks the certificate, key binding and persisted resource outcomes after a real client succeeds.
-func (h *harness) verify(t *testing.T, chainPEM []byte, key crypto.PublicKey) *acmeserver.Order {
+// Checks the returned chain against the client key, the requested names and the trusted root.
+func (h *harness) verifyLeaf(t *testing.T, chainPEM []byte, key crypto.PublicKey, names []string) (*x509.Certificate, []byte) {
 	t.Helper()
 	block, rest := pem.Decode(chainPEM)
 	if block == nil {
@@ -219,14 +275,25 @@ func (h *harness) verify(t *testing.T, chainPEM []byte, key crypto.PublicKey) *a
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(publicKey, leaf.RawSubjectPublicKeyInfo) || len(leaf.DNSNames) != 1 || leaf.DNSNames[0] != "issuance.test" || len(leaf.IPAddresses) != 0 {
+	expected := slices.Sorted(slices.Values(names))
+	if !bytes.Equal(publicKey, leaf.RawSubjectPublicKeyInfo) || !slices.Equal(slices.Sorted(slices.Values(leaf.DNSNames)), expected) || len(leaf.IPAddresses) != 0 {
 		t.Fatal("certificate key or identifiers differ from the client request")
 	}
 	roots := x509.NewCertPool()
 	roots.AddCert(h.ca.root)
-	if _, err := leaf.Verify(x509.VerifyOptions{Roots: roots, DNSName: "issuance.test"}); err != nil {
-		t.Fatal(err)
+	for _, name := range names {
+		if _, err := leaf.Verify(x509.VerifyOptions{Roots: roots, DNSName: strings.Replace(name, "*.", "host.", 1)}); err != nil {
+			t.Fatal(err)
+		}
 	}
+	return leaf, publicKey
+}
+
+// Checks the certificate, key binding and persisted resource outcomes after a real client succeeds.
+// Every name must have been authorized through the named challenge type.
+func (h *harness) verify(t *testing.T, chainPEM []byte, key crypto.PublicKey, names []string, typ acmeserver.ChallengeType) *acmeserver.Order {
+	t.Helper()
+	leaf, publicKey := h.verifyLeaf(t, chainPEM, key, names)
 	digest := sha256.Sum256(leaf.Raw)
 	cert, err := h.store.Certificate(t.Context(), base64.RawURLEncoding.EncodeToString(digest[:]))
 	if err != nil {
@@ -239,24 +306,100 @@ func (h *harness) verify(t *testing.T, chainPEM []byte, key crypto.PublicKey) *a
 	if !bytes.Equal(publicKey, mustCSR(t, order.CSR).RawSubjectPublicKeyInfo) || order.CertificateID != cert.ID || !bytes.Equal(cert.Chain[0], leaf.Raw) {
 		t.Fatal("publication differs from returned certificate")
 	}
+	if len(order.AuthorizationIDs) != len(names) {
+		t.Fatalf("authorizations = %d for %d names", len(order.AuthorizationIDs), len(names))
+	}
 	for _, id := range order.AuthorizationIDs {
 		a, err := h.store.Authorization(t.Context(), id)
 		if err != nil || a.Status != acmeserver.AuthorizationValid || !a.Expires.After(time.Now()) {
 			t.Fatalf("authorization = %+v, %v", a, err)
 		}
-		ch, err := h.store.Challenge(t.Context(), a.ChallengeIDs[0])
-		if err != nil || ch.Status != acmeserver.ChallengeValid || ch.Validated.IsZero() {
-			t.Fatalf("challenge = %+v, %v", ch, err)
+		name := a.Identifier.Value
+		if a.Wildcard {
+			name = "*." + name
 		}
+		if !slices.Contains(names, name) || a.Identifier.Type != acmeserver.IdentifierDNS {
+			t.Fatalf("authorization identifier %s wildcard=%v is not a requested name", a.Identifier, a.Wildcard)
+		}
+		h.verifyChallenges(t, a, typ)
 	}
-	if len(cert.Validations) != 1 || cert.Validations[0].Type != acmeserver.ChallengeHTTP01 {
+	if len(cert.Validations) != len(names) {
 		t.Fatal("missing validation evidence")
+	}
+	for _, validation := range cert.Validations {
+		if validation.Type != typ {
+			t.Fatalf("validation type = %s", validation.Type)
+		}
 	}
 	if _, err := h.store.ClaimTask(t.Context(), time.Now().Add(time.Hour), time.Now().Add(2*time.Hour)); !errors.Is(err, acmeserver.ErrNotFound) {
 		t.Fatalf("unfinished work: %v", err)
 	}
-	t.Log("verified HTTPS trust, HTTP-01 proof, leaf key, exact SAN, validity, chain, certificate retrieval and valid resources")
+	t.Logf("verified HTTPS trust, %s proof, leaf key, exact SANs %v, validity, chain, certificate retrieval and valid resources", typ, names)
 	return order
+}
+
+// Requires exactly one valid challenge of the expected type and untouched siblings.
+func (h *harness) verifyChallenges(t *testing.T, a *acmeserver.Authorization, typ acmeserver.ChallengeType) {
+	t.Helper()
+	valid := 0
+	for _, id := range a.ChallengeIDs {
+		ch, err := h.store.Challenge(t.Context(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch {
+		case ch.Type == typ && ch.Status == acmeserver.ChallengeValid && !ch.Validated.IsZero():
+			valid++
+		case ch.Status == acmeserver.ChallengePending:
+		default:
+			t.Fatalf("challenge = %+v", ch)
+		}
+	}
+	if valid != 1 {
+		t.Fatalf("valid %s challenges = %d", typ, valid)
+	}
+}
+
+// Requires that a failed client run left every order invalid without any CA issuance.
+func (h *harness) verifyRejected(t *testing.T, account acme.Account, typ acmeserver.ChallengeType) {
+	t.Helper()
+	ids, err := h.store.OrderIDs(t.Context(), accountID(account), "", 10)
+	if err != nil || len(ids) == 0 {
+		t.Fatalf("orders = %v, %v", ids, err)
+	}
+	failed := 0
+	for _, id := range ids {
+		order, err := h.store.Order(t.Context(), id)
+		if err != nil || order.Status != acmeserver.OrderInvalid || order.CertificateID != "" || order.Issuance != nil {
+			t.Fatalf("order = %+v, %v", order, err)
+		}
+		for _, authzID := range order.AuthorizationIDs {
+			a, err := h.store.Authorization(t.Context(), authzID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, challengeID := range a.ChallengeIDs {
+				ch, err := h.store.Challenge(t.Context(), challengeID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if ch.Status == acmeserver.ChallengeInvalid {
+					if ch.Type != typ || ch.Error == nil || a.Status != acmeserver.AuthorizationInvalid {
+						t.Fatalf("challenge = %+v authorization = %+v", ch, a)
+					}
+					failed++
+				}
+			}
+		}
+	}
+	if failed == 0 {
+		t.Fatal("no challenge recorded the rejected proof")
+	}
+	var count int
+	if err := h.ca.db.QueryRowContext(t.Context(), "SELECT count(*) FROM issuance").Scan(&count); err != nil || count != 0 {
+		t.Fatalf("CA calls = %d, %v", count, err)
+	}
+	t.Logf("incorrect %s proof rejected, orders invalid, no CA issuance", typ)
 }
 
 // Parses the accepted CSR for independent comparison with the issued key.
