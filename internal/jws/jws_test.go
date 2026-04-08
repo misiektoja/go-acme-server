@@ -16,6 +16,7 @@ import (
 	"errors"
 	"hash"
 	"math/big"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -496,4 +497,52 @@ func decode(t *testing.T, s string) []byte {
 func isCode(err error, code Code) bool {
 	var jwsErr *Error
 	return errors.As(err, &jwsErr) && jwsErr.Code == code
+}
+
+// Checks that the inner and MAC profiles enforce their header shapes and never both accept one body.
+func FuzzParseProfiles(f *testing.F) {
+	priv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	inner := map[string]any{"alg": algES256, "url": "u", "jwk": json.RawMessage(mustMarshalJWK(f, &priv.PublicKey))}
+	f.Add(sign(f, priv, algES256, inner, []byte(`{"account":"a","oldKey":{}}`)))
+	protected := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256","kid":"k","url":"u"}`))
+	payload := base64.RawURLEncoding.EncodeToString([]byte(`{}`))
+	mac := hmac.New(sha256.New, []byte("secret"))
+	mac.Write([]byte(protected + "." + payload))
+	f.Add([]byte(`{"protected":"` + protected + `","payload":"` + payload + `","signature":"` + base64.RawURLEncoding.EncodeToString(mac.Sum(nil)) + `"}`))
+	f.Add(sign(f, priv, algES256, map[string]any{"alg": algES256, "nonce": "bm9uY2U", "url": "u", "kid": "k"}, []byte("{}")))
+	f.Fuzz(func(t *testing.T, body []byte) {
+		innerMsg, innerErr := ParseInner(body)
+		switch {
+		case innerErr != nil && !isTyped(innerErr):
+			t.Fatalf("ParseInner returned an untyped error: %v", innerErr)
+		case innerErr == nil && (innerMsg.Header.Key == nil || innerMsg.Header.KeyID != "" || innerMsg.Header.Nonce != "" ||
+			innerMsg.Header.URL == "" || !slices.Contains(Algorithms, innerMsg.Header.Algorithm)):
+			t.Fatalf("ParseInner accepted a wrong header shape: %+v", innerMsg.Header)
+		case innerErr == nil:
+			if err := innerMsg.Verify(innerMsg.Header.Key); err != nil && !isTyped(err) {
+				t.Fatalf("Verify returned an untyped error: %v", err)
+			}
+		}
+		macMsg, macErr := ParseMAC(body)
+		switch {
+		case macErr != nil && !isTyped(macErr):
+			t.Fatalf("ParseMAC returned an untyped error: %v", macErr)
+		case macErr == nil && (macMsg.Header.Key != nil || macMsg.Header.KeyID == "" || macMsg.Header.Nonce != "" ||
+			macMsg.Header.URL == "" || !slices.Contains(MACAlgorithms, macMsg.Header.Algorithm)):
+			t.Fatalf("ParseMAC accepted a wrong header shape: %+v", macMsg.Header)
+		case macErr == nil:
+			if err := macMsg.VerifyMAC([]byte("secret")); err != nil && !isTyped(err) {
+				t.Fatalf("VerifyMAC returned an untyped error: %v", err)
+			}
+		}
+		if _, requestErr := Parse(body); (innerErr == nil && macErr == nil) || (innerErr == nil && requestErr == nil) || (macErr == nil && requestErr == nil) {
+			t.Fatal("one body satisfied two incompatible profiles")
+		}
+	})
+}
+
+// Reports whether err is a classified *Error.
+func isTyped(err error) bool {
+	var e *Error
+	return errors.As(err, &e) && e.Code != 0
 }

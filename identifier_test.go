@@ -2,6 +2,8 @@ package acmeserver
 
 import (
 	"errors"
+	"net/netip"
+	"strings"
 	"testing"
 )
 
@@ -113,4 +115,54 @@ func make64(c byte) []byte {
 func longName() string {
 	label := string(make64('b')[:60])
 	return label + "." + label + "." + label + "." + label + "." + label + ".example"
+}
+
+// Checks that normalization is idempotent, keeps the documented syntax and fails with problems.
+func FuzzIdentifierNormalize(f *testing.F) {
+	f.Add("dns", "Example.COM")
+	f.Add("dns", "*.example.com")
+	f.Add("dns", "xn--bcher-kva.example")
+	f.Add("dns", "a..b")
+	f.Add("ip", "::FFFF:192.0.2.1")
+	f.Add("ip", "2001:DB8::1")
+	f.Add("ip", "fe80::1%eth0")
+	f.Add("mail", "x")
+	f.Fuzz(func(t *testing.T, typ, value string) {
+		id := Identifier{Type: IdentifierType(typ), Value: value}
+		normalized, err := id.Normalize()
+		if err != nil {
+			p, ok := AsProblem(err)
+			if !ok || (p.Type != ErrorUnsupportedIdentifier && p.Type != ErrorMalformed && p.Type != ErrorRejectedIdentifier) {
+				t.Fatalf("Normalize returned %v", err)
+			}
+			return
+		}
+		again, err := normalized.Normalize()
+		if err != nil || again != normalized {
+			t.Fatalf("normalization is not idempotent: %v -> %v, %v", normalized, again, err)
+		}
+		switch normalized.Type {
+		case IdentifierDNS:
+			name := normalized.Value
+			if name != strings.ToLower(value) || len(name) > maxDNSNameLength || normalized.IsWildcard() != strings.HasPrefix(name, "*.") {
+				t.Fatalf("accepted DNS identifier %q from %q", name, value)
+			}
+			for label := range strings.SplitSeq(strings.TrimPrefix(name, "*."), ".") {
+				if reason := checkDNSLabel(label); reason != "" {
+					t.Fatalf("accepted label %q: %s", label, reason)
+				}
+			}
+			if _, err := netip.ParseAddr(strings.TrimPrefix(name, "*.")); err == nil {
+				t.Fatalf("accepted IP literal %q as a DNS identifier", name)
+			}
+		case IdentifierIP:
+			address, err := netip.ParseAddr(normalized.Value)
+			if err != nil || address.String() != normalized.Value || address.Zone() != "" || address.Is4In6() ||
+				address.IsUnspecified() || address.IsMulticast() {
+				t.Fatalf("accepted IP identifier %q from %q", normalized.Value, value)
+			}
+		default:
+			t.Fatalf("accepted type %q", normalized.Type)
+		}
+	})
 }

@@ -1,6 +1,7 @@
 package jws
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -64,4 +65,57 @@ func TestUnmarshalStrictTypeMismatch(t *testing.T) {
 	if !errors.As(err, &jwsErr) || jwsErr.Code != CodeMalformed {
 		t.Fatalf("type mismatch error = %v", err)
 	}
+}
+
+// Checks that every accepted document is valid JSON within the nesting bound and decodes twice.
+func FuzzUnmarshalStrict(f *testing.F) {
+	f.Add([]byte(`{"a":1,"b":{"x":[1,{"y":null}],"z":"s"}}`))
+	f.Add([]byte(`{"a":1,"a":2}`))
+	f.Add([]byte(strings.Repeat("[", MaxDepth+1) + strings.Repeat("]", MaxDepth+1)))
+	f.Add([]byte(`"scalar" 1`))
+	f.Add([]byte(``))
+	f.Fuzz(func(t *testing.T, data []byte) {
+		var v any
+		err := UnmarshalStrict(data, &v)
+		if err != nil {
+			var e *Error
+			if !errors.As(err, &e) || e.Code != CodeMalformed {
+				t.Fatalf("UnmarshalStrict returned an untyped error: %v", err)
+			}
+			return
+		}
+		if !json.Valid(data) {
+			t.Fatalf("accepted invalid JSON %q", data)
+		}
+		if depth := jsonDepth(v); depth > MaxDepth {
+			t.Fatalf("accepted nesting of %d levels", depth)
+		}
+		encoded, err := json.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var again any
+		if err := UnmarshalStrict(encoded, &again); err != nil {
+			t.Fatalf("re-encoded document rejected: %v", err)
+		}
+	})
+}
+
+// Counts nested objects and arrays in a decoded document.
+func jsonDepth(v any) int {
+	switch value := v.(type) {
+	case map[string]any:
+		depth := 0
+		for _, member := range value {
+			depth = max(depth, jsonDepth(member))
+		}
+		return depth + 1
+	case []any:
+		depth := 0
+		for _, element := range value {
+			depth = max(depth, jsonDepth(element))
+		}
+		return depth + 1
+	}
+	return 0
 }

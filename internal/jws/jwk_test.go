@@ -1,6 +1,7 @@
 package jws
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
@@ -207,4 +208,57 @@ func mustThumbprint(t *testing.T, key any) string {
 		t.Fatalf("Thumbprint: %v", err)
 	}
 	return got
+}
+
+// Checks that every accepted JWK is bounded, canonical and round-trips through MarshalJWK.
+func FuzzParseJWK(f *testing.F) {
+	f.Add([]byte(`{"kty":"EC","crv":"P-256","x":"` + rfc7515ECX + `","y":"` + rfc7515ECY + `"}`))
+	f.Add([]byte(`{"kty":"OKP","crv":"Ed25519","x":"` + rfc8037X + `"}`))
+	f.Add([]byte(`{"kty":"RSA","n":"` + rfc7515RSAN + `","e":"AQAB"}`))
+	f.Add([]byte(`{"kty":"EC","crv":"P-521","x":"","y":""}`))
+	f.Add([]byte(`{"kty":"RSA","n":"AQ","e":"AQAB","d":"x"}`))
+	f.Add([]byte(`{}`))
+	f.Fuzz(func(t *testing.T, raw []byte) {
+		key, err := ParseJWK(raw)
+		if err != nil {
+			if !isCode(err, CodeBadPublicKey) {
+				t.Fatalf("ParseJWK returned an untyped error: %v", err)
+			}
+			return
+		}
+		switch k := key.(type) {
+		case *rsa.PublicKey:
+			if bits := k.N.BitLen(); bits < MinRSABits || bits > MaxRSABits || k.E < 3 || k.E%2 == 0 {
+				t.Fatalf("accepted RSA key outside bounds: %d bits, e=%d", bits, k.E)
+			}
+		case *ecdsa.PublicKey:
+			if _, _, ok := curveName(k.Curve); !ok {
+				t.Fatalf("accepted EC key on %v", k.Curve)
+			}
+			if _, err := k.Bytes(); err != nil {
+				t.Fatalf("accepted EC point is invalid: %v", err)
+			}
+		case ed25519.PublicKey:
+			if len(k) != ed25519.PublicKeySize {
+				t.Fatalf("accepted Ed25519 key of %d bytes", len(k))
+			}
+		default:
+			t.Fatalf("accepted unsupported key %T", key)
+		}
+		canonical, err := MarshalJWK(key)
+		if err != nil {
+			t.Fatalf("MarshalJWK: %v", err)
+		}
+		again, err := ParseJWK(canonical)
+		if err != nil {
+			t.Fatalf("canonical JWK rejected: %v", err)
+		}
+		second, err := MarshalJWK(again)
+		if err != nil || !bytes.Equal(canonical, second) {
+			t.Fatalf("canonical form is unstable: %s vs %s (%v)", canonical, second, err)
+		}
+		if thumb, err := Thumbprint(key); err != nil || len(thumb) != 43 || !isBase64URL(thumb) {
+			t.Fatalf("thumbprint %q, %v", thumb, err)
+		}
+	})
 }

@@ -206,3 +206,53 @@ func TestResolverSkipsUnrelatedRecordBodies(t *testing.T) {
 		t.Fatalf("TXT = %v, %v", values, err)
 	}
 }
+
+// Checks that decoded DNS responses stay within the record bound and carry only validation types.
+func FuzzDNSResponse(f *testing.F) {
+	question := dnsmessage.Question{Name: dnsmessage.MustNewName("_acme-challenge.a.test."), Type: dnsmessage.TypeTXT, Class: dnsmessage.ClassINET}
+	valid := dnsmessage.Message{Header: dnsmessage.Header{ID: 7, Response: true}, Questions: []dnsmessage.Question{question},
+		Answers: []dnsmessage.Resource{
+			dnsRecord(question.Name.String(), dnsmessage.TypeTXT, &dnsmessage.TXTResource{TXT: []string{"proof"}}),
+			dnsRecord(question.Name.String(), dnsmessage.TypeCNAME, &dnsmessage.CNAMEResource{CNAME: dnsmessage.MustNewName("b.test.")}),
+			dnsRecord("b.test.", dnsmessage.TypeA, &dnsmessage.AResource{A: [4]byte{192, 0, 2, 1}}),
+			dnsRecord("b.test.", dnsmessage.TypeSVCB, &dnsmessage.UnknownResource{Type: dnsmessage.TypeSVCB, Data: []byte{0}}),
+		}}
+	wire, err := valid.Pack()
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Add(wire)
+	f.Add(wire[:12])
+	f.Add([]byte{})
+	resolver, err := NewResolver(ResolverOptions{Servers: []netip.AddrPort{netip.MustParseAddrPort("127.0.0.1:53")}, MaxRecords: 8})
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Fuzz(func(t *testing.T, response []byte) {
+		answers, err := resolver.parseResponse(response, 7, question)
+		if err != nil {
+			return
+		}
+		if len(answers) > 8 {
+			t.Fatalf("accepted %d answers", len(answers))
+		}
+		for _, answer := range answers {
+			var want dnsmessage.Type
+			switch answer.Body.(type) {
+			case *dnsmessage.AResource:
+				want = dnsmessage.TypeA
+			case *dnsmessage.AAAAResource:
+				want = dnsmessage.TypeAAAA
+			case *dnsmessage.CNAMEResource:
+				want = dnsmessage.TypeCNAME
+			case *dnsmessage.TXTResource:
+				want = dnsmessage.TypeTXT
+			default:
+				t.Fatalf("decoded unrelated body %T", answer.Body)
+			}
+			if answer.Header.Type != want {
+				t.Fatalf("body %T under header type %v", answer.Body, answer.Header.Type)
+			}
+		}
+	})
+}
