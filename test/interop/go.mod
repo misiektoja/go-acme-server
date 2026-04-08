@@ -3,8 +3,10 @@ module github.com/misiektoja/go-acme-server/test/interop
 go 1.26.1
 
 require (
+	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/mholt/acmez/v3 v3.1.6
 	github.com/misiektoja/go-acme-server v0.0.0
+	golang.org/x/net v0.52.0
 	modernc.org/sqlite v1.48.1
 )
 
@@ -15,7 +17,6 @@ require (
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	golang.org/x/crypto v0.49.0 // indirect
-	golang.org/x/net v0.52.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/text v0.35.0 // indirect
 	modernc.org/libc v1.71.0 // indirect
