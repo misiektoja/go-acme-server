@@ -24,6 +24,12 @@ type event struct {
 var required = map[string]string{
 	"github.com/misiektoja/go-acme-server/test/interop/TestAcmezHTTP01":                         "",
 	"github.com/misiektoja/go-acme-server/test/interop/TestAcmezRejectsWrongProof":              "",
+	"github.com/misiektoja/go-acme-server/test/interop/TestAcmezDNS01Wildcard":                  "",
+	"github.com/misiektoja/go-acme-server/test/interop/TestAcmezRejectsWrongDNSProof":           "",
+	"github.com/misiektoja/go-acme-server/test/interop/TestAcmezTLSALPN01":                      "",
+	"github.com/misiektoja/go-acme-server/test/interop/TestAcmezRejectsWrongALPNProof":          "",
+	"github.com/misiektoja/go-acme-server/test/interop/TestGoJoseAccounts":                      "",
+	"github.com/misiektoja/go-acme-server/test/interop/TestGoJoseRejectedRequests":              "",
 	"github.com/misiektoja/go-acme-server/test/interop/TestCertbotHTTP01":                       "",
 	"github.com/misiektoja/go-acme-server/test/interop/TestCrashAfterIssuance":                  "",
 	"github.com/misiektoja/go-acme-server/test/interop/sqlitestore/TestStoreContract":           "",

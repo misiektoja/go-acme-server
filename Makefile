@@ -61,6 +61,20 @@ test-interop: test-scratch ## Require acmez, Certbot, durable storage and proces
 test-recovery: test-scratch ## Exercise two-process fencing and recovery after a killed worker.
 	cd test/interop && go test -race -count=1 -timeout=2m -run 'Test(CrashAfterIssuance|TwoProcessLeaseAndFence)$$' ./...
 
+# FUZZ_TIME bounds each target. go test fuzzes one target per invocation, so the targets run in turn.
+FUZZ_TIME ?= 20s
+FUZZ_TARGETS := ./internal/jws:FuzzParse ./internal/jws:FuzzParseProfiles ./internal/jws:FuzzParseJWK ./internal/jws:FuzzUnmarshalStrict \
+	.:FuzzIdentifierNormalize ./challenge:FuzzDNSResponse ./challenge:FuzzALPNProof
+
+.PHONY: fuzz
+fuzz: ## Fuzz every parsing target for FUZZ_TIME each. Failing inputs are saved under testdata.
+	@for target in $(FUZZ_TARGETS); do \
+		pkg="$${target%%:*}"; name="$${target##*:}"; \
+		go test -list "^$$name$$" "$$pkg" | grep -x "$$name" >/dev/null || { echo "fuzz target $$name is missing from $$pkg"; exit 1; }; \
+		echo "fuzzing $$name in $$pkg for $(FUZZ_TIME)"; \
+		go test -run "^$$" -fuzz "^$$name$$" -fuzztime "$(FUZZ_TIME)" "$$pkg"; \
+	done
+
 ##@ Checks
 
 .PHONY: lint
