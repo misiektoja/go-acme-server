@@ -1,6 +1,7 @@
 # Interoperability tests
 
-This separate module tests go-acme-server with acmez v3.1.6, Certbot 5.4.0 and go-jose v4.1.4.
+This separate module tests go-acme-server with acmez v3.1.6, Certbot 5.4.0, lego v4.35.2 and
+go-jose v4.1.4.
 Clients reach the server over HTTPS and trust a generated root explicitly. Tests check the issued
 key, exact identifiers, validity, chain and stored resource state. An incorrect proof of any
 challenge type must leave the order invalid without any CA issuance.
@@ -8,7 +9,13 @@ challenge type must leave the order invalid without any CA issuance.
 acmez obtains certificates through HTTP-01, DNS-01 and TLS-ALPN-01. The DNS-01 scenario orders a
 wildcard together with its base domain, so two proofs share one TXT owner name in the local TCP DNS
 responder. The TLS-ALPN-01 scenario serves the challenge certificates that acmez itself generates
-from a local TLS listener. Certbot uses its standalone HTTP-01 solver on an unprivileged port.
+from a local TLS listener. Certbot uses its standalone HTTP-01 solver on an unprivileged port
+and its manual plugin for a DNS-01 wildcard with its base domain. The manual hooks are shell
+scripts written into the test directory that append and remove TXT values in files the local
+responder reads. Certbot then revokes the certificate through its account. lego issues through
+its own HTTP-01 server and through DNS-01 for the same wildcard pair with a provider that writes
+to the responder directly. It revokes with a reason code and receives `alreadyRevoked` on the
+second attempt. The test CA records revocations by serial so each test confirms one CA call.
 
 go-jose signs requests independently of the server's JWS code. The cross-check creates accounts
 with every advertised algorithm, compares stored RFC 7638 thumbprints with go-jose, changes keys
@@ -45,7 +52,8 @@ ACME_CERTBOT="$PWD/.cache/certbot/bin/certbot" make test-interop
 
 `ACME_CERTBOT` selects the executable. Its version must match the pin. Missing tools, failed tests
 and skipped required scenarios fail the gate. The DNS, TLS and go-jose scenarios need no extra
-tools. `make test-recovery` runs process recovery and fencing without needing Certbot. `make lint`
+tools. lego runs in process and reads no host resolver because CNAME discovery is disabled.
+`make test-recovery` runs process recovery and fencing without needing Certbot. `make lint`
 and `make tidy-check` cover both modules.
 
 `go.mod` and `go.sum` pin the Go dependencies. `requirements.txt` pins every Certbot dependency.
@@ -60,6 +68,6 @@ these files. The gate prints diagnostics and writes `interop-summary.json` in th
 only Go version, operating system, architecture, test names, outcomes and elapsed times. CI uses
 its temporary directory and uploads only the summary, including after failure.
 
-These tests establish the named acmez, Certbot, go-jose, concurrency and recovery scenarios. Local validator
+These tests establish the named acmez, Certbot, lego, go-jose, concurrency and recovery scenarios. Local validator
 tests separately check RFC 8555, RFC 8737 and RFC 8738 proof and egress rules. They do not establish
 complete RFC conformance or the broader client matrix.
