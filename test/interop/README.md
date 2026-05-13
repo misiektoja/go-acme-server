@@ -15,6 +15,14 @@ with every advertised algorithm, compares stored RFC 7638 thumbprints with go-jo
 through an inner JWS, binds an external account with HS256 and confirms that refused signatures
 return the expected problem types, including a fresh nonce on every refusal.
 
+A raw go-jose client also repeats and races requests the way clients do after a lost response.
+Registering one key again or from several connections at once yields one account. Repeated
+and concurrent challenge responses validate once and repeated finalizations with the same CSR
+issue once, while a different CSR is refused before and after issuance. Competing CSRs, racing
+key changes and one nonce used from several connections each succeed exactly once. Four
+authorizations of one order complete concurrently and two workers share one SQLite store
+without processing any task twice.
+
 The SQLite adapter uses modernc.org/sqlite v1.48.1 with WAL, `synchronous=FULL`, foreign keys,
 a five-second busy timeout and `BEGIN IMMEDIATE` writes. It is test infrastructure with no schema
 migration or production support contract. SQLite lock conflicts return `ErrRevisionMismatch` so
@@ -52,6 +60,6 @@ these files. The gate prints diagnostics and writes `interop-summary.json` in th
 only Go version, operating system, architecture, test names, outcomes and elapsed times. CI uses
 its temporary directory and uploads only the summary, including after failure.
 
-These tests establish the named acmez, Certbot, go-jose and recovery scenarios. Local validator
+These tests establish the named acmez, Certbot, go-jose, concurrency and recovery scenarios. Local validator
 tests separately check RFC 8555, RFC 8737 and RFC 8738 proof and egress rules. They do not establish
 complete RFC conformance or the broader client matrix.
