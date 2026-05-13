@@ -102,6 +102,10 @@ func openCA(t *testing.T, directory string) *durableCA {
 	if err != nil {
 		t.Fatal(err)
 	}
+	_, err = db.ExecContext(t.Context(), `CREATE TABLE IF NOT EXISTS revocation (serial TEXT PRIMARY KEY, reason INTEGER NOT NULL, calls INTEGER NOT NULL)`)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return &durableCA{key: key, root: root, db: db}
 }
 
@@ -164,7 +168,9 @@ func (ca *durableCA) sign(req acmeserver.IssueRequest) ([]byte, error) {
 	return x509.CreateCertificate(rand.Reader, leaf, ca.root, req.CSR.PublicKey, ca.key)
 }
 
-// Refuses revocation because this harness exercises issuance only.
-func (*durableCA) Revoke(context.Context, acmeserver.RevokeRequest) error {
-	return errors.New("revocation is outside this test CA scenario")
+// Records the revocation durably by serial, counting repeated calls for the same certificate.
+func (ca *durableCA) Revoke(ctx context.Context, req acmeserver.RevokeRequest) error {
+	_, err := ca.db.ExecContext(ctx, `INSERT INTO revocation VALUES (?, ?, 1) ON CONFLICT(serial) DO UPDATE SET calls = calls + 1`,
+		req.Certificate.SerialNumber.String(), req.Reason)
+	return err
 }

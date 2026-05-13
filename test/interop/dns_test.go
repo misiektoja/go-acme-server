@@ -6,6 +6,8 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -25,6 +27,9 @@ type dnsResponder struct {
 	records map[string][]string
 	// Number of TXT values returned by each answered query, in order.
 	answered []int
+	// Optional directory whose files hold one TXT value per line, named by owner without the
+	// trailing dot. External hook scripts write them.
+	dir string
 }
 
 // Starts the isolated DNS responder on an ephemeral loopback port.
@@ -71,6 +76,9 @@ func (d *dnsResponder) serve(connection net.Conn) {
 	name := strings.ToLower(question.Name.String())
 	d.mu.Lock()
 	values := slices.Clone(d.records[name])
+	if d.dir != "" {
+		values = append(values, d.fileValues(name)...)
+	}
 	if question.Type == dnsmessage.TypeTXT {
 		d.answered = append(d.answered, len(values))
 	}
@@ -91,6 +99,15 @@ func (d *dnsResponder) serve(connection net.Conn) {
 	}
 	binary.BigEndian.PutUint16(size[:], uint16(len(wire)))
 	connection.Write(append(size[:], wire...))
+}
+
+// Reads the TXT values a hook script wrote for an owner, ignoring blank lines.
+func (d *dnsResponder) fileValues(name string) []string {
+	data, err := os.ReadFile(filepath.Join(d.dir, strings.TrimSuffix(name, ".")))
+	if err != nil {
+		return nil
+	}
+	return slices.DeleteFunc(strings.Split(string(data), "\n"), func(v string) bool { return strings.TrimSpace(v) == "" })
 }
 
 // Adds one TXT value at a lowercase fully qualified owner name.

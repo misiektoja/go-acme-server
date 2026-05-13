@@ -39,7 +39,7 @@ import (
 // Names the versions every required client run must use.
 const (
 	certbotVersion = "certbot 5.4.0"
-	clientVersions = "acmez=v3.1.6 Certbot=5.4.0 go-jose=v4.1.4 SQLite=v1.48.1"
+	clientVersions = "acmez=v3.1.6 Certbot=5.4.0 go-jose=v4.1.4 lego=v4.35.2 SQLite=v1.48.1"
 )
 
 // The only host name the harness resolves and issues for.
@@ -400,6 +400,27 @@ func (h *harness) verifyRejected(t *testing.T, account acme.Account, typ acmeser
 		t.Fatalf("CA calls = %d, %v", count, err)
 	}
 	t.Logf("incorrect %s proof rejected, orders invalid, no CA issuance", typ)
+}
+
+// Checks that the order's certificate is stored as revoked with the reason and no CA re-issuance.
+func (h *harness) verifyRevoked(t *testing.T, order *acmeserver.Order, reason int) {
+	t.Helper()
+	cert, err := h.store.Certificate(t.Context(), order.CertificateID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cert.Revoked || cert.RevokedAt.IsZero() || cert.RevocationReason != reason {
+		t.Fatalf("certificate revoked=%v at=%v reason=%d", cert.Revoked, cert.RevokedAt, cert.RevocationReason)
+	}
+	leaf, err := x509.ParseCertificate(cert.Chain[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var issued, caReason, calls int
+	err = h.ca.db.QueryRowContext(t.Context(), "SELECT (SELECT count(*) FROM issuance), reason, calls FROM revocation WHERE serial = ?", leaf.SerialNumber.String()).Scan(&issued, &caReason, &calls)
+	if err != nil || issued != 1 || caReason != reason || calls != 1 {
+		t.Fatalf("issuance rows=%d CA revocation reason=%d calls=%d, %v", issued, caReason, calls, err)
+	}
 }
 
 // Parses the accepted CSR for independent comparison with the issued key.
