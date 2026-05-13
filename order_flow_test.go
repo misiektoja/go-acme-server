@@ -196,6 +196,9 @@ func TestIssuanceFlow(t *testing.T) {
 	if responded.Status != statusProcessing && responded.Status != statusValid {
 		t.Fatalf("challenge after response = %+v", responded)
 	}
+	if retry := rec.Header().Get("Retry-After"); (responded.Status == statusProcessing) != (retry != "") {
+		t.Fatalf("challenge %s with Retry-After %q", responded.Status, retry)
+	}
 	waitFor(t, "first authorization valid", func() bool {
 		c.get(order.Authorizations[0], &authz)
 		return authz.Status == statusValid
