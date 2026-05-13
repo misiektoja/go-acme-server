@@ -161,6 +161,14 @@ func (s *Server) writeOrder(ctx context.Context, w http.ResponseWriter, status i
 	s.writeJSON(ctx, w, status, view)
 }
 
+// Writes a challenge and asks clients to poll a processing one later, see RFC 8555 section 7.5.1.
+func (s *Server) writeChallenge(ctx context.Context, w http.ResponseWriter, ch *Challenge) {
+	if ch.Status == ChallengeProcessing {
+		w.Header().Set("Retry-After", strconv.Itoa(processingRetryAfter))
+	}
+	s.writeJSON(ctx, w, http.StatusOK, s.challengeView(ch))
+}
+
 // Decodes a request payload into v with the strict JSON rules.
 func decodePayload(payload []byte, v any) *Problem {
 	if err := jws.UnmarshalStrict(payload, v); err != nil {

@@ -348,7 +348,7 @@ func (s *Server) serveChallenge(w http.ResponseWriter, r *http.Request, id strin
 			return
 		}
 	}
-	s.writeJSON(ctx, w, http.StatusOK, s.challengeView(ch))
+	s.writeChallenge(ctx, w, ch)
 }
 
 // Moves a pending challenge to processing and enqueues its validation. A challenge that is no
