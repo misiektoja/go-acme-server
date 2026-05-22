@@ -81,12 +81,15 @@ func (s *Server) serveNewAccount(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case errors.Is(err, ErrConflict):
 		existing, lookupErr := s.store.AccountByKey(ctx, thumbprint)
-		if lookupErr != nil {
+		switch {
+		case lookupErr == nil:
+			s.writeExistingAccount(ctx, w, existing)
+		case errors.Is(lookupErr, ErrNotFound) && account.ExternalAccountClaim != "":
+			s.writeProblem(ctx, w, NewProblem(ErrorUnauthorized, "the external account key is already bound to another account"))
+		default:
 			s.logError(ctx, "account creation conflict", err)
 			s.writeProblem(ctx, w, NewProblem(ErrorServerInternal, "account creation failed"))
-			return
 		}
-		s.writeExistingAccount(ctx, w, existing)
 		return
 	case err != nil:
 		s.logError(ctx, "account creation failed", err)
@@ -141,6 +144,9 @@ func (s *Server) buildAccount(ctx context.Context, req *signedRequest, thumbprin
 		TermsOfServiceAgreed: payload.TermsOfServiceAgreed,
 		ExternalAccountID:    externalID,
 		CreatedAt:            s.clock.Now(),
+	}
+	if s.singleUseEAB {
+		account.ExternalAccountClaim = externalID
 	}
 	if p := s.policyProblem(ctx, s.policy.NewAccount(ctx, account), "account policy"); p != nil {
 		return nil, p

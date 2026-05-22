@@ -18,18 +18,20 @@ import (
 
 // An in-memory Store. The zero value is not usable, call New.
 type Store struct {
-	mu            sync.RWMutex
-	accounts      map[string]*acmeserver.Account
-	accountByKey  map[string]string
-	orders        map[string]*acmeserver.Order
-	orderIDs      map[string][]string
-	authzs        map[string]*acmeserver.Authorization
-	authzIndex    map[authorizationKey][]string
-	challenges    map[string]*acmeserver.Challenge
-	certificates  map[string]*acmeserver.Certificate
-	tasks         map[string]*acmeserver.Task
-	taskSequence  uint64
-	taskInsertion map[string]uint64
+	mu           sync.RWMutex
+	accounts     map[string]*acmeserver.Account
+	accountByKey map[string]string
+	// Maps single-use external account claims to account IDs.
+	accountByClaim map[string]string
+	orders         map[string]*acmeserver.Order
+	orderIDs       map[string][]string
+	authzs         map[string]*acmeserver.Authorization
+	authzIndex     map[authorizationKey][]string
+	challenges     map[string]*acmeserver.Challenge
+	certificates   map[string]*acmeserver.Certificate
+	tasks          map[string]*acmeserver.Task
+	taskSequence   uint64
+	taskInsertion  map[string]uint64
 }
 
 // Indexes authorizations by account and complete identifier, including wildcard scope.
@@ -41,16 +43,17 @@ type authorizationKey struct {
 // Returns an empty Store.
 func New() *Store {
 	return &Store{
-		accounts:      make(map[string]*acmeserver.Account),
-		accountByKey:  make(map[string]string),
-		orders:        make(map[string]*acmeserver.Order),
-		orderIDs:      make(map[string][]string),
-		authzs:        make(map[string]*acmeserver.Authorization),
-		authzIndex:    make(map[authorizationKey][]string),
-		challenges:    make(map[string]*acmeserver.Challenge),
-		certificates:  make(map[string]*acmeserver.Certificate),
-		tasks:         make(map[string]*acmeserver.Task),
-		taskInsertion: make(map[string]uint64),
+		accounts:       make(map[string]*acmeserver.Account),
+		accountByKey:   make(map[string]string),
+		accountByClaim: make(map[string]string),
+		orders:         make(map[string]*acmeserver.Order),
+		orderIDs:       make(map[string][]string),
+		authzs:         make(map[string]*acmeserver.Authorization),
+		authzIndex:     make(map[authorizationKey][]string),
+		challenges:     make(map[string]*acmeserver.Challenge),
+		certificates:   make(map[string]*acmeserver.Certificate),
+		tasks:          make(map[string]*acmeserver.Task),
+		taskInsertion:  make(map[string]uint64),
 	}
 }
 
@@ -70,9 +73,15 @@ func (s *Store) CreateAccount(ctx context.Context, account *acmeserver.Account) 
 	if _, exists := s.accountByKey[account.KeyThumbprint]; exists {
 		return acmeserver.ErrConflict
 	}
+	if _, exists := s.accountByClaim[account.ExternalAccountClaim]; exists && account.ExternalAccountClaim != "" {
+		return acmeserver.ErrConflict
+	}
 	account.Revision = 1
 	s.accounts[account.ID] = cloneAccount(account)
 	s.accountByKey[account.KeyThumbprint] = account.ID
+	if account.ExternalAccountClaim != "" {
+		s.accountByClaim[account.ExternalAccountClaim] = account.ID
+	}
 	return nil
 }
 
@@ -125,8 +134,17 @@ func (s *Store) UpdateAccount(ctx context.Context, account *acmeserver.Account) 
 		if owner, exists := s.accountByKey[account.KeyThumbprint]; exists && owner != account.ID {
 			return acmeserver.ErrConflict
 		}
-		delete(s.accountByKey, stored.KeyThumbprint)
-		s.accountByKey[account.KeyThumbprint] = account.ID
+	}
+	if account.ExternalAccountClaim != stored.ExternalAccountClaim && account.ExternalAccountClaim != "" {
+		if owner, exists := s.accountByClaim[account.ExternalAccountClaim]; exists && owner != account.ID {
+			return acmeserver.ErrConflict
+		}
+	}
+	delete(s.accountByKey, stored.KeyThumbprint)
+	s.accountByKey[account.KeyThumbprint] = account.ID
+	delete(s.accountByClaim, stored.ExternalAccountClaim)
+	if account.ExternalAccountClaim != "" {
+		s.accountByClaim[account.ExternalAccountClaim] = account.ID
 	}
 	account.Revision++
 	s.accounts[account.ID] = cloneAccount(account)

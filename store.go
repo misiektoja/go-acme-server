@@ -15,8 +15,8 @@ var (
 
 // Persists accounts. Every method is atomic and returns copies the caller owns.
 type AccountStore interface {
-	// Stores a new account with revision 1. It returns ErrConflict when the ID or key
-	// thumbprint is already in use.
+	// Stores a new account with revision 1. It returns ErrConflict when the ID, the key
+	// thumbprint or a non-empty ExternalAccountClaim is already in use.
 	CreateAccount(ctx context.Context, account *Account) error
 	// Returns the account with the given ID or ErrNotFound.
 	Account(ctx context.Context, id string) (*Account, error)

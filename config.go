@@ -69,6 +69,9 @@ type Config struct {
 	Validators map[ChallengeType]Validator
 	// Verifies external account bindings. Required when Meta.ExternalAccountRequired is set.
 	ExternalAccounts ExternalAccountKeys
+	// Binds each external account key identifier to at most one account. The claim is committed
+	// with the account, and a later newAccount with the same identifier and another key is refused.
+	SingleUseExternalAccounts bool
 	// Reviews new accounts and orders. Defaults to AllowAll.
 	Policy Policy
 	// Reviews current issuance policy before dispatch, with the accepted CSR and validation evidence.

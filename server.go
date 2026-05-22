@@ -53,6 +53,7 @@ type Server struct {
 	revoker        Revoker
 	validators     map[ChallengeType]Validator
 	eabKeys        ExternalAccountKeys
+	singleUseEAB   bool
 	policy         Policy
 	issuancePolicy IssuancePolicy
 	requireTOS     bool
@@ -92,6 +93,7 @@ func New(cfg Config) (*Server, error) {
 		revoker:        cfg.Revoker,
 		validators:     make(map[ChallengeType]Validator, len(cfg.Validators)),
 		eabKeys:        cfg.ExternalAccounts,
+		singleUseEAB:   cfg.SingleUseExternalAccounts,
 		policy:         cfg.Policy,
 		issuancePolicy: cfg.IssuancePolicy,
 		requireTOS:     cfg.RequireTermsOfServiceAgreed,
@@ -145,6 +147,8 @@ func (cfg Config) validate() error {
 		return errorf("Config.Validators needs at least one validator")
 	case cfg.Meta.ExternalAccountRequired && cfg.ExternalAccounts == nil:
 		return errorf("Config.ExternalAccounts is required when Meta.ExternalAccountRequired is set")
+	case cfg.SingleUseExternalAccounts && cfg.ExternalAccounts == nil:
+		return errorf("Config.SingleUseExternalAccounts needs Config.ExternalAccounts")
 	case cfg.RequireTermsOfServiceAgreed && cfg.Meta.TermsOfService == "":
 		return errorf("Config.RequireTermsOfServiceAgreed needs Meta.TermsOfService")
 	case cfg.MaxRequestBody < 0 || cfg.OrderLifetime < 0 || cfg.AuthorizationLifetime < 0 || cfg.MaxIdentifiers < 0:

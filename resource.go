@@ -26,7 +26,10 @@ type Account struct {
 	TermsOfServiceAgreed bool
 	// The identity the host derived from a verified external account binding.
 	ExternalAccountID string
-	CreatedAt         time.Time
+	// The single-use claim on that binding, set when Config.SingleUseExternalAccounts is on.
+	// Stores keep non-empty claims unique among accounts.
+	ExternalAccountClaim string
+	CreatedAt            time.Time
 	// Increases on every successful update and guards concurrent modification.
 	Revision uint64
 }
