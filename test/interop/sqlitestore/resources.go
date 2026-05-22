@@ -18,12 +18,17 @@ func (s *Store) CreateAccount(ctx context.Context, account *acmeserver.Account) 
 	copyOf.Revision = 1
 	err := s.transaction(ctx, true, func(c *sql.Conn) error {
 		return insert(ctx, c,
-			insertAccountSQL, &copyOf, copyOf.ID, 1, copyOf.KeyThumbprint)
+			insertAccountSQL, &copyOf, copyOf.ID, 1, copyOf.KeyThumbprint, claim(copyOf.ExternalAccountClaim))
 	})
 	if err == nil {
 		account.Revision = 1
 	}
 	return err
+}
+
+// Stores an empty claim as NULL so the unique index only constrains real claims.
+func claim(value string) sql.NullString {
+	return sql.NullString{String: value, Valid: value != ""}
 }
 
 // Loads an account by opaque ID.
@@ -52,7 +57,8 @@ func (s *Store) UpdateAccount(ctx context.Context, account *acmeserver.Account) 
 		if err := update(ctx, c, "accounts", account.ID, account.Revision, &copyOf); err != nil {
 			return err
 		}
-		_, err := c.ExecContext(ctx, updateAccountKeySQL, account.KeyThumbprint, account.ID)
+		_, err := c.ExecContext(ctx, updateAccountKeySQL, account.KeyThumbprint, claim(account.ExternalAccountClaim),
+			account.ID)
 		return err
 	})
 	if err == nil {

@@ -2,9 +2,10 @@ package sqlitestore
 
 // Fixed SQL statements bind every resource value supplied by callers.
 const (
-	insertAccountSQL       = `INSERT INTO accounts(id, revision, key_thumbprint, data) VALUES (?, ?, ?, ?)`
+	insertAccountSQL = `INSERT INTO accounts(id, revision, key_thumbprint, external_claim, data)
+VALUES (?, ?, ?, ?, ?)`
 	accountByKeySQL        = `SELECT data FROM accounts WHERE key_thumbprint = ?`
-	updateAccountKeySQL    = `UPDATE accounts SET key_thumbprint = ? WHERE id = ?`
+	updateAccountKeySQL    = `UPDATE accounts SET key_thumbprint = ?, external_claim = ? WHERE id = ?`
 	insertOrderSQL         = `INSERT INTO orders(id, account_id, revision, data) VALUES (?, ?, ?, ?)`
 	insertAuthorizationSQL = `INSERT INTO authorizations
 (id, account_id, order_id, scope, status, expires, revision, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`

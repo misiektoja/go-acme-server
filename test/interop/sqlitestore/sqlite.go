@@ -62,7 +62,7 @@ func (s *Store) Close() error { return s.db.Close() }
 // Defines resource ownership, unique account keys and indexes used for claims and authorization checks.
 const schema = `
 CREATE TABLE IF NOT EXISTS accounts (id TEXT PRIMARY KEY, revision INTEGER NOT NULL, key_thumbprint TEXT
-UNIQUE NOT NULL, data BLOB NOT NULL);
+UNIQUE NOT NULL, external_claim TEXT UNIQUE, data BLOB NOT NULL);
 CREATE TABLE IF NOT EXISTS orders (sequence INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE NOT NULL,
 account_id TEXT NOT NULL REFERENCES accounts(id), revision INTEGER NOT NULL, data BLOB NOT NULL);
 CREATE INDEX IF NOT EXISTS account_orders ON orders(account_id, sequence);
