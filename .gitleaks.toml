@@ -18,3 +18,10 @@ description = "Published RFC 7515 appendix A.1 HMAC test vector used by the JWS 
 regexes = [
   '''AyM1SysPpbyDfgZld3umj1qzKObwVMkoqQ-EstJQLr_T-1qS0gZH75aKtMN3Yj0iPS4hcgUuTwjAzZr1Z9CAow''',
 ]
+
+[[allowlists]]
+description = "lego certificate key type selection in the interoperability tests, not a credential"
+regexTarget = "line"
+regexes = [
+  '''KeyType = certcrypto\.EC256''',
+]
