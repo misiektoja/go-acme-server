@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -495,16 +496,24 @@ func TestRevocation(t *testing.T) {
 	assertProblem(t, stranger.post(baseURL+"revoke-cert", map[string]any{"certificate": leaf}), http.StatusForbidden,
 		acmeserver.ErrorUnauthorized)
 	f.revoker.err = errTransient
-	assertProblem(t, c.post(baseURL+"revoke-cert", map[string]any{"certificate": leaf}), http.StatusInternalServerError,
+	assertProblem(t, c.post(baseURL+"revoke-cert", map[string]any{"certificate": leaf, "reason": 1}), http.StatusInternalServerError,
 		acmeserver.ErrorServerInternal)
 	f.revoker.err = nil
-	rec := c.post(baseURL+"revoke-cert", map[string]any{"certificate": leaf, "reason": 1})
+	// The retry continues the recorded operation with its reason, whatever the client sends now.
+	rec := c.post(baseURL+"revoke-cert", map[string]any{"certificate": leaf, "reason": 4})
 	if rec.Code != http.StatusOK || rec.Body.Len() != 0 || rec.Header().Get("Replay-Nonce") == "" {
 		t.Fatalf("revoke = %d %q", rec.Code, rec.Body.String())
 	}
-	if len(f.revoker.requests) != 2 || f.revoker.requests[1].Reason != 1 || f.revoker.requests[1].AccountID == "" ||
-		f.revoker.requests[1].Certificate.SerialNumber.Cmp(chain[0].SerialNumber) != 0 {
+	first, retry := f.revoker.requests[0], f.revoker.requests[len(f.revoker.requests)-1]
+	if len(f.revoker.requests) != 2 || first.OperationID == "" || retry.OperationID != first.OperationID ||
+		first.Reason != 1 || retry.Reason != 1 || retry.AccountID == "" ||
+		retry.Certificate.SerialNumber.Cmp(chain[0].SerialNumber) != 0 {
 		t.Fatalf("revoker requests = %+v", f.revoker.requests)
+	}
+	stored, err := f.store.Certificate(t.Context(), valid.Certificate[len(baseURL+"cert/"):])
+	if err != nil || !stored.Revoked || stored.RevocationReason != 1 || stored.RevocationOperationID != first.OperationID ||
+		stored.RevocationRequestedAt.IsZero() || stored.RevokedAt.Before(stored.RevocationRequestedAt) {
+		t.Fatalf("stored revocation = %+v, %v", stored, err)
 	}
 	assertProblem(t, c.post(baseURL+"revoke-cert", map[string]any{"certificate": leaf}), http.StatusBadRequest,
 		acmeserver.ErrorAlreadyRevoked)
@@ -520,8 +529,53 @@ func TestRevocation(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("revoke by certificate key = %d %s", rec.Code, rec.Body.String())
 	}
-	if last := f.revoker.requests[len(f.revoker.requests)-1]; last.AccountID != "" || last.Reason != 0 {
+	if last := f.revoker.requests[len(f.revoker.requests)-1]; last.AccountID != "" || last.Reason != 0 ||
+		last.OperationID == "" || last.OperationID == first.OperationID {
 		t.Fatalf("revoke by key request = %+v", last)
+	}
+}
+
+// Sends the same revocation from several connections at once and expects one CA operation.
+func TestConcurrentRevocation(t *testing.T) {
+	f := newFlow(t, nil)
+	f.runWorker()
+	c := f.newClient()
+	c.register()
+	location, order := c.newOrder("a.test")
+	c.respondHTTP01(order)
+	c.waitOrder(location, statusReady)
+	c.finalize(order, newKey(t))
+	valid := c.waitOrder(location, statusValid)
+	chain := parsePEMChain(t, c.get(valid.Certificate, nil).Body.Bytes())
+	payload := map[string]any{"certificate": base64.RawURLEncoding.EncodeToString(chain[0].Raw)}
+	bodies := make([][]byte, 6)
+	for i := range bodies {
+		bodies[i] = c.signed(baseURL+"revoke-cert", payload)
+	}
+	codes := make([]int, len(bodies))
+	var wg sync.WaitGroup
+	for i, body := range bodies {
+		wg.Go(func() { codes[i] = c.send(baseURL+"revoke-cert", body).Code })
+	}
+	wg.Wait()
+	accepted, refused := 0, 0
+	for _, code := range codes {
+		switch code {
+		case http.StatusOK:
+			accepted++
+		case http.StatusBadRequest:
+			refused++
+		}
+	}
+	if accepted < 1 || accepted+refused != len(codes) {
+		t.Fatalf("revocation status codes = %v", codes)
+	}
+	ids := map[string]bool{}
+	for _, req := range f.revoker.requests {
+		ids[req.OperationID] = true
+	}
+	if len(ids) != 1 || len(f.revoker.requests) < 1 {
+		t.Fatalf("revoker saw operations %v across %d calls", ids, len(f.revoker.requests))
 	}
 }
 

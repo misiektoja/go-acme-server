@@ -21,6 +21,7 @@ func Run(t *testing.T, open func(t *testing.T) acmeserver.Store) {
 	t.Run("CreateAndReadAccount", func(t *testing.T) { testCreateAndRead(t, open(t)) })
 	t.Run("AccountNotFound", func(t *testing.T) { testNotFound(t, open(t)) })
 	t.Run("CreateAccountConflicts", func(t *testing.T) { testCreateConflicts(t, open(t)) })
+	t.Run("ExternalAccountClaims", func(t *testing.T) { testExternalAccountClaims(t, open(t)) })
 	t.Run("UpdateAccount", func(t *testing.T) { testUpdate(t, open(t)) })
 	t.Run("UpdateAccountStaleRevision", func(t *testing.T) { testUpdateStale(t, open(t)) })
 	t.Run("UpdateAccountMissing", func(t *testing.T) { testUpdateMissing(t, open(t)) })
@@ -175,6 +176,52 @@ func testUpdateMissing(t *testing.T, store acmeserver.Store) {
 	account.Revision = 1
 	if err := store.UpdateAccount(context.Background(), account); !errors.Is(err, acmeserver.ErrNotFound) {
 		t.Fatalf("UpdateAccount(missing) error = %v, want ErrNotFound", err)
+	}
+}
+
+// Checks that non-empty external account claims are unique while empty ones never conflict.
+func testExternalAccountClaims(t *testing.T, store acmeserver.Store) {
+	const first, second = "eab-1", "eab-2"
+	ctx := context.Background()
+	claimed := NewAccount(t, "acct-1")
+	claimed.ExternalAccountID, claimed.ExternalAccountClaim = first, first
+	if err := store.CreateAccount(ctx, claimed); err != nil {
+		t.Fatalf("CreateAccount(claim): %v", err)
+	}
+	again := NewAccount(t, "acct-2")
+	again.ExternalAccountID, again.ExternalAccountClaim = first, first
+	if err := store.CreateAccount(ctx, again); !errors.Is(err, acmeserver.ErrConflict) {
+		t.Fatalf("CreateAccount(same claim) error = %v, want ErrConflict", err)
+	}
+	if _, err := store.Account(ctx, "acct-2"); !errors.Is(err, acmeserver.ErrNotFound) {
+		t.Fatalf("conflicting claim left an account behind: %v", err)
+	}
+	if _, err := store.AccountByKey(ctx, again.KeyThumbprint); !errors.Is(err, acmeserver.ErrNotFound) {
+		t.Fatalf("conflicting claim left a key behind: %v", err)
+	}
+	for _, id := range []string{"acct-3", "acct-4"} {
+		unclaimed := NewAccount(t, id)
+		unclaimed.ExternalAccountID = first
+		if err := store.CreateAccount(ctx, unclaimed); err != nil {
+			t.Fatalf("CreateAccount(%s without claim): %v", id, err)
+		}
+	}
+	got, err := store.Account(ctx, "acct-1")
+	if err != nil || got.ExternalAccountClaim != first {
+		t.Fatalf("Account(acct-1) = %+v, %v", got, err)
+	}
+	other := NewAccount(t, "acct-5")
+	other.ExternalAccountID, other.ExternalAccountClaim = second, second
+	if err := store.CreateAccount(ctx, other); err != nil {
+		t.Fatalf("CreateAccount(other claim): %v", err)
+	}
+	other.ExternalAccountClaim = first
+	if err := store.UpdateAccount(ctx, other); !errors.Is(err, acmeserver.ErrConflict) {
+		t.Fatalf("UpdateAccount(taken claim) error = %v, want ErrConflict", err)
+	}
+	got, err = store.Account(ctx, "acct-5")
+	if err != nil || got.ExternalAccountClaim != second || got.Revision != 1 {
+		t.Fatalf("Account(acct-5) after refused update = %+v, %v", got, err)
 	}
 }
 

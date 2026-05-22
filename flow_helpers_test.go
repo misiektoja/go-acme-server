@@ -177,7 +177,21 @@ func (c *client) postRaw(url string, payload []byte, embedKey bool) *httptest.Re
 	} else {
 		header["kid"] = c.kid
 	}
-	r := httptest.NewRequest(http.MethodPost, url, bytes.NewReader(signES256(c.f.t, c.key, header, payload)))
+	return c.send(url, signES256(c.f.t, c.key, header, payload))
+}
+
+// Signs a payload with the account kid and a fresh nonce without sending it.
+func (c *client) signed(url string, payload any) []byte {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		c.f.t.Fatal(err)
+	}
+	return signES256(c.f.t, c.key, map[string]any{"nonce": c.nonce(), "url": url, "kid": c.kid}, body)
+}
+
+// Sends a prepared JWS body. It touches no test state, so goroutines may call it.
+func (c *client) send(url string, body []byte) *httptest.ResponseRecorder {
+	r := httptest.NewRequest(http.MethodPost, url, bytes.NewReader(body))
 	r.Header.Set("Content-Type", "application/jose+json")
 	return c.f.do(r)
 }

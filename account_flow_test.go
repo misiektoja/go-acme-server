@@ -105,33 +105,42 @@ func manyContacts(n int) []string {
 	return out
 }
 
+// Builds an external account binding JWS over a payload.
+func binding(kid string, key []byte, url string, payload []byte, alg string) map[string]string {
+	protected, _ := json.Marshal(map[string]string{"alg": alg, "kid": kid, "url": url})
+	p := base64.RawURLEncoding.EncodeToString(protected)
+	pl := base64.RawURLEncoding.EncodeToString(payload)
+	h := hmac.New(sha256.New, key)
+	h.Write([]byte(p + "." + pl))
+	return map[string]string{"protected": p, "payload": pl, "signature": base64.RawURLEncoding.EncodeToString(h.Sum(nil))}
+}
+
 func TestNewAccountWithExternalAccountBinding(t *testing.T) {
+	const kid = "kid-1"
 	mac := []byte("0123456789abcdef0123456789abcdef")
 	f := newFlow(t, func(c *acmeserver.Config) {
 		c.Meta.ExternalAccountRequired = true
-		c.ExternalAccounts = eabKeys{"kid-1": mac}
+		c.ExternalAccounts = eabKeys{kid: mac}
 	})
 	c := f.newClient()
 	assertProblem(t, c.post(baseURL+"new-account", map[string]any{"termsOfServiceAgreed": true}),
 		http.StatusForbidden, acmeserver.ErrorExternalAccountRequired)
-	binding := func(kid string, key []byte, url string, payload []byte, alg string) map[string]string {
-		protected, _ := json.Marshal(map[string]string{"alg": alg, "kid": kid, "url": url})
-		p := base64.RawURLEncoding.EncodeToString(protected)
-		pl := base64.RawURLEncoding.EncodeToString(payload)
-		h := hmac.New(sha256.New, key)
-		h.Write([]byte(p + "." + pl))
-		return map[string]string{"protected": p, "payload": pl, "signature": base64.RawURLEncoding.EncodeToString(h.Sum(nil))}
-	}
 	jwk := publicJWK(t, &c.key.PublicKey)
-	good := binding("kid-1", mac, baseURL+"new-account", jwk, "HS256")
+	good := binding(kid, mac, baseURL+"new-account", jwk, "HS256")
 	rec := c.post(baseURL+"new-account", map[string]any{"termsOfServiceAgreed": true, "externalAccountBinding": good})
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("new-account with EAB = %d %s", rec.Code, rec.Body.String())
 	}
 	id := strings.TrimPrefix(rec.Header().Get("Location"), baseURL+"acct/")
 	account, err := f.store.Account(t.Context(), id)
-	if err != nil || account.ExternalAccountID != "kid-1" {
+	if err != nil || account.ExternalAccountID != kid || account.ExternalAccountClaim != "" {
 		t.Fatalf("stored account = %+v, %v", account, err)
+	}
+	// Without single use the same key identifier may bind further accounts.
+	second := f.newClient()
+	if rec := second.post(baseURL+"new-account", map[string]any{"termsOfServiceAgreed": true,
+		"externalAccountBinding": binding(kid, mac, baseURL+"new-account", publicJWK(t, &second.key.PublicKey), "HS256")}); rec.Code != http.StatusCreated {
+		t.Fatalf("second account with the same kid = %d %s", rec.Code, rec.Body.String())
 	}
 	otherKey := newKey(t)
 	newAccount := baseURL + "new-account"
@@ -143,25 +152,25 @@ func TestNewAccountWithExternalAccountBinding(t *testing.T) {
 		"unknown kid": {func(jwk json.RawMessage) map[string]string { return binding("kid-2", mac, newAccount, jwk, "HS256") },
 			http.StatusForbidden, acmeserver.ErrorUnauthorized},
 		"wrong mac": {func(jwk json.RawMessage) map[string]string {
-			return binding("kid-1", []byte("wrong"), newAccount, jwk, "HS256")
+			return binding(kid, []byte("wrong"), newAccount, jwk, "HS256")
 		},
 			http.StatusForbidden, acmeserver.ErrorUnauthorized},
 		"wrong url": {func(jwk json.RawMessage) map[string]string {
-			return binding("kid-1", mac, baseURL+"new-order", jwk, "HS256")
+			return binding(kid, mac, baseURL+"new-order", jwk, "HS256")
 		},
 			http.StatusBadRequest, acmeserver.ErrorMalformed},
 		"other key": {func(json.RawMessage) map[string]string {
-			return binding("kid-1", mac, newAccount, publicJWK(t, &otherKey.PublicKey), "HS256")
+			return binding(kid, mac, newAccount, publicJWK(t, &otherKey.PublicKey), "HS256")
 		}, http.StatusBadRequest, acmeserver.ErrorMalformed},
-		"signature alg": {func(jwk json.RawMessage) map[string]string { return binding("kid-1", mac, newAccount, jwk, "ES256") },
+		"signature alg": {func(jwk json.RawMessage) map[string]string { return binding(kid, mac, newAccount, jwk, "ES256") },
 			http.StatusBadRequest, acmeserver.ErrorBadSignatureAlgorithm},
 		"payload not a key": {func(json.RawMessage) map[string]string {
-			return binding("kid-1", mac, newAccount, []byte(`{"a":1}`), "HS256")
+			return binding(kid, mac, newAccount, []byte(`{"a":1}`), "HS256")
 		},
 			http.StatusBadRequest, acmeserver.ErrorMalformed},
 		"binding with nonce": {func(jwk json.RawMessage) map[string]string {
-			b := binding("kid-1", mac, newAccount, jwk, "HS256")
-			protected, _ := json.Marshal(map[string]string{"alg": "HS256", "kid": "kid-1", "url": newAccount, "nonce": "x"})
+			b := binding(kid, mac, newAccount, jwk, "HS256")
+			protected, _ := json.Marshal(map[string]string{"alg": "HS256", "kid": kid, "url": newAccount, "nonce": "x"})
 			b["protected"] = base64.RawURLEncoding.EncodeToString(protected)
 			return b
 		}, http.StatusBadRequest, acmeserver.ErrorMalformed},
@@ -172,6 +181,44 @@ func TestNewAccountWithExternalAccountBinding(t *testing.T) {
 			assertProblem(t, fresh.post(newAccount, map[string]any{"termsOfServiceAgreed": true,
 				"externalAccountBinding": tc.build(publicJWK(t, &fresh.key.PublicKey))}), tc.status, tc.typ)
 		})
+	}
+}
+
+// Binds each external account key identifier to one account when configured.
+func TestSingleUseExternalAccount(t *testing.T) {
+	const kid = "kid-1"
+	mac := []byte("0123456789abcdef0123456789abcdef")
+	f := newFlow(t, func(c *acmeserver.Config) {
+		c.ExternalAccounts = eabKeys{kid: mac, "kid-2": mac}
+		c.SingleUseExternalAccounts = true
+	})
+	newAccount := baseURL + "new-account"
+	c := f.newClient()
+	register := func(c *client, kid string) *httptest.ResponseRecorder {
+		return c.post(newAccount, map[string]any{"termsOfServiceAgreed": true,
+			"externalAccountBinding": binding(kid, mac, newAccount, publicJWK(t, &c.key.PublicKey), "HS256")})
+	}
+	rec := register(c, kid)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("first account = %d %s", rec.Code, rec.Body.String())
+	}
+	location := rec.Header().Get("Location")
+	account, err := f.store.Account(t.Context(), strings.TrimPrefix(location, baseURL+"acct/"))
+	if err != nil || account.ExternalAccountID != kid || account.ExternalAccountClaim != kid {
+		t.Fatalf("stored account = %+v, %v", account, err)
+	}
+	// A lost response is retried with the same key and finds the existing account.
+	if rec := register(c, kid); rec.Code != http.StatusOK || rec.Header().Get("Location") != location {
+		t.Fatalf("retried registration = %d Location %q", rec.Code, rec.Header().Get("Location"))
+	}
+	// Another key may not claim the identifier again, but an unclaimed identifier still works.
+	assertProblem(t, register(f.newClient(), kid), http.StatusForbidden, acmeserver.ErrorUnauthorized)
+	if rec := register(f.newClient(), "kid-2"); rec.Code != http.StatusCreated {
+		t.Fatalf("account with an unclaimed kid = %d %s", rec.Code, rec.Body.String())
+	}
+	// A registration without a binding still succeeds because bindings are not required here.
+	if rec := f.newClient().post(newAccount, map[string]any{"termsOfServiceAgreed": true}); rec.Code != http.StatusCreated {
+		t.Fatalf("account without binding = %d %s", rec.Code, rec.Body.String())
 	}
 }
 
