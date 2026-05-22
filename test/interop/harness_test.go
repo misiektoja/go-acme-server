@@ -173,6 +173,7 @@ func configuredServer(t *testing.T, baseURL string, options harnessOptions, stor
 			TaskTimeout: time.Second, Lease: 2 * time.Second}}
 	if options.eab != nil {
 		config.ExternalAccounts = eabKeys(options.eab)
+		config.SingleUseExternalAccounts = true
 	}
 	server, err := acmeserver.New(config)
 	if err != nil {

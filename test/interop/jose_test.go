@@ -258,11 +258,28 @@ func TestGoJoseAccounts(t *testing.T) {
 		if account.ExternalAccountID != "eab-1" {
 			t.Fatalf("external account = %q", account.ExternalAccountID)
 		}
+		if account.ExternalAccountClaim != "eab-1" {
+			t.Fatalf("external account claim = %q", account.ExternalAccountClaim)
+		}
+		response, body = h.post(t, d.NewAccount, h.joseSign(t, r, []byte(`{"termsOfServiceAgreed":true,"externalAccountBinding":`+string(binding)+`}`)))
+		if response.StatusCode != http.StatusOK || response.Header.Get("Location") != h.https.URL+"/acme/acct/"+account.ID {
+			t.Fatalf("retried newAccount with binding: %d %s", response.StatusCode, body)
+		}
 		wrong := h.joseSign(t, joseRequest{alg: jose.HS256, key: bytes.Repeat([]byte{1}, 32), kid: "eab-1", url: d.NewAccount, noNonce: true}, accountJWK)
 		other := joseKeys(t)[0]
 		other.url = d.NewAccount
 		response, body = h.post(t, d.NewAccount, h.joseSign(t, other, []byte(`{"termsOfServiceAgreed":true,"externalAccountBinding":`+string(wrong)+`}`)))
 		requireProblem(t, response, body, http.StatusForbidden, acmeserver.ErrorUnauthorized)
+		otherJWK, err := json.Marshal(jose.JSONWebKey{Key: other.key.(crypto.Signer).Public()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		reuse := h.joseSign(t, joseRequest{alg: jose.HS256, key: macKey, kid: "eab-1", url: d.NewAccount, noNonce: true}, otherJWK)
+		response, body = h.post(t, d.NewAccount, h.joseSign(t, other, []byte(`{"termsOfServiceAgreed":true,"externalAccountBinding":`+string(reuse)+`}`)))
+		requireProblem(t, response, body, http.StatusForbidden, acmeserver.ErrorUnauthorized)
+		if _, err := h.store.AccountByKey(t.Context(), joseThumbprint(t, other.key.(crypto.Signer).Public())); err == nil {
+			t.Fatal("a second account claimed the used binding")
+		}
 	})
 	t.Log("go-jose v4.1.4 signatures, thumbprints, key change and external account binding agree with the server")
 }

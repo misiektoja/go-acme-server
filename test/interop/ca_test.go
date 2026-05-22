@@ -102,7 +102,7 @@ func openCA(t *testing.T, directory string) *durableCA {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = db.ExecContext(t.Context(), `CREATE TABLE IF NOT EXISTS revocation (serial TEXT PRIMARY KEY, reason INTEGER NOT NULL, calls INTEGER NOT NULL)`)
+	_, err = db.ExecContext(t.Context(), `CREATE TABLE IF NOT EXISTS revocation (operation TEXT PRIMARY KEY, serial TEXT UNIQUE NOT NULL, reason INTEGER NOT NULL, calls INTEGER NOT NULL)`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,9 +168,13 @@ func (ca *durableCA) sign(req acmeserver.IssueRequest) ([]byte, error) {
 	return x509.CreateCertificate(rand.Reader, leaf, ca.root, req.CSR.PublicKey, ca.key)
 }
 
-// Records the revocation durably by serial, counting repeated calls for the same certificate.
+// Records the revocation durably once per operation ID, counting repeated calls. A second
+// operation for an already revoked serial fails because the server must not start one.
 func (ca *durableCA) Revoke(ctx context.Context, req acmeserver.RevokeRequest) error {
-	_, err := ca.db.ExecContext(ctx, `INSERT INTO revocation VALUES (?, ?, 1) ON CONFLICT(serial) DO UPDATE SET calls = calls + 1`,
-		req.Certificate.SerialNumber.String(), req.Reason)
+	if req.OperationID == "" {
+		return errors.New("revocation without an operation ID")
+	}
+	_, err := ca.db.ExecContext(ctx, `INSERT INTO revocation VALUES (?, ?, ?, 1) ON CONFLICT(operation) DO UPDATE SET calls = calls + 1`,
+		req.OperationID, req.Certificate.SerialNumber.String(), req.Reason)
 	return err
 }
