@@ -15,12 +15,14 @@ scripts written into the test directory that append and remove TXT values in fil
 responder reads. Certbot then revokes the certificate through its account. lego issues through
 its own HTTP-01 server and through DNS-01 for the same wildcard pair with a provider that writes
 to the responder directly. It revokes with a reason code and receives `alreadyRevoked` on the
-second attempt. The test CA records revocations by serial so each test confirms one CA call.
+second attempt. The test CA records revocations by operation ID so each test confirms one CA call.
 
 go-jose signs requests independently of the server's JWS code. The cross-check creates accounts
 with every advertised algorithm, compares stored RFC 7638 thumbprints with go-jose, changes keys
 through an inner JWS, binds an external account with HS256 and confirms that refused signatures
-return the expected problem types, including a fresh nonce on every refusal.
+return the expected problem types, including a fresh nonce on every refusal. The harness enables
+single-use bindings, so a retry with the same key returns the bound account and another key
+cannot reuse the identifier.
 
 A raw go-jose client also repeats and races requests the way clients do after a lost response.
 Registering one key again or from several connections at once yields one account. Repeated

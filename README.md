@@ -98,5 +98,13 @@ Chains that fail publication checks remain in `Order.UnpublishedResult` with the
 host reconciliation. They are never returned as successful orders. The host remains responsible for
 reconciling or revoking them. A certificate can be revoked by its issuing account, its private key
 or another valid account authorized for every complete identifier, including wildcard scope.
+The server records a revocation operation ID and reason before calling the `Revoker` and repeats
+the same request after an uncertain answer, so the revoker must deduplicate by `OperationID`.
+A retried revocation keeps the first recorded reason.
+
+External account bindings are verified with the keys from `ExternalAccounts`. With
+`SingleUseExternalAccounts`, each key identifier binds at most one account. The claim is stored
+with the account, a retry with the same account key returns that account and a different key is
+refused as unauthorized.
 
 Licensed under [Apache-2.0](LICENSE).
