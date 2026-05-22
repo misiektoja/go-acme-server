@@ -109,6 +109,10 @@ type Certificate struct {
 	RevokedAt time.Time
 	// The CRL reason code recorded at revocation.
 	RevocationReason int
+	// Identifies the revocation the host CA receives. It is committed with the reason before the
+	// first CA call and reused by every retry, so the CA can deduplicate.
+	RevocationOperationID string
+	RevocationRequestedAt time.Time
 	// The validation evidence the issuer received, kept for host audit needs.
 	Validations []Validation
 	CreatedAt   time.Time

@@ -67,11 +67,13 @@ func (s *Server) serveRevokeCert(w http.ResponseWriter, r *http.Request) {
 		s.writeProblem(ctx, w, p)
 		return
 	}
-	if cert.Revoked {
-		s.writeProblem(ctx, w, NewProblem(ErrorAlreadyRevoked, "certificate is already revoked"))
+	cert, p = s.beginRevocation(ctx, cert, reason)
+	if p != nil {
+		s.writeProblem(ctx, w, p)
 		return
 	}
-	revokeReq := RevokeRequest{Certificate: leaf, DER: der, Reason: reason}
+	revokeReq := RevokeRequest{OperationID: cert.RevocationOperationID, Certificate: leaf, DER: der,
+		Reason: cert.RevocationReason}
 	if req.Account != nil {
 		revokeReq.AccountID = req.Account.ID
 	}
@@ -84,7 +86,7 @@ func (s *Server) serveRevokeCert(w http.ResponseWriter, r *http.Request) {
 		s.writeProblem(ctx, w, NewProblem(ErrorServerInternal, "revocation failed"))
 		return
 	}
-	if p := s.recordRevocation(r, cert, reason); p != nil {
+	if p := s.recordRevocation(r, cert); p != nil {
 		s.writeProblem(ctx, w, p)
 		return
 	}
@@ -123,12 +125,42 @@ func (s *Server) authorizeRevocation(ctx context.Context, req *signedRequest, ce
 	return nil
 }
 
+// Commits the operation ID and reason before the CA call. A retry after an uncertain answer and a
+// concurrent request both continue the recorded operation instead of starting another.
+func (s *Server) beginRevocation(ctx context.Context, cert *Certificate, reason int) (*Certificate, *Problem) {
+	for range 2 {
+		switch {
+		case cert.Revoked:
+			return nil, NewProblem(ErrorAlreadyRevoked, "certificate is already revoked")
+		case cert.RevocationOperationID != "":
+			return cert, nil
+		}
+		id, err := newID()
+		if err != nil {
+			s.logError(ctx, "identifier generation failed", err)
+			return nil, NewProblem(ErrorServerInternal, "revocation could not be recorded")
+		}
+		cert.RevocationOperationID, cert.RevocationReason, cert.RevocationRequestedAt = id, reason, s.clock.Now()
+		err = s.store.UpdateCertificate(ctx, cert)
+		if err == nil {
+			return cert, nil
+		}
+		if !errors.Is(err, ErrRevisionMismatch) {
+			s.logError(ctx, "revocation record failed", err)
+			return nil, NewProblem(ErrorServerInternal, "revocation could not be recorded")
+		}
+		if cert, err = s.store.Certificate(ctx, cert.ID); err != nil {
+			return nil, s.storeProblem(ctx, err, "certificate")
+		}
+	}
+	return nil, NewProblem(ErrorServerInternal, "revocation could not be recorded")
+}
+
 // Stores the revocation. A concurrent revocation of the same certificate is treated as success.
-func (s *Server) recordRevocation(r *http.Request, cert *Certificate, reason int) *Problem {
+func (s *Server) recordRevocation(r *http.Request, cert *Certificate) *Problem {
 	ctx := r.Context()
 	cert.Revoked = true
 	cert.RevokedAt = s.clock.Now()
-	cert.RevocationReason = reason
 	err := s.store.UpdateCertificate(ctx, cert)
 	if errors.Is(err, ErrRevisionMismatch) {
 		current, lookupErr := s.store.Certificate(ctx, cert.ID)
