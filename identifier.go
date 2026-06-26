@@ -8,10 +8,12 @@ import (
 // Names the kind of subject an order or authorization refers to.
 type IdentifierType string
 
-// Identifier types registered by RFC 8555 section 9.7.7 and RFC 8738.
+// Identifier types registered by RFC 8555 section 9.7.7, RFC 8738 and RFC 9448.
 const (
 	IdentifierDNS IdentifierType = "dns"
 	IdentifierIP  IdentifierType = "ip"
+	// A base64url encoded DER TN Authorization List, see RFC 8226 section 9.
+	IdentifierTNAuthList IdentifierType = "TNAuthList"
 )
 
 // An ACME identifier object.
@@ -42,6 +44,8 @@ func (id Identifier) Normalize() (Identifier, error) {
 		return normalizeDNS(id.Value)
 	case IdentifierIP:
 		return normalizeIP(id.Value)
+	case IdentifierTNAuthList:
+		return normalizeTNAuthList(id.Value)
 	}
 	return Identifier{}, Problemf(ErrorUnsupportedIdentifier, "identifier type %q is not supported", string(id.Type))
 }
