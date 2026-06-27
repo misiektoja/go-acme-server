@@ -43,14 +43,19 @@ type authorizationJSON struct {
 	Wildcard   bool                `json:"wildcard,omitempty"`
 }
 
-// The challenge object of RFC 8555 section 7.1.5.
+// The challenge object of RFC 8555 section 7.1.5 with the tkauth-01 members of RFC 9447
+// section 3.
 type challengeJSON struct {
-	Type      ChallengeType   `json:"type"`
-	URL       string          `json:"url"`
-	Status    ChallengeStatus `json:"status"`
-	Token     string          `json:"token"`
-	Validated string          `json:"validated,omitempty"`
-	Error     *Problem        `json:"error,omitempty"`
+	Type   ChallengeType   `json:"type"`
+	URL    string          `json:"url"`
+	Status ChallengeStatus `json:"status"`
+	Token  string          `json:"token"`
+	// The Authority Token subtype, always atc on a tkauth-01 challenge.
+	TKAuthType string `json:"tkauth-type,omitempty"`
+	// Where a client may obtain the Authority Token, when the server names one.
+	TokenAuthority string   `json:"token-authority,omitempty"`
+	Validated      string   `json:"validated,omitempty"`
+	Error          *Problem `json:"error,omitempty"`
 }
 
 // Returns the wire form of an account.
@@ -106,7 +111,7 @@ func (s *Server) authorizationView(authz *Authorization, challenges []*Challenge
 
 // Returns the wire form of a challenge.
 func (s *Server) challengeView(ch *Challenge) challengeJSON {
-	return challengeJSON{
+	view := challengeJSON{
 		Type:      ch.Type,
 		URL:       s.resourceURL(challengePathPrefix + ch.ID),
 		Status:    ch.Status,
@@ -114,6 +119,11 @@ func (s *Server) challengeView(ch *Challenge) challengeJSON {
 		Validated: formatTime(ch.Validated),
 		Error:     ch.Error,
 	}
+	if ch.Type == ChallengeTKAuth01 {
+		view.TKAuthType = TKAuthTypeATC
+		view.TokenAuthority = s.tokenAuthority
+	}
+	return view
 }
 
 // Returns the status clients see, treating an expired pending or ready order as invalid.

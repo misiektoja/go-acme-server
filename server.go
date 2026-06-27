@@ -58,6 +58,8 @@ type Server struct {
 	issuancePolicy IssuancePolicy
 	requireTOS     bool
 	ipIdentifiers  bool
+	tnAuthList     bool
+	tokenAuthority string
 	orderLifetime  time.Duration
 	authzLifetime  time.Duration
 	maxIdentifiers int
@@ -98,6 +100,8 @@ func New(cfg Config) (*Server, error) {
 		issuancePolicy: cfg.IssuancePolicy,
 		requireTOS:     cfg.RequireTermsOfServiceAgreed,
 		ipIdentifiers:  cfg.IPIdentifiers,
+		tnAuthList:     cfg.TNAuthListIdentifiers,
+		tokenAuthority: cfg.TokenAuthority,
 		orderLifetime:  cfg.OrderLifetime,
 		authzLifetime:  cfg.AuthorizationLifetime,
 		maxIdentifiers: cfg.MaxIdentifiers,
@@ -151,6 +155,10 @@ func (cfg Config) validate() error {
 		return errorf("Config.SingleUseExternalAccounts needs Config.ExternalAccounts")
 	case cfg.RequireTermsOfServiceAgreed && cfg.Meta.TermsOfService == "":
 		return errorf("Config.RequireTermsOfServiceAgreed needs Meta.TermsOfService")
+	case cfg.TNAuthListIdentifiers && cfg.Validators[ChallengeTKAuth01] == nil:
+		return errorf("Config.TNAuthListIdentifiers needs a " + string(ChallengeTKAuth01) + " validator")
+	case cfg.TokenAuthority != "" && !isHTTPSURL(cfg.TokenAuthority):
+		return errorf("Config.TokenAuthority must be an absolute https URL")
 	case cfg.MaxRequestBody < 0 || cfg.OrderLifetime < 0 || cfg.AuthorizationLifetime < 0 || cfg.MaxIdentifiers < 0:
 		return errorf("Config limits must not be negative")
 	}
@@ -158,7 +166,8 @@ func (cfg Config) validate() error {
 		if v == nil {
 			return errorf("Config.Validators[" + string(typ) + "] is nil")
 		}
-		if typ != ChallengeHTTP01 && typ != ChallengeDNS01 && typ != ChallengeTLSALPN01 {
+		if typ != ChallengeHTTP01 && typ != ChallengeDNS01 && typ != ChallengeTLSALPN01 &&
+			typ != ChallengeTKAuth01 {
 			return errorf("Config.Validators has the unknown challenge type " + string(typ))
 		}
 	}

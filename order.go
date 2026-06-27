@@ -22,6 +22,15 @@ type authorizationUpdateJSON struct {
 	Status string `json:"status"`
 }
 
+// The challenge response payload. RFC 8555 section 7.5.1 sends an empty object and RFC 9448
+// section 4 adds the Authority Token for tkauth-01.
+type challengeResponseJSON struct {
+	TKAuth string `json:"tkauth"`
+}
+
+// Bounds the Authority Token a client may present.
+const maxAuthorityTokenLength = 16 << 10
+
 // Creates an order with its authorizations and challenges, see RFC 8555 section 7.4.
 func (s *Server) serveNewOrder(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -67,6 +76,10 @@ func (s *Server) buildOrder(ctx context.Context, account *Account, payload *newO
 	for _, id := range payload.Identifiers {
 		if id.Type == IdentifierIP && !s.ipIdentifiers {
 			return nil, NewProblem(ErrorUnsupportedIdentifier, "IP identifiers are not supported").WithIdentifier(id)
+		}
+		if id.Type == IdentifierTNAuthList && !s.tnAuthList {
+			return nil, NewProblem(ErrorUnsupportedIdentifier, "TNAuthList identifiers are not supported").
+				WithIdentifier(id)
 		}
 	}
 	identifiers, err := NormalizeIdentifiers(payload.Identifiers)
@@ -164,11 +177,15 @@ func (s *Server) buildAuthorizations(ctx context.Context, order *Order) ([]*Auth
 }
 
 // Returns the configured challenge types that may validate the identifier. Wildcard names need
-// dns-01 and IP addresses exclude it, see RFC 8555 section 7.1.3 and RFC 8738 section 5.
+// dns-01, IP addresses exclude it and only TNAuthList identifiers use tkauth-01, see RFC 8555
+// section 7.1.3, RFC 8738 section 5 and RFC 9447 section 3.
 func (s *Server) challengeTypesFor(id Identifier) []ChallengeType {
 	var types []ChallengeType
-	for _, typ := range []ChallengeType{ChallengeHTTP01, ChallengeDNS01, ChallengeTLSALPN01} {
+	for _, typ := range []ChallengeType{ChallengeHTTP01, ChallengeDNS01, ChallengeTLSALPN01, ChallengeTKAuth01} {
 		if _, ok := s.validators[typ]; !ok {
+			continue
+		}
+		if (typ == ChallengeTKAuth01) != (id.Type == IdentifierTNAuthList) {
 			continue
 		}
 		if id.IsWildcard() && typ != ChallengeDNS01 {
@@ -180,6 +197,23 @@ func (s *Server) challengeTypesFor(id Identifier) []ChallengeType {
 		types = append(types, typ)
 	}
 	return types
+}
+
+// Checks a challenge response payload against what the challenge type expects.
+func checkChallengeResponse(typ ChallengeType, payload challengeResponseJSON) *Problem {
+	if typ != ChallengeTKAuth01 {
+		if payload.TKAuth != "" {
+			return Problemf(ErrorMalformed, "a %s response does not carry an authority token", string(typ))
+		}
+		return nil
+	}
+	switch {
+	case payload.TKAuth == "":
+		return NewProblem(ErrorMalformed, "a tkauth-01 response needs the tkauth authority token")
+	case len(payload.TKAuth) > maxAuthorityTokenLength:
+		return Problemf(ErrorMalformed, "the authority token exceeds %d characters", maxAuthorityTokenLength)
+	}
+	return nil
 }
 
 // Returns a random challenge token with 256 bits of entropy.
@@ -337,12 +371,12 @@ func (s *Server) serveChallenge(w http.ResponseWriter, r *http.Request, id strin
 	}
 	w.Header().Add("Link", `<`+s.resourceURL(authzPathPrefix+ch.AuthorizationID)+`>;rel="up"`)
 	if len(req.Payload) != 0 {
-		var payload struct{}
+		var payload challengeResponseJSON
 		if p := decodePayload(req.Payload, &payload); p != nil {
 			s.writeProblem(ctx, w, p)
 			return
 		}
-		ch, p = s.acceptChallenge(ctx, ch, req.Account)
+		ch, p = s.acceptChallenge(ctx, ch, req.Account, payload)
 		if p != nil {
 			s.writeProblem(ctx, w, p)
 			return
@@ -353,7 +387,11 @@ func (s *Server) serveChallenge(w http.ResponseWriter, r *http.Request, id strin
 
 // Moves a pending challenge to processing and enqueues its validation. A challenge that is no
 // longer pending is returned unchanged so repeated responses are harmless.
-func (s *Server) acceptChallenge(ctx context.Context, ch *Challenge, account *Account) (*Challenge, *Problem) {
+func (s *Server) acceptChallenge(ctx context.Context, ch *Challenge, account *Account,
+	payload challengeResponseJSON) (*Challenge, *Problem) {
+	if p := checkChallengeResponse(ch.Type, payload); p != nil {
+		return nil, p
+	}
 	if ch.Status != ChallengePending {
 		return ch, nil
 	}
@@ -373,6 +411,7 @@ func (s *Server) acceptChallenge(ctx context.Context, ch *Challenge, account *Ac
 	}
 	ch.Status = ChallengeProcessing
 	ch.KeyThumbprint = account.KeyThumbprint
+	ch.AuthorityToken = payload.TKAuth
 	task := &Task{ID: taskID, Kind: TaskValidate, TargetID: ch.ID, AccountID: account.ID, RunAt: now, CreatedAt: now}
 	err = s.store.AcceptChallenge(ctx, ch, task)
 	switch {

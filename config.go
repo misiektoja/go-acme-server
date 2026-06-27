@@ -80,6 +80,11 @@ type Config struct {
 	RequireTermsOfServiceAgreed bool
 	// Accepts IP identifiers as specified in RFC 8738.
 	IPIdentifiers bool
+	// Accepts TNAuthList identifiers as specified in RFC 9448. It needs a tkauth-01 validator.
+	TNAuthListIdentifiers bool
+	// The https URL offered as token-authority on tkauth-01 challenges, see RFC 9447 section 3.
+	// It is optional, and clients fall back to their own configuration when it is empty.
+	TokenAuthority string
 	// How long a new order and its pending authorizations stay valid.
 	OrderLifetime time.Duration
 	// How long a validated authorization stays valid.
@@ -114,4 +119,10 @@ func normalizeBaseURL(raw string, allowInsecure bool) (*url.URL, error) {
 		u.Path += "/"
 	}
 	return u, nil
+}
+
+// Reports whether raw is an absolute https URL without user info or a fragment.
+func isHTTPSURL(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && u.Scheme == "https" && u.Host != "" && u.User == nil && u.Fragment == "" && u.Opaque == ""
 }
