@@ -1,6 +1,7 @@
 package acmeserver
 
 import (
+	"encoding/base64"
 	"errors"
 	"net/netip"
 	"strings"
@@ -160,6 +161,11 @@ func FuzzIdentifierNormalize(f *testing.F) {
 			if err != nil || address.String() != normalized.Value || address.Zone() != "" || address.Is4In6() ||
 				address.IsUnspecified() || address.IsMulticast() {
 				t.Fatalf("accepted IP identifier %q from %q", normalized.Value, value)
+			}
+		case IdentifierTNAuthList:
+			der, err := base64.RawURLEncoding.Strict().DecodeString(normalized.Value)
+			if err != nil || normalized.Value != value || checkTNAuthList(der) != nil {
+				t.Fatalf("accepted TNAuthList identifier %q from %q", normalized.Value, value)
 			}
 		default:
 			t.Fatalf("accepted type %q", normalized.Type)
