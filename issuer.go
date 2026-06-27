@@ -82,12 +82,28 @@ type ValidationRequest struct {
 	KeyAuthorization string
 	// The RFC 7638 thumbprint of the account key captured when the client responded.
 	AccountKeyThumbprint string
+	// The Authority Token of a tkauth-01 response, empty for every other challenge type.
+	AuthorityToken string
+}
+
+// What a successful challenge response authorizes beyond control of the identifier.
+type ValidationGrant struct {
+	// Allows the order to be finalized with a certificate request that asks for a CA
+	// certificate, see RFC 9448 section 6.
+	CACertificate bool
 }
 
 // Checks a challenge response. A nil result marks the challenge valid, a returned *Problem
 // marks it invalid and any other error is retried until the attempt limit.
 type Validator interface {
 	Validate(ctx context.Context, req ValidationRequest) error
+}
+
+// Reports what a response authorizes in addition to checking it. A validator that only proves
+// control of an identifier implements Validator alone, and the server then grants nothing.
+type GrantingValidator interface {
+	Validator
+	ValidateGrant(ctx context.Context, req ValidationRequest) (ValidationGrant, error)
 }
 
 // Supplies the MAC keys that verify external account bindings, see RFC 8555 section 7.3.4.

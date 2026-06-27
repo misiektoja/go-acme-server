@@ -8,12 +8,17 @@ import (
 // Names a challenge mechanism registered with IANA.
 type ChallengeType string
 
-// Challenge types from RFC 8555 section 8 and RFC 8737.
+// Challenge types from RFC 8555 section 8, RFC 8737 and RFC 9447.
 const (
 	ChallengeHTTP01    ChallengeType = "http-01"
 	ChallengeDNS01     ChallengeType = "dns-01"
 	ChallengeTLSALPN01 ChallengeType = "tls-alpn-01"
+	// Answered with an Authority Token instead of a network proof.
+	ChallengeTKAuth01 ChallengeType = "tkauth-01"
 )
+
+// The only Authority Token subtype this server offers, see RFC 9447 section 4.
+const TKAuthTypeATC = "atc"
 
 // A stored ACME account. Its ID is opaque and appears only in the account URL.
 type Account struct {
@@ -73,8 +78,10 @@ type Authorization struct {
 	// Marks a wildcard authorization. Identifier then holds the base name.
 	Wildcard     bool
 	ChallengeIDs []string
-	CreatedAt    time.Time
-	Revision     uint64
+	// Records that the successful challenge also authorized a CA certificate for the identifier.
+	CACertificate bool
+	CreatedAt     time.Time
+	Revision      uint64
 }
 
 // A stored challenge resource.
@@ -85,6 +92,8 @@ type Challenge struct {
 	Type            ChallengeType
 	Status          ChallengeStatus
 	Token           string
+	// The Authority Token a tkauth-01 response carried, see RFC 9448 section 4.
+	AuthorityToken string
 	// The account key thumbprint captured at response time, so a key rollover
 	// does not change an in-flight validation.
 	KeyThumbprint string
@@ -132,4 +141,6 @@ type Validation struct {
 	Identifier Identifier
 	Type       ChallengeType
 	Validated  time.Time
+	// Reports that the validation authorized a CA certificate rather than an end-entity one.
+	CACertificate bool
 }

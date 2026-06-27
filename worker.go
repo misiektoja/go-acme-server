@@ -127,8 +127,9 @@ func (s *Server) runValidation(ctx context.Context, task *Task) {
 		Wildcard:             authz.Wildcard,
 		KeyAuthorization:     ch.Token + "." + ch.KeyThumbprint,
 		AccountKeyThumbprint: ch.KeyThumbprint,
+		AuthorityToken:       ch.AuthorityToken,
 	}
-	err = validator.Validate(ctx, req)
+	grant, err := validate(ctx, validator, req)
 	now = s.clock.Now()
 	if !authz.Expires.After(now) {
 		err = NewProblem(ErrorUnauthorized, "authorization expired during validation")
@@ -139,6 +140,7 @@ func (s *Server) runValidation(ctx context.Context, task *Task) {
 		ch.Error = nil
 		authz.Status = AuthorizationValid
 		authz.Expires = now.Add(s.authzLifetime)
+		authz.CACertificate = grant.CACertificate
 		s.completeValidation(ctx, task, ch, authz)
 		return
 	}
@@ -157,6 +159,14 @@ func (s *Server) runValidation(ctx context.Context, task *Task) {
 	ch.Error = p
 	authz.Status = AuthorizationInvalid
 	s.completeValidation(ctx, task, ch, authz)
+}
+
+// Runs a validator and reports what the response authorizes.
+func validate(ctx context.Context, v Validator, req ValidationRequest) (ValidationGrant, error) {
+	if granting, ok := v.(GrantingValidator); ok {
+		return granting.ValidateGrant(ctx, req)
+	}
+	return ValidationGrant{}, v.Validate(ctx, req)
 }
 
 // Commits a validation result, deriving the order status from every authorization. A concurrent
