@@ -36,7 +36,14 @@ func certificateIdentifiers(leaf *x509.Certificate) ([]Identifier, error) {
 	if err := checkSANExtensions(leaf.Extensions); err != nil {
 		return nil, err
 	}
-	names := make([]Identifier, 0, len(leaf.DNSNames)+len(leaf.IPAddresses))
+	tnAuthList, hasTNAuthList, err := tnAuthListExtension(leaf.Extensions)
+	if err != nil {
+		return nil, err
+	}
+	names := make([]Identifier, 0, len(leaf.DNSNames)+len(leaf.IPAddresses)+1)
+	if hasTNAuthList {
+		names = append(names, tnAuthList)
+	}
 	for _, name := range leaf.DNSNames {
 		names = append(names, Identifier{Type: IdentifierDNS, Value: name})
 	}
@@ -51,7 +58,8 @@ func certificateIdentifiers(leaf *x509.Certificate) ([]Identifier, error) {
 	if err != nil || len(ids) == 0 {
 		return nil, errors.New("invalid certificate identifiers")
 	}
-	if leaf.Subject.CommonName != "" {
+	// A STIR certificate names a service provider in the common name, not one of its identifiers.
+	if leaf.Subject.CommonName != "" && !hasTNAuthList {
 		cn, err := commonNameIdentifier(leaf.Subject.CommonName).Normalize()
 		if err != nil || !slices.Contains(ids, cn) {
 			return nil, errors.New("common name is outside the SAN set")
@@ -101,10 +109,31 @@ func checkChain(chain [][]byte, csr *x509.CertificateRequest, order *Order, now 
 	if err != nil || !sameIdentifiers(ids, order.Identifiers) {
 		return nil, errors.New("leaf identifiers do not match the order")
 	}
+	if err := checkLeafCACertificate(leaf, csr, order); err != nil {
+		return nil, err
+	}
 	for i := 0; i+1 < len(certs); i++ {
 		if err := certs[i].CheckSignatureFrom(certs[i+1]); err != nil {
 			return nil, fmt.Errorf("chain element %d is not signed by element %d: %w", i, i+1, err)
 		}
 	}
 	return leaf, nil
+}
+
+// Checks that an authority list certificate is a CA certificate exactly when the accepted request
+// asked for one, see RFC 9448 section 6.
+func checkLeafCACertificate(leaf *x509.Certificate, csr *x509.CertificateRequest, order *Order) error {
+	if !slices.ContainsFunc(order.Identifiers, func(id Identifier) bool {
+		return id.Type == IdentifierTNAuthList
+	}) {
+		return nil
+	}
+	requested, err := csrCACertificate(csr.Extensions)
+	if err != nil {
+		return err
+	}
+	if leaf.IsCA != requested {
+		return errors.New("leaf CA basic constraint does not match the certificate request")
+	}
+	return nil
 }

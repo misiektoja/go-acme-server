@@ -2,6 +2,7 @@ package acmeserver
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"errors"
 	"net/http"
@@ -44,7 +45,12 @@ func (s *Server) serveFinalize(w http.ResponseWriter, r *http.Request, id string
 		s.writeProblem(ctx, w, Problemf(ErrorOrderNotReady, "order is %s", string(status)))
 		return
 	}
-	if _, p := checkCSR(der, order, req.Account); p != nil {
+	grantedCA, p := s.grantedCACertificate(ctx, order)
+	if p != nil {
+		s.writeProblem(ctx, w, p)
+		return
+	}
+	if _, p := checkCSR(der, order, req.Account, grantedCA); p != nil {
 		s.writeProblem(ctx, w, p)
 		return
 	}
@@ -74,4 +80,18 @@ func (s *Server) serveFinalize(w http.ResponseWriter, r *http.Request, id string
 		return
 	}
 	s.writeOrder(ctx, w, http.StatusOK, order, now)
+}
+
+// Reports whether every authorization of the order granted a CA certificate.
+func (s *Server) grantedCACertificate(ctx context.Context, order *Order) (bool, *Problem) {
+	for _, id := range order.AuthorizationIDs {
+		authz, err := s.store.Authorization(ctx, id)
+		if err != nil {
+			return false, s.storeProblem(ctx, err, "authorization")
+		}
+		if !authz.CACertificate {
+			return false, nil
+		}
+	}
+	return true, nil
 }

@@ -6,14 +6,28 @@ import (
 	"crypto/elliptic"
 	"crypto/rsa"
 	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/asn1"
+	"errors"
 	"slices"
 
 	"github.com/misiektoja/go-acme-server/internal/jws"
 )
 
+// The basic constraints extension of RFC 5280 section 4.2.1.9.
+var basicConstraintsOID = asn1.ObjectIdentifier{2, 5, 29, 19}
+
+// The part of the basic constraints extension that authorization decisions depend on.
+type basicConstraints struct {
+	IsCA       bool `asn1:"optional"`
+	MaxPathLen int  `asn1:"optional,default:-1"`
+}
+
 // Parses a CSR and checks that it may finalize the order: a valid self signature, an accepted
-// key that is not the account key and exactly the order's identifiers, see RFC 8555 section 7.4.
-func checkCSR(der []byte, order *Order, account *Account) (*x509.CertificateRequest, *Problem) {
+// key that is not the account key, exactly the order's identifiers and a CA basic constraint the
+// authorizations granted, see RFC 8555 section 7.4 and RFC 9448 section 6.
+func checkCSR(der []byte, order *Order, account *Account,
+	grantedCA bool) (*x509.CertificateRequest, *Problem) {
 	csr, err := x509.ParseCertificateRequest(der)
 	if err != nil {
 		return nil, NewProblem(ErrorBadCSR, "CSR could not be parsed")
@@ -41,7 +55,34 @@ func checkCSR(der []byte, order *Order, account *Account) (*x509.CertificateRequ
 	if !sameIdentifiers(requested, order.Identifiers) {
 		return nil, NewProblem(ErrorBadCSR, "CSR identifiers do not match the order")
 	}
+	requestedCA, err := csrCACertificate(csr.Extensions)
+	if err != nil {
+		return nil, NewProblem(ErrorBadCSR, "CSR basic constraints could not be read")
+	}
+	if requestedCA != grantedCA {
+		return nil, NewProblem(ErrorBadCSR, "CSR CA basic constraint does not match the granted authorization")
+	}
 	return csr, nil
+}
+
+// Returns whether a certificate request asks for a CA certificate.
+func csrCACertificate(extensions []pkix.Extension) (bool, error) {
+	found := false
+	value := basicConstraints{MaxPathLen: -1}
+	for _, extension := range extensions {
+		if !extension.Id.Equal(basicConstraintsOID) {
+			continue
+		}
+		if found {
+			return false, errors.New("duplicate basic constraints extension")
+		}
+		found = true
+		rest, err := asn1.Unmarshal(extension.Value, &value)
+		if err != nil || len(rest) != 0 {
+			return false, errors.New("invalid basic constraints extension")
+		}
+	}
+	return value.IsCA, nil
 }
 
 // Rejects keys the server does not issue for.
@@ -73,6 +114,13 @@ func csrIdentifiers(csr *x509.CertificateRequest) ([]Identifier, *Problem) {
 	}
 	for _, ip := range csr.IPAddresses {
 		raw = append(raw, Identifier{Type: IdentifierIP, Value: ip.String()})
+	}
+	tnAuthList, present, err := tnAuthListExtension(csr.Extensions)
+	if err != nil {
+		return nil, NewProblem(ErrorBadCSR, "CSR TN authorization list is not acceptable")
+	}
+	if present {
+		raw = append(raw, tnAuthList)
 	}
 	if len(raw) == 0 {
 		return nil, NewProblem(ErrorBadCSR, "CSR requests no identifiers")
