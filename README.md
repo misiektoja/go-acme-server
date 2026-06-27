@@ -8,7 +8,8 @@ parts that differ between deployments:
 
 * a `Store` that persists resources and background work, with `memstore` for tests and examples
 * an `Issuer` and a `Revoker` that call the host CA
-* one `Validator` per challenge type, with HTTP-01, DNS-01 and TLS-ALPN-01 implementations in `challenge`
+* one `Validator` per challenge type, with HTTP-01, DNS-01, TLS-ALPN-01 and tkauth-01 implementations
+  in `challenge`
 * optional policy hooks, external account binding keys and directory metadata
 
 ## Usage
@@ -81,6 +82,40 @@ failures are retryable. Incorrect proofs and policy refusals are terminal.
 `HTTPOptions.TestPort` and `TLSALPNOptions.TestPort` override destination ports 80 and 443 for tests
 only. The HTTP override applies to port 80 connections. Enable IP identifiers with
 `Config.IPIdentifiers` and use HTTP-01 or TLS-ALPN-01. DNS-01 cannot validate IP identifiers.
+
+## Authority Token challenges
+
+`tkauth-01` proves authority over a list of telephone numbers instead of control of a network
+resource, as specified in RFC 9447 and RFC 9448. Enable it with `Config.TNAuthListIdentifiers` and a
+`ChallengeTKAuth01` validator. Orders then accept identifiers of type `TNAuthList` whose value is the
+unpadded base64url encoding of a DER `TNAuthorizationList` from RFC 8226 section 9. Such an
+identifier is offered `tkauth-01` alone, and every other identifier type keeps the network challenges.
+
+A client answers the challenge by posting the Authority Token in a `tkauth` payload member. The
+validator checks the token against the challenge identifier and the responding account key. It never
+fetches the `x5u` URL, because trusting a Token Authority is a deployment decision: the header
+reference is passed to a `TokenAuthorities` implementation that returns the certificate whose key
+must have signed the token. `StaticTokenAuthorities` covers a fixed trust list with no network access.
+
+```go
+tkauth, err := challenge.NewTKAuth01(challenge.TKAuthOptions{
+	Authorities: challenge.StaticTokenAuthorities{
+		ByURL: map[string]*x509.Certificate{"https://authority.example.com/cert": authorityCert},
+	},
+})
+```
+
+`Config.TokenAuthority` sets the optional `token-authority` URL advertised on the challenge. The
+`fingerprint` claim may use either the RFC 8555 account key thumbprint or the `SHA256` hex form of
+the same digest, since RFC 9448 shows both. The token must carry `exp` and `jti`, and a one-minute
+clock skew is tolerated by default.
+
+Finalize such an order with a certificate request that carries the same authority list in its
+`id-pe-TNAuthList` extension request. A token whose `atc` claim sets `ca` authorizes a CA certificate
+for delegation. Certificate requests must match what the authorizations granted: asking for a CA
+certificate without that grant is refused as `badCSR`, and so is omitting it after the grant. This
+rule applies to every order, so a request for a CA certificate is refused unless a challenge granted
+one.
 
 ## Persistence and issuance
 
