@@ -10,6 +10,8 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"database/sql"
+	"encoding/asn1"
+	"encoding/base64"
 	"errors"
 	"math/big"
 	"net"
@@ -142,6 +144,9 @@ func (ca *durableCA) Issue(ctx context.Context, req acmeserver.IssueRequest) (ac
 	return acmeserver.IssueResult{Chain: [][]byte{der, ca.root.Raw}, CAReference: req.OperationID}, nil
 }
 
+// The id-pe-TNAuthList certificate extension of RFC 8226 section 9.
+var tnAuthListOID = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 1, 26}
+
 // Issues only the identifiers and validity accepted by the server.
 func (ca *durableCA) sign(req acmeserver.IssueRequest) ([]byte, error) {
 	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
@@ -163,6 +168,12 @@ func (ca *durableCA) sign(req acmeserver.IssueRequest) ([]byte, error) {
 			leaf.DNSNames = append(leaf.DNSNames, id.Value)
 		case acmeserver.IdentifierIP:
 			leaf.IPAddresses = append(leaf.IPAddresses, net.ParseIP(id.Value))
+		case acmeserver.IdentifierTNAuthList:
+			value, err := base64.RawURLEncoding.DecodeString(id.Value)
+			if err != nil {
+				return nil, err
+			}
+			leaf.ExtraExtensions = append(leaf.ExtraExtensions, pkix.Extension{Id: tnAuthListOID, Value: value})
 		}
 	}
 	return x509.CreateCertificate(rand.Reader, leaf, ca.root, req.CSR.PublicKey, ca.key)
