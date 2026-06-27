@@ -63,7 +63,8 @@ test-recovery: test-scratch ## Exercise two-process fencing and recovery after a
 
 # FUZZ_TIME bounds each target. go test fuzzes one target per invocation, so the targets run in turn.
 FUZZ_TIME ?= 20s
-FUZZ_TARGETS := ./internal/jws:FuzzParse ./internal/jws:FuzzParseProfiles ./internal/jws:FuzzParseJWK ./internal/jws:FuzzUnmarshalStrict \
+FUZZ_TARGETS := ./internal/jws:FuzzParse ./internal/jws:FuzzParseProfiles ./internal/jws:FuzzParseCompact \
+	./internal/jws:FuzzParseJWK ./internal/jws:FuzzUnmarshalStrict \
 	.:FuzzIdentifierNormalize ./challenge:FuzzDNSResponse ./challenge:FuzzALPNProof
 
 .PHONY: fuzz
