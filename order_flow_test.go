@@ -448,7 +448,7 @@ func TestIssuerRetriesUncertainOutcome(t *testing.T) {
 func TestUnacceptableChainIsNotPublished(t *testing.T) {
 	f := newFlow(t, nil)
 	rogue := newTestCA(t)
-	chain, err := rogue.sign(&newKey(t).PublicKey, []acmeserver.Identifier{{Type: acmeserver.IdentifierDNS, Value: "a.test"}}, time.Time{})
+	chain, err := rogue.sign(&newKey(t).PublicKey, []acmeserver.Identifier{{Type: acmeserver.IdentifierDNS, Value: "a.test"}}, time.Time{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}

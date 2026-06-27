@@ -299,12 +299,14 @@ type authzBody struct {
 }
 
 type challengeBody struct {
-	Type      string              `json:"type"`
-	URL       string              `json:"url"`
-	Status    string              `json:"status"`
-	Token     string              `json:"token"`
-	Validated string              `json:"validated"`
-	Error     *acmeserver.Problem `json:"error"`
+	Type           string              `json:"type"`
+	URL            string              `json:"url"`
+	Status         string              `json:"status"`
+	Token          string              `json:"token"`
+	TKAuthType     string              `json:"tkauth-type"`
+	TokenAuthority string              `json:"token-authority"`
+	Validated      string              `json:"validated"`
+	Error          *acmeserver.Problem `json:"error"`
 }
 
 type accountBody struct {
@@ -484,7 +486,7 @@ func (ca *testCA) Issue(_ context.Context, req acmeserver.IssueRequest) (acmeser
 	if chain, ok := ca.issued[req.OperationID]; ok {
 		return acmeserver.IssueResult{Chain: chain}, nil
 	}
-	chain, err := ca.sign(req.CSR.PublicKey, req.Identifiers, req.NotAfter)
+	chain, err := ca.sign(req.CSR.PublicKey, req.Identifiers, req.NotAfter, grantedCACertificate(req.Validations))
 	if err != nil {
 		return acmeserver.IssueResult{}, err
 	}
@@ -492,8 +494,19 @@ func (ca *testCA) Issue(_ context.Context, req acmeserver.IssueRequest) (acmeser
 	return acmeserver.IssueResult{Chain: chain}, nil
 }
 
-// Signs a leaf for the identifiers.
-func (ca *testCA) sign(pub any, identifiers []acmeserver.Identifier, notAfter time.Time) ([][]byte, error) {
+// Reports whether every validation of the request authorized a CA certificate.
+func grantedCACertificate(validations []acmeserver.Validation) bool {
+	for _, validation := range validations {
+		if !validation.CACertificate {
+			return false
+		}
+	}
+	return len(validations) != 0
+}
+
+// Signs a leaf for the identifiers, as a CA certificate when the authorizations granted one.
+func (ca *testCA) sign(pub any, identifiers []acmeserver.Identifier, notAfter time.Time,
+	isCA bool) ([][]byte, error) {
 	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 100))
 	if err != nil {
 		return nil, err
@@ -509,11 +522,25 @@ func (ca *testCA) sign(pub any, identifiers []acmeserver.Identifier, notAfter ti
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 	}
 	for _, id := range identifiers {
-		if id.Type == acmeserver.IdentifierIP {
+		switch id.Type {
+		case acmeserver.IdentifierIP:
 			tmpl.IPAddresses = append(tmpl.IPAddresses, net.ParseIP(id.Value))
-		} else {
+		case acmeserver.IdentifierTNAuthList:
+			value, err := base64.RawURLEncoding.DecodeString(id.Value)
+			if err != nil {
+				return nil, err
+			}
+			tmpl.ExtraExtensions = append(tmpl.ExtraExtensions, pkix.Extension{Id: tnAuthListOID, Value: value})
+		case acmeserver.IdentifierDNS:
 			tmpl.DNSNames = append(tmpl.DNSNames, id.Value)
+		default:
+			return nil, fmt.Errorf("unsupported identifier type %q", id.Type)
 		}
+	}
+	if isCA {
+		tmpl.IsCA = true
+		tmpl.BasicConstraintsValid = true
+		tmpl.KeyUsage |= x509.KeyUsageCertSign
 	}
 	der, err := x509.CreateCertificate(rand.Reader, tmpl, ca.cert, pub, ca.key)
 	if err != nil {
