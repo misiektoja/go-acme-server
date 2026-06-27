@@ -213,6 +213,7 @@ func testAcceptChallenge(t *testing.T, store acmeserver.Store) {
 	stale := *challenge
 	challenge.Status = acmeserver.ChallengeProcessing
 	challenge.KeyThumbprint = "thumb"
+	challenge.AuthorityToken = "header.claims.signature"
 	task := newTask("task-1", acmeserver.TaskValidate, challenge.ID, testNow)
 	if err := store.AcceptChallenge(ctx, challenge, task); err != nil {
 		t.Fatalf("AcceptChallenge: %v", err)
@@ -221,7 +222,8 @@ func testAcceptChallenge(t *testing.T, store acmeserver.Store) {
 		t.Fatalf("AcceptChallenge set Revision %d, want 2", challenge.Revision)
 	}
 	got, err := store.Challenge(ctx, challenge.ID)
-	if err != nil || got.Status != acmeserver.ChallengeProcessing || got.KeyThumbprint != "thumb" {
+	if err != nil || got.Status != acmeserver.ChallengeProcessing || got.KeyThumbprint != "thumb" ||
+		got.AuthorityToken != challenge.AuthorityToken {
 		t.Fatalf("Challenge after accept = %+v, %v", got, err)
 	}
 	pending, err := store.PendingTasks(ctx, testNow)
@@ -366,6 +368,7 @@ func testCompleteValidation(t *testing.T, store acmeserver.Store) {
 	challenge.Validated = testNow
 	authz := authzs[0]
 	authz.Status = acmeserver.AuthorizationValid
+	authz.CACertificate = true
 	if err := store.CompleteValidation(ctx, task, challenge, authz, order); err != nil {
 		t.Fatalf("CompleteValidation: %v", err)
 	}
@@ -377,7 +380,7 @@ func testCompleteValidation(t *testing.T, store acmeserver.Store) {
 		t.Fatalf("Order after completion = %+v, %v", gotOrder, err)
 	}
 	gotAuthz, err := store.Authorization(ctx, authz.ID)
-	if err != nil || gotAuthz.Status != acmeserver.AuthorizationValid {
+	if err != nil || gotAuthz.Status != acmeserver.AuthorizationValid || !gotAuthz.CACertificate {
 		t.Fatalf("Authorization after completion = %+v, %v", gotAuthz, err)
 	}
 	_, err = store.ClaimTask(ctx, testNow.Add(time.Hour), testNow.Add(2*time.Hour))
