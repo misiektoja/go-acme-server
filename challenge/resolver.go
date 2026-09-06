@@ -180,7 +180,7 @@ func (r *Resolver) query(ctx context.Context, name string, typ dnsmessage.Type) 
 	}
 	question := dnsmessage.Question{Name: qname, Type: typ, Class: dnsmessage.ClassINET}
 	message := dnsmessage.Message{
-		Header:    dnsmessage.Header{ID: binary.BigEndian.Uint16(randomID[:]), RecursionDesired: true},
+		ID: binary.BigEndian.Uint16(randomID[:]), RecursionDesired: true,
 		Questions: []dnsmessage.Question{question}}
 	query, err := message.Pack()
 	if err != nil {

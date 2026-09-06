@@ -201,8 +201,7 @@ func badKey(detail string) *Error { return &Error{Code: CodeBadPublicKey, Detail
 
 // Returns the detail of a *Error or the message of any other error.
 func detailOf(err error) string {
-	var e *Error
-	if errors.As(err, &e) {
+	if e, ok := errors.AsType[*Error](err); ok {
 		return e.Detail
 	}
 	return err.Error()

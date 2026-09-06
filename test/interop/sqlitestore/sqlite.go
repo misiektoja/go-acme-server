@@ -111,8 +111,7 @@ func storageError(err error) error {
 	if errors.Is(err, sql.ErrNoRows) {
 		return acmeserver.ErrNotFound
 	}
-	var sqliteError *sqlite.Error
-	if errors.As(err, &sqliteError) {
+	if sqliteError, ok := errors.AsType[*sqlite.Error](err); ok {
 		switch sqliteError.Code() {
 		case 1555, 2067:
 			return acmeserver.ErrConflict

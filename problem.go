@@ -211,8 +211,7 @@ func (p *Problem) UnmarshalJSON(data []byte) error {
 
 // Returns the Problem in the error chain of err, if there is one.
 func AsProblem(err error) (*Problem, bool) {
-	var p *Problem
-	if errors.As(err, &p) {
+	if p, ok := errors.AsType[*Problem](err); ok {
 		return p, true
 	}
 	return nil, false
