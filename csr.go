@@ -24,10 +24,9 @@ type basicConstraints struct {
 }
 
 // Parses a CSR and checks that it may finalize the order: a valid self signature, an accepted
-// key that is not the account key, exactly the order's identifiers and a CA basic constraint the
-// authorizations granted, see RFC 8555 section 7.4 and RFC 9448 section 6.
-func checkCSR(der []byte, order *Order, account *Account,
-	grantedCA bool) (*x509.CertificateRequest, *Problem) {
+// key that is not the account key and exactly the order's identifiers, see RFC 8555 section 7.4.
+// The CA basic constraint is compared with the authorization grants separately.
+func checkCSR(der []byte, order *Order, account *Account) (*x509.CertificateRequest, *Problem) {
 	csr, err := x509.ParseCertificateRequest(der)
 	if err != nil {
 		return nil, NewProblem(ErrorBadCSR, "CSR could not be parsed")
@@ -54,13 +53,6 @@ func checkCSR(der []byte, order *Order, account *Account,
 	}
 	if !sameIdentifiers(requested, order.Identifiers) {
 		return nil, NewProblem(ErrorBadCSR, "CSR identifiers do not match the order")
-	}
-	requestedCA, err := csrCACertificate(csr.Extensions)
-	if err != nil {
-		return nil, NewProblem(ErrorBadCSR, "CSR basic constraints could not be read")
-	}
-	if requestedCA != grantedCA {
-		return nil, NewProblem(ErrorBadCSR, "CSR CA basic constraint does not match the granted authorization")
 	}
 	return csr, nil
 }
