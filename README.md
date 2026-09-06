@@ -180,10 +180,11 @@ call. The server records authorization evidence and the earliest authorization o
 before dispatch. `IssuancePolicy` can refuse that first dispatch. The issuer must enforce
 `Deadline` and must never start signing when `RecoveryOnly` is true. It may shorten the requested
 validity to its own lifetime policy, but a leaf that starts earlier or ends later than the order
-asked for fails the publication check. Recovery continues after account deactivation, expiry or
-exhausted ordinary retries because an external CA may already have issued a certificate. An
-accepted challenge that the worker has not validated yet does not survive deactivation. It
-becomes invalid with its authorization and no proof is fetched from the subscriber.
+asked for fails the publication check. So does a CA certificate for an order that carries no
+authority list grant. Recovery continues after account deactivation, expiry or exhausted ordinary
+retries because an external CA may already have issued a certificate. An accepted challenge that
+the worker has not validated yet does not survive deactivation. It becomes invalid with its
+authorization and no proof is fetched from the subscriber.
 
 Chains that fail publication checks remain in `Order.UnpublishedResult` with the CA reference and
 are never returned to clients. The host reconciles or revokes them.
