@@ -383,6 +383,50 @@ func TestTKAuth01TokenExpiryClampsRequestedNotAfter(t *testing.T) {
 	}
 }
 
+// Builds a TNAuthList CSR that also names a service provider in its subject.
+func makeNamedTNAuthListCSR(t *testing.T, key crypto.Signer, list []byte, cn string, names ...string) []byte {
+	t.Helper()
+	der, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{
+		Subject:         pkix.Name{CommonName: cn},
+		DNSNames:        names,
+		ExtraExtensions: []pkix.Extension{{Id: tnAuthListOID, Value: list}},
+	}, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return der
+}
+
+// Accepts a service provider common name on an authority list request and still refuses one that
+// adds an unauthorized name to a mixed order.
+func TestTKAuth01ServiceProviderCommonName(t *testing.T) {
+	t.Run("authority list only", func(t *testing.T) {
+		f, authority := newTKAuthFlow(t)
+		f.runWorker()
+		c := f.newClient()
+		c.register()
+		orderURL, order := c.newAuthorityListOrder(flowAuthorityList)
+		c.answerAll(order, authority, flowAuthorityList, false)
+		order = c.waitOrder(orderURL, statusReady)
+		csr := makeNamedTNAuthListCSR(t, newKey(t), flowAuthorityList, "SHAKEN 1234")
+		if rec := c.finalizeCSR(order, csr); rec.Code != http.StatusOK {
+			t.Fatalf("finalize = %d %s", rec.Code, rec.Body.String())
+		}
+		c.waitOrder(orderURL, statusValid)
+	})
+	t.Run("mixed order", func(t *testing.T) {
+		f, authority := newTKAuthFlow(t)
+		f.runWorker()
+		c := f.newClient()
+		c.register()
+		orderURL, order := c.newAuthorityListOrder(flowAuthorityList, "mixed.test")
+		c.answerAll(order, authority, flowAuthorityList, false)
+		order = c.waitOrder(orderURL, statusReady)
+		csr := makeNamedTNAuthListCSR(t, newKey(t), flowAuthorityList, "other.test", "mixed.test")
+		assertProblem(t, c.finalizeCSR(order, csr), http.StatusBadRequest, acmeserver.ErrorBadCSR)
+	})
+}
+
 // Refuses responses and orders that do not follow the tkauth-01 rules.
 func TestTKAuth01Refusals(t *testing.T) {
 	f, authority := newTKAuthFlow(t)

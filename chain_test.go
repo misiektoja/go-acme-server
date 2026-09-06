@@ -81,3 +81,28 @@ func TestChainChecksCompleteIdentityAndValidity(t *testing.T) {
 		})
 	}
 }
+
+// Exempts the common name only when an authority list is the certificate's only identity.
+func TestCertificateIdentifiersCommonName(t *testing.T) {
+	list := pkix.Extension{Id: tnAuthListOID, Value: authorityList(spcEntry("1234"))}
+	for _, test := range []struct {
+		name string
+		leaf x509.Certificate
+		ok   bool
+	}{
+		{"provider name on an authority list", x509.Certificate{
+			Subject: pkix.Name{CommonName: "SHAKEN 1234"}, Extensions: []pkix.Extension{list}}, true},
+		{"provider name on a mixed certificate", x509.Certificate{
+			Subject: pkix.Name{CommonName: "SHAKEN 1234"}, DNSNames: []string{"a.test"},
+			Extensions: []pkix.Extension{list}}, false},
+		{"SAN name on a mixed certificate", x509.Certificate{
+			Subject: pkix.Name{CommonName: "a.test"}, DNSNames: []string{"a.test"},
+			Extensions: []pkix.Extension{list}}, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := certificateIdentifiers(&test.leaf); (err == nil) != test.ok {
+				t.Fatalf("certificateIdentifiers = %v, ok = %v", err, test.ok)
+			}
+		})
+	}
+}
