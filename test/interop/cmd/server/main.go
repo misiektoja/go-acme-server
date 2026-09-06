@@ -291,7 +291,7 @@ func newServer(ctx context.Context, dirs paths, baseURL string, resolve pairs, a
 		}
 	}
 	server, err := acmeserver.New(acmeserver.Config{BaseURL: baseURL, Store: store, Nonces: nonce.New(nonce.Options{}),
-		Issuer: ca, Revoker: ca, Logger: logger,
+		Issuer: ca, Revoker: ca, Logger: logger, RenewalInfo: acmeserver.LifetimeRenewal{},
 		Validators: map[acmeserver.ChallengeType]acmeserver.Validator{acmeserver.ChallengeHTTP01: validator},
 		Workers: acmeserver.WorkerConfig{PollInterval: 200 * time.Millisecond, RetryDelay: 2 * time.Second,
 			TaskTimeout: 15 * time.Second}})

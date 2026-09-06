@@ -181,7 +181,7 @@ func configuredServer(t *testing.T, baseURL string, options harnessOptions, stor
 		validators[acmeserver.ChallengeTKAuth01] = validator
 	}
 	config := acmeserver.Config{BaseURL: baseURL, Store: store, Nonces: nonce.New(nonce.Options{}),
-		Issuer: ca, Revoker: ca, Validators: validators,
+		Issuer: ca, Revoker: ca, Validators: validators, RenewalInfo: acmeserver.LifetimeRenewal{RetryAfter: time.Hour},
 		Workers: acmeserver.WorkerConfig{External: options.external, PollInterval: 10 * time.Millisecond, RetryDelay: 10 * time.Millisecond,
 			TaskTimeout: time.Second, Lease: 2 * time.Second}}
 	if options.eab != nil {
