@@ -32,7 +32,7 @@ through a host CA.
   host reconciliation. Host issuers must deduplicate operations and enforce authorization deadlines.
   Revocations carry a durable operation ID that retries repeat, so revokers deduplicate the same way.
 * **`make test-interop`** requires acmez issuance through HTTP-01, DNS-01 with a wildcard and its
-  base domain, and TLS-ALPN-01, Certbot HTTP-01 and manual-hook DNS-01 wildcard issuance with
+  base domain, TLS-ALPN-01 and an IP identifier, Certbot HTTP-01 and manual-hook DNS-01 wildcard issuance with
   revocation, lego HTTP-01 issuance with revocation, DNS-01 wildcard and TLS-ALPN-01 issuance,
   renewal information and certificate replacement through acmez and lego, delayed issuance
   through Certbot and lego, Go crypto/acme account changes, issuance, key-signed revocation and
