@@ -1,7 +1,7 @@
 # Interoperability tests
 
-This separate module tests go-acme-server with acmez v3.1.6, Certbot 5.4.0, lego v4.35.2 and
-go-jose v4.1.4.
+This separate module tests go-acme-server with acmez v3.1.6, Certbot 5.8.0, lego v4.35.2 and
+go-jose v4.1.5.
 Clients reach the server over HTTPS and trust a generated root explicitly. Tests check the issued
 key, exact identifiers, validity, chain and stored resource state. An incorrect proof of any
 challenge type must leave the order invalid without any CA issuance.
@@ -32,7 +32,7 @@ key changes and one nonce used from several connections each succeed exactly onc
 authorizations of one order complete concurrently and two workers share one SQLite store
 without processing any task twice.
 
-The SQLite adapter uses modernc.org/sqlite v1.48.1 with WAL, `synchronous=FULL`, foreign keys,
+The SQLite adapter uses modernc.org/sqlite v1.58.0 with WAL, `synchronous=FULL`, foreign keys,
 a five-second busy timeout and `BEGIN IMMEDIATE` writes. It is test infrastructure with no schema
 migration or production support contract. SQLite lock conflicts return `ErrRevisionMismatch` so
 the caller can retry the atomic operation. Unique IDs and account keys return `ErrConflict`.
@@ -59,7 +59,7 @@ tools. lego runs in process and reads no host resolver because CNAME discovery i
 and `make tidy-check` cover both modules.
 
 `go.mod` and `go.sum` pin the Go dependencies. `requirements.txt` pins every Certbot dependency.
-CI uses Python 3.14.3 and the Go version from the root `go.mod`. Refresh these pins together and
+CI uses Python 3.14.7 and the Go version from the root `go.mod`. Refresh these pins together and
 rerun the required scenarios when updating a client.
 
 ## Evidence

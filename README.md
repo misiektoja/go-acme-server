@@ -107,15 +107,21 @@ tkauth, err := challenge.NewTKAuth01(challenge.TKAuthOptions{
 
 `Config.TokenAuthority` sets the optional `token-authority` URL advertised on the challenge. The
 `fingerprint` claim may use either the RFC 8555 account key thumbprint or the `SHA256` hex form of
-the same digest, since RFC 9448 shows both. The token must carry `exp` and `jti`, and a one-minute
-clock skew is tolerated by default.
+the same digest, since RFC 9448 shows both. The `tktype` claim is compared without regard to case,
+so tokens that follow the `TnAuthList` spelling of the RFC 9447 example are accepted. The token must
+carry `exp` and `jti`, and a one-minute clock skew is tolerated by default.
 
 Finalize such an order with a certificate request that carries the same authority list in its
-`id-pe-TNAuthList` extension request. A token whose `atc` claim sets `ca` authorizes a CA certificate
-for delegation. Certificate requests must match what the authorizations granted: asking for a CA
-certificate without that grant is refused as `badCSR`, and so is omitting it after the grant. This
-rule applies to every order, so a request for a CA certificate is refused unless a challenge granted
-one.
+`id-pe-TNAuthList` extension request. An order holds at most one `TNAuthList` identifier, because a
+certificate has one such extension. A token whose `atc` claim sets `ca` authorizes a CA certificate
+for delegation. Every authorization of the order must have granted what the request asks for: asking
+for a CA certificate without that grant is refused as `badCSR`, and so is omitting it after the
+grant, including when the order mixes the authority list with DNS names. Network challenges grant
+nothing, so a request for a CA certificate is refused unless every challenge granted one.
+
+The issued certificate may not outlive the token. The issuer receives the token expiry as the
+requested `notAfter` when the order asks for nothing or for a later time, and a leaf that is valid
+past the token expiry is refused and retained as an unacceptable result.
 
 ## Persistence and issuance
 
