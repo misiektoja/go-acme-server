@@ -144,12 +144,15 @@ token must carry `exp` and `jti`. Its `fingerprint` may use the account key thum
 9447 and RFC 9448 spell them differently. One minute of clock skew is tolerated by default.
 
 The certificate request must carry the same authority list in its `id-pe-TNAuthList` extension
-request. A token whose `atc` claim sets `ca` authorizes a CA certificate. Every authorization of
-the order must have granted what the request asks for, so a request for a CA certificate without
-the grant is refused as `badCSR` and so is a request without the CA constraint after the grant.
-The issued certificate may not outlive the token. The issuer receives the token expiry as the
-requested `notAfter` unless the order asks for an earlier time. A leaf valid past the token
-expiry is refused and retained as an unacceptable result.
+request. The subject common name normally counts as a requested identifier. It is exempt when the
+authority list is the only identifier, so the request may name the service provider there. An
+order that also covers DNS or IP identifiers keeps the normal rule. A token whose `atc` claim
+sets `ca` authorizes a CA certificate. Every authorization of the order must have granted what
+the request asks for, so a request for a CA certificate without the grant is refused as `badCSR`
+and so is a request without the CA constraint after the grant. The issued certificate may not
+outlive the token. The issuer receives the token expiry as the requested `notAfter` unless the
+order asks for an earlier time. A leaf valid past the token expiry is refused and retained as an
+unacceptable result.
 
 ## Renewal information
 
