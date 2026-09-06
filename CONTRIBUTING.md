@@ -47,6 +47,17 @@ Before v1.0.0 a minor release may change the public API. The changelog names eve
 * Interfaces the host implements, such as `Store`, `Issuer`, `Revoker`, `Validator`, `Policy`, `RenewalAdvisor` and `challenge.TokenAuthorities`, may gain methods before v1.0.0. A store change comes with a `storetest` update, so run that suite when upgrading. After v1.0.0 new server capabilities go through optional interfaces that the server detects.
 * Wire behavior that clients can observe changes only with a changelog entry and an RFC citation.
 
+## Releasing
+
+Releases are tags on `main`. To publish a version:
+
+1. Replace the `Unreleased (TBD)` heading in `CHANGELOG.md` with the version and date and give the entries a final read as a user of the library.
+2. Run `make lint`, `make test`, `make test-interop` and `RELEASE_VERSION=vX.Y.Z make release-check`. The release check exports `HEAD` with `git archive`, verifies, builds and tests the export and imports it from a separate module, so it catches files that are ignored, untracked or only present locally.
+3. Merge `dev` into `main`, create a signed annotated tag such as `git tag -s v0.1.0 -m 'v0.1.0'` and push the branch and the tag.
+4. Create the GitHub release from the tag with the changelog section as its notes.
+5. Confirm the module proxy serves the version with `GOPROXY=https://proxy.golang.org GOFLAGS=-mod=mod go list -m github.com/misiektoja/go-acme-server@vX.Y.Z` from a directory outside the repository and check that pkg.go.dev shows the package documentation.
+6. Start the next `Unreleased (TBD)` section in `CHANGELOG.md` on `dev`.
+
 ## Code style
 
 [.editorconfig](.editorconfig) records the whitespace rules: UTF-8, LF line endings, a final newline, no trailing whitespace, tabs for Go and Make recipes plus two-space indentation for YAML and TOML. Markdown keeps meaningful trailing spaces and `LICENSE` remains verbatim. Most editors apply these settings automatically, while a few need a plugin.
