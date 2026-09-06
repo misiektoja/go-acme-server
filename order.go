@@ -60,7 +60,6 @@ func (s *Server) serveNewOrder(w http.ResponseWriter, r *http.Request) {
 		s.writeProblem(ctx, w, NewProblem(ErrorServerInternal, "order creation failed"))
 		return
 	}
-	w.Header().Set("Location", s.resourceURL(orderPathPrefix+order.ID))
 	s.writeOrder(ctx, w, http.StatusCreated, order, now)
 }
 

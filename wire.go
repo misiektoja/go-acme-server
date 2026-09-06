@@ -162,8 +162,11 @@ func (s *Server) writeJSON(ctx context.Context, w http.ResponseWriter, status in
 	s.writeBody(w, v)
 }
 
-// Writes an order and asks processing clients to poll later.
+// Writes an order with its URL in Location and asks processing clients to poll later. Every order
+// response names the order because the Go crypto/acme client reads the URL it polls after
+// finalization from that header.
 func (s *Server) writeOrder(ctx context.Context, w http.ResponseWriter, status int, order *Order, now time.Time) {
+	w.Header().Set("Location", s.resourceURL(orderPathPrefix+order.ID))
 	view := s.orderView(order, now)
 	if view.Status == OrderProcessing {
 		w.Header().Set("Retry-After", strconv.Itoa(processingRetryAfter))
