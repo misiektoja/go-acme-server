@@ -6,7 +6,9 @@ Clients reach the server over HTTPS and trust a generated root explicitly. Tests
 key, exact identifiers, validity, chain and stored resource state. An incorrect proof of any
 challenge type must leave the order invalid without any CA issuance.
 
-acmez obtains certificates through HTTP-01, DNS-01 and TLS-ALPN-01. The DNS-01 scenario orders a
+acmez obtains certificates through HTTP-01, DNS-01 and TLS-ALPN-01. acmez and lego also read
+RFC 9773 renewal information for an issued certificate, replace it through an order that names it
+and, when they name it again, drop the claim after the server answers `alreadyReplaced`. The DNS-01 scenario orders a
 wildcard together with its base domain, so two proofs share one TXT owner name in the local TCP DNS
 responder. The TLS-ALPN-01 scenario serves the challenge certificates that acmez itself generates
 from a local TLS listener. Certbot uses its standalone HTTP-01 solver on an unprivileged port
@@ -95,6 +97,6 @@ only Go version, operating system, architecture, test names, outcomes and elapse
 its temporary directory and uploads only the summary, including after failure.
 
 These tests establish the named acmez, Certbot, lego, crypto/acme, go-jose, cert-manager,
-tkauth-01, concurrency and recovery scenarios. Local validator tests separately check RFC 8555, RFC 8737, RFC 8738 and
+tkauth-01, renewal information, concurrency and recovery scenarios. Local validator tests separately check RFC 8555, RFC 8737, RFC 8738 and
 RFC 9448 proof and egress rules. They do not establish complete RFC conformance or alternate chain
 selection.

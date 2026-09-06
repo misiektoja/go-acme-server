@@ -123,6 +123,21 @@ The issued certificate may not outlive the token. The issuer receives the token 
 requested `notAfter` when the order asks for nothing or for a later time, and a leaf that is valid
 past the token expiry is refused and retained as an unacceptable result.
 
+## Renewal information
+
+Set `Config.RenewalInfo` to serve RFC 9773 renewal information. The directory then advertises
+`renewalInfo`, clients fetch a suggested renewal window for a certificate with an unauthenticated
+GET on its identifier and new orders may name the certificate they replace. `LifetimeRenewal` is
+the built-in advisor. It opens the window at two thirds of the lifetime, closes it at five sixths
+and moves it to the revocation time for revoked certificates. Hosts implement `RenewalAdvisor`
+for other schedules, an explanation URL or a different Retry-After, which defaults to six hours.
+
+A `replaces` member is checked against the stored predecessor. It must belong to the same account
+and share an identifier with the new order. The store marks the certificate replaced when the
+order is created, so a second order naming the same certificate is refused with `alreadyReplaced`
+until the first one is invalid. Stores keep `Certificate.RenewalID` unique and look certificates up
+by it. Without `Config.RenewalInfo` the member is ignored.
+
 ## Persistence and issuance
 
 `memstore` is for tests and examples. Hosts must supply durable storage for production. Atomic
