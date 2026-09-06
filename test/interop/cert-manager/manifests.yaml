@@ -1,0 +1,96 @@
+# Server resources for the cert-manager scenario. run.sh applies them after the HTTPS credentials
+# exist in the acme-credentials secret, then generates the ClusterIssuer with the trust bundle and
+# applies certificate.yaml.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: acme-test
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: acme
+  namespace: acme-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: acme
+  template:
+    metadata:
+      labels:
+        app: acme
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: acme
+          image: go-acme-server-interop:local
+          imagePullPolicy: Never
+          args:
+            - -credentials=/credentials
+            - -state=/state
+            - -base-url=https://acme.acme-test.svc.cluster.local:8443/acme/
+            # The solver service below carries this fixed address.
+            - -resolve=cert-manager.issuance.test=10.96.0.100
+            - -allow=10.96.0.0/16
+          ports:
+            - containerPort: 8443
+          readinessProbe:
+            httpGet:
+              path: /acme/directory
+              port: 8443
+              scheme: HTTPS
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: credentials
+              mountPath: /credentials
+              readOnly: true
+            - name: state
+              mountPath: /state
+      volumes:
+        - name: credentials
+          secret:
+            secretName: acme-credentials
+        - name: state
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: acme
+  namespace: acme-test
+spec:
+  selector:
+    app: acme
+  ports:
+    - port: 8443
+      targetPort: 8443
+---
+# Reaches whichever solver pod cert-manager runs for the test domain. The fixed address lets the
+# ACME server and the CoreDNS hosts entry name it before any challenge exists.
+apiVersion: v1
+kind: Service
+metadata:
+  name: solver
+  namespace: acme-test
+spec:
+  clusterIP: 10.96.0.100
+  selector:
+    acme.cert-manager.io/http01-solver: "true"
+  ports:
+    - port: 80
+      targetPort: 8089

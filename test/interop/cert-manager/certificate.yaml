@@ -1,0 +1,16 @@
+# The certificate cert-manager obtains from the test server through HTTP-01.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: cert-manager-test
+  namespace: acme-test
+spec:
+  secretName: cert-manager-test-tls
+  dnsNames:
+    - cert-manager.issuance.test
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    kind: ClusterIssuer
+    name: acme-test
