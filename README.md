@@ -178,9 +178,10 @@ contains a SQLite test adapter and runs the same contract suite as the memory st
 An issuer must deduplicate by `OperationID` and recover its original result after an uncertain
 call. The server records authorization evidence and the earliest authorization or order deadline
 before dispatch. `IssuancePolicy` can refuse that first dispatch. The issuer must enforce
-`Deadline` and must never start signing when `RecoveryOnly` is true. Recovery continues after
-account deactivation, expiry or exhausted ordinary retries because an external CA may already have
-issued a certificate.
+`Deadline` and must never start signing when `RecoveryOnly` is true. It may shorten the requested
+validity to its own lifetime policy, but a leaf that starts earlier or ends later than the order
+asked for fails the publication check. Recovery continues after account deactivation, expiry or
+exhausted ordinary retries because an external CA may already have issued a certificate.
 
 Chains that fail publication checks remain in `Order.UnpublishedResult` with the CA reference and
 are never returned to clients. The host reconciles or revokes them.
