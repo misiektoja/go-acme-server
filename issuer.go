@@ -20,8 +20,8 @@ type IssueRequest struct {
 	// The normalized identifiers the order covers.
 	Identifiers []Identifier
 	// The requested validity. Zero values mean the host decides. An authority token expiry
-	// narrows NotAfter. The issuer may return a shorter validity, but a leaf that starts earlier
-	// or ends later than the request is refused.
+	// narrows NotAfter. The issuer may return a shorter validity, but the leaf must fit inside
+	// the requested window and must be valid already unless NotBefore is in the future.
 	NotBefore time.Time
 	NotAfter  time.Time
 	// How each identifier was validated.
