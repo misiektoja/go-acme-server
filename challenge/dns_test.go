@@ -210,7 +210,7 @@ func TestResolverSkipsUnrelatedRecordBodies(t *testing.T) {
 // Checks that decoded DNS responses stay within the record bound and carry only validation types.
 func FuzzDNSResponse(f *testing.F) {
 	question := dnsmessage.Question{Name: dnsmessage.MustNewName("_acme-challenge.a.test."), Type: dnsmessage.TypeTXT, Class: dnsmessage.ClassINET}
-	valid := dnsmessage.Message{ID: 7, Response: true, Questions: []dnsmessage.Question{question},
+	valid := dnsmessage.Message{Header: dnsmessage.Header{ID: 7, Response: true}, Questions: []dnsmessage.Question{question},
 		Answers: []dnsmessage.Resource{
 			dnsRecord(question.Name.String(), dnsmessage.TypeTXT, &dnsmessage.TXTResource{TXT: []string{"proof"}}),
 			dnsRecord(question.Name.String(), dnsmessage.TypeCNAME, &dnsmessage.CNAMEResource{CNAME: dnsmessage.MustNewName("b.test.")}),
