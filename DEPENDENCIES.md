@@ -9,6 +9,7 @@ The implementation is original. Third-party code is consumed through versioned p
 | github.com/mholt/acmez/v3 | Independent Go client tests | Apache-2.0 |
 | github.com/go-jose/go-jose/v4 | Independent JWS signing in the interoperability tests | Apache-2.0 |
 | github.com/go-acme/lego/v4 | Independent Go client tests | MIT |
+| golang.org/x/crypto | Independent Go client tests through its `acme` package | BSD-3-Clause |
 | Certbot and acme | Independent Python client tests | Apache-2.0 with component notices |
 
 Exact Go versions and checksums are in each module's `go.mod` and `go.sum`. The Python test

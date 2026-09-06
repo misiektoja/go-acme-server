@@ -1,7 +1,7 @@
 # Interoperability tests
 
-This separate module tests go-acme-server with acmez v3.1.6, Certbot 5.8.0, lego v4.35.2 and
-go-jose v4.1.5.
+This separate module tests go-acme-server with acmez v3.1.6, Certbot 5.8.0, lego v4.35.2, the Go
+crypto/acme client v0.56.0 and go-jose v4.1.5.
 Clients reach the server over HTTPS and trust a generated root explicitly. Tests check the issued
 key, exact identifiers, validity, chain and stored resource state. An incorrect proof of any
 challenge type must leave the order invalid without any CA issuance.
@@ -16,6 +16,18 @@ responder reads. Certbot then revokes the certificate through its account. lego 
 its own HTTP-01 server and through DNS-01 for the same wildcard pair with a provider that writes
 to the responder directly. It revokes with a reason code and receives `alreadyRevoked` on the
 second attempt. The test CA records revocations by operation ID so each test confirms one CA call.
+Certbot and lego also issue while the test CA answers Pending for two seconds, so both wait out a
+processing order without ordering again.
+
+The Go crypto/acme client updates its contact, rolls its key over, issues through HTTP-01, revokes
+with the certificate key and a reason code, and deactivates the account. Its repeated revocation
+reports success because the client treats `alreadyRevoked` as done, so the stored state is checked
+instead.
+
+A raw go-jose client covers tkauth-01, which no independent client speaks. It orders a TNAuthList
+identifier, answers with an Authority Token from a local Token Authority the harness trusts,
+finalizes a CSR that carries the TN authorization list and checks that the token expiry bounds the
+certificate. A token issued to another account key leaves the order invalid without issuance.
 
 go-jose signs requests independently of the server's JWS code. The cross-check creates accounts
 with every advertised algorithm, compares stored RFC 7638 thumbprints with go-jose, changes keys
@@ -70,6 +82,7 @@ these files. The gate prints diagnostics and writes `interop-summary.json` in th
 only Go version, operating system, architecture, test names, outcomes and elapsed times. CI uses
 its temporary directory and uploads only the summary, including after failure.
 
-These tests establish the named acmez, Certbot, lego, go-jose, concurrency and recovery scenarios. Local validator
-tests separately check RFC 8555, RFC 8737 and RFC 8738 proof and egress rules. They do not establish
-complete RFC conformance or the broader client matrix.
+These tests establish the named acmez, Certbot, lego, crypto/acme, go-jose, tkauth-01, concurrency
+and recovery scenarios. Local validator tests separately check RFC 8555, RFC 8737, RFC 8738 and
+RFC 9448 proof and egress rules. They do not establish complete RFC conformance, alternate chain
+selection or cert-manager behavior.
