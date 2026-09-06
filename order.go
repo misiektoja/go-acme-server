@@ -402,14 +402,15 @@ func (s *Server) serveChallenge(w http.ResponseWriter, r *http.Request, id strin
 }
 
 // Moves a pending challenge to processing and enqueues its validation. A challenge that is no
-// longer pending is returned unchanged so repeated responses are harmless.
+// longer pending is returned unchanged without reading the payload, so repeated responses are
+// harmless whatever they carry.
 func (s *Server) acceptChallenge(ctx context.Context, ch *Challenge, account *Account,
 	payload challengeResponseJSON) (*Challenge, *Problem) {
-	if p := checkChallengeResponse(ch.Type, payload); p != nil {
-		return nil, p
-	}
 	if ch.Status != ChallengePending {
 		return ch, nil
+	}
+	if p := checkChallengeResponse(ch.Type, payload); p != nil {
+		return nil, p
 	}
 	authz, err := s.store.Authorization(ctx, ch.AuthorizationID)
 	if err != nil {
