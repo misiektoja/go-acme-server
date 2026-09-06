@@ -42,8 +42,11 @@ const (
 	clientVersions = "acmez=v3.1.6 Certbot=5.8.0 crypto/acme=v0.56.0 go-jose=v4.1.5 lego=v4.35.2 SQLite=v1.58.0"
 )
 
-// The only host name the harness resolves and issues for.
-const testHost = "issuance.test"
+// The only host name the harness resolves and issues for, and the loopback IP identifier.
+const (
+	testHost = "issuance.test"
+	testIP   = "127.0.0.1"
+)
 
 // Routes only the harness identifier to its isolated responder.
 type localResolver struct{}
@@ -69,6 +72,8 @@ type harnessOptions struct {
 	delay time.Duration
 	// Offers tkauth-01 for TNAuthList identifiers with this Token Authority trusted.
 	authority *tokenAuthority
+	// Accepts RFC 8738 IP identifiers.
+	ipIdentifiers bool
 }
 
 // Returns the MAC key for a configured external account identifier.
@@ -192,6 +197,7 @@ func configuredServer(t *testing.T, baseURL string, options harnessOptions, stor
 		config.TNAuthListIdentifiers = true
 		config.TokenAuthority = tokenAuthorityURL
 	}
+	config.IPIdentifiers = options.ipIdentifiers
 	server, err := acmeserver.New(config)
 	if err != nil {
 		t.Fatal(err)
@@ -242,7 +248,7 @@ func (s *solver) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	proof, ok := s.proofs[r.URL.Path]
-	if !ok || r.Host != testHost {
+	if !ok || (r.Host != testHost && r.Host != testIP) {
 		http.NotFound(w, r)
 		return
 	}
@@ -293,8 +299,22 @@ func (h *harness) verifyLeaf(t *testing.T, chainPEM []byte, key crypto.PublicKey
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := slices.Sorted(slices.Values(names))
-	if !bytes.Equal(publicKey, leaf.RawSubjectPublicKeyInfo) || !slices.Equal(slices.Sorted(slices.Values(leaf.DNSNames)), expected) || len(leaf.IPAddresses) != 0 {
+	// Names may be DNS names or IP addresses, and the leaf must carry exactly those.
+	var dnsNames, ipNames []string
+	for _, name := range names {
+		if net.ParseIP(name) != nil {
+			ipNames = append(ipNames, name)
+		} else {
+			dnsNames = append(dnsNames, name)
+		}
+	}
+	leafIPs := make([]string, 0, len(leaf.IPAddresses))
+	for _, ip := range leaf.IPAddresses {
+		leafIPs = append(leafIPs, ip.String())
+	}
+	if !bytes.Equal(publicKey, leaf.RawSubjectPublicKeyInfo) ||
+		!slices.Equal(slices.Sorted(slices.Values(leaf.DNSNames)), slices.Sorted(slices.Values(dnsNames))) ||
+		!slices.Equal(slices.Sorted(slices.Values(leafIPs)), slices.Sorted(slices.Values(ipNames))) {
 		t.Fatal("certificate key or identifiers differ from the client request")
 	}
 	roots := x509.NewCertPool()
@@ -336,7 +356,11 @@ func (h *harness) verify(t *testing.T, chainPEM []byte, key crypto.PublicKey, na
 		if a.Wildcard {
 			name = "*." + name
 		}
-		if !slices.Contains(names, name) || a.Identifier.Type != acmeserver.IdentifierDNS {
+		wantType := acmeserver.IdentifierDNS
+		if net.ParseIP(name) != nil {
+			wantType = acmeserver.IdentifierIP
+		}
+		if !slices.Contains(names, name) || a.Identifier.Type != wantType {
 			t.Fatalf("authorization identifier %s wildcard=%v is not a requested name", a.Identifier, a.Wildcard)
 		}
 		h.verifyChallenges(t, a, typ)

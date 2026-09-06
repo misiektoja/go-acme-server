@@ -209,6 +209,42 @@ func TestCertbotDNS01Wildcard(t *testing.T) {
 	t.Log(certbotVersion + " manual DNS-01 wildcard issuance and account revocation passed")
 }
 
+// Issues for an IP identifier next to a DNS name through acmez and confirms that the IP
+// authorization offers HTTP-01 only, as RFC 8738 requires, while the name still gets DNS-01.
+func TestAcmezIPIdentifier(t *testing.T) {
+	s, port := newSolver(t, false)
+	_, endpoint := newDNSResponder(t)
+	h := newHarness(t, harnessOptions{httpPort: port, dns: endpoint, ipIdentifiers: true})
+	client, account := h.acmez(t, httpSolver(s))
+	key := newKey(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	names := []string{testIP, testHost}
+	certs, err := client.ObtainCertificateForSANs(ctx, account, key, names)
+	if err != nil || len(certs) != 1 {
+		t.Fatalf("issuance = %d, %v", len(certs), err)
+	}
+	order := h.verify(t, certs[0].ChainPEM, &key.PublicKey, names, acmeserver.ChallengeHTTP01)
+	for _, id := range order.AuthorizationIDs {
+		a, err := h.store.Authorization(t.Context(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		offered := len(a.ChallengeIDs)
+		if (a.Identifier.Type == acmeserver.IdentifierIP && offered != 1) || (a.Identifier.Type == acmeserver.IdentifierDNS && offered != 2) {
+			t.Fatalf("%s authorization offered %d challenges", a.Identifier.Type, offered)
+		}
+	}
+	// Without Config.IPIdentifiers the same order is refused before any authorization exists.
+	plain := newHarness(t, harnessOptions{httpPort: port})
+	client, account = plain.acmez(t, httpSolver(s))
+	_, err = client.ObtainCertificateForSANs(ctx, account, newKey(t), []string{testIP})
+	if err == nil || !strings.Contains(err.Error(), string(acmeserver.ErrorUnsupportedIdentifier)) {
+		t.Fatalf("IP order without the option = %v, want unsupportedIdentifier", err)
+	}
+	t.Log("acmez v3.1.6 issued for 127.0.0.1 with issuance.test through HTTP-01 and the IP authorization offered no dns-01")
+}
+
 // Registers the HTTP-01 responder as the only acmez solver.
 func httpSolver(s *solver) map[string]acmez.Solver {
 	return map[string]acmez.Solver{acme.ChallengeTypeHTTP01: s}
