@@ -43,6 +43,8 @@ func newSigner(t *testing.T, alg string) signer {
 		key, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	case "ES384":
 		key, err = ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	case "ES512":
+		key, err = ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
 	case "RS256":
 		key, err = rsa.GenerateKey(rand.Reader, 2048)
 	case "EdDSA":
@@ -72,10 +74,14 @@ func (s signer) sign(t *testing.T, header map[string]any, payload []byte) []byte
 	case *ecdsa.PrivateKey:
 		size := (k.Curve.Params().BitSize + 7) / 8
 		var digest []byte
-		if s.alg == "ES384" {
+		switch s.alg {
+		case "ES384":
 			d := sha512.Sum384(input)
 			digest = d[:]
-		} else {
+		case "ES512":
+			d := sha512.Sum512(input)
+			digest = d[:]
+		default:
 			d := sha256.Sum256(input)
 			digest = d[:]
 		}
@@ -153,7 +159,7 @@ func accountHeader(s *Server, rel, nonceValue string) map[string]any {
 }
 
 func TestReadSignedRequestWithAccountKey(t *testing.T) {
-	for _, alg := range []string{"ES256", "ES384", "RS256", "EdDSA"} {
+	for _, alg := range []string{"ES256", "ES384", "ES512", "RS256", "EdDSA"} {
 		t.Run(alg, func(t *testing.T) {
 			s, store, _ := newTestServer(t, DirectoryMeta{})
 			sig := newSigner(t, alg)
@@ -353,7 +359,7 @@ func TestReadSignedRequestRejects(t *testing.T) {
 			}
 			_, p := s.readSignedRequest(r, resource, mode)
 			assertProblemType(t, p, tc.typ, tc.status)
-			if tc.typ == ErrorBadSignatureAlgorithm && strings.Join(p.Algorithms, ",") != "ES256,ES384,RS256,EdDSA" {
+			if tc.typ == ErrorBadSignatureAlgorithm && strings.Join(p.Algorithms, ",") != "ES256,ES384,ES512,RS256,EdDSA" {
 				t.Fatalf("algorithms = %v", p.Algorithms)
 			}
 		})

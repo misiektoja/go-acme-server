@@ -92,6 +92,7 @@ func TestVerifySignatureVectors(t *testing.T) {
 func TestParseAndVerifyAllAlgorithms(t *testing.T) {
 	es256, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	es384, _ := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	es512, _ := ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
 	rs256, _ := rsa.GenerateKey(rand.Reader, 2048)
 	edPub, edPriv, _ := ed25519.GenerateKey(rand.Reader)
 	cases := []struct {
@@ -101,6 +102,7 @@ func TestParseAndVerifyAllAlgorithms(t *testing.T) {
 	}{
 		{algES256, es256, &es256.PublicKey},
 		{"ES384", es384, &es384.PublicKey},
+		{"ES512", es512, &es512.PublicKey},
 		{"RS256", rs256, &rs256.PublicKey},
 		{"EdDSA", edPriv, edPub},
 	}
@@ -412,10 +414,14 @@ func sign(tb testing.TB, key crypto.Signer, alg string, header map[string]any, p
 	case *ecdsa.PrivateKey:
 		size := (k.Curve.Params().BitSize + 7) / 8
 		var digest []byte
-		if alg == "ES384" {
+		switch alg {
+		case "ES384":
 			d := sha512.Sum384(input)
 			digest = d[:]
-		} else {
+		case "ES512":
+			d := sha512.Sum512(input)
+			digest = d[:]
+		default:
 			d := sha256.Sum256(input)
 			digest = d[:]
 		}

@@ -8,6 +8,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/sha512"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
@@ -177,7 +178,7 @@ func (c *client) postRaw(url string, payload []byte, embedKey bool) *httptest.Re
 	} else {
 		header["kid"] = c.kid
 	}
-	return c.send(url, signES256(c.f.t, c.key, header, payload))
+	return c.send(url, signECDSA(c.f.t, c.key, header, payload))
 }
 
 // Signs a payload with the account kid and a fresh nonce without sending it.
@@ -186,7 +187,7 @@ func (c *client) signed(url string, payload any) []byte {
 	if err != nil {
 		c.f.t.Fatal(err)
 	}
-	return signES256(c.f.t, c.key, map[string]any{"nonce": c.nonce(), "url": url, "kid": c.kid}, body)
+	return signECDSA(c.f.t, c.key, map[string]any{"nonce": c.nonce(), "url": url, "kid": c.kid}, body)
 }
 
 // Sends a prepared JWS body. It touches no test state, so goroutines may call it.
@@ -349,7 +350,7 @@ func publicJWK(t *testing.T, key *ecdsa.PublicKey) json.RawMessage {
 	}
 	size := (key.Curve.Params().BitSize + 7) / 8
 	jwk := map[string]string{
-		"kty": "EC", "crv": "P-256",
+		"kty": "EC", "crv": key.Curve.Params().Name,
 		"x": base64.RawURLEncoding.EncodeToString(point[1 : 1+size]),
 		"y": base64.RawURLEncoding.EncodeToString(point[1+size:]),
 	}
@@ -372,18 +373,18 @@ func thumbprint(t *testing.T, key *ecdsa.PublicKey) string {
 	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
-// Signs a flattened ES256 JWS.
-func signES256(t *testing.T, key *ecdsa.PrivateKey, header map[string]any, payload []byte) []byte {
+// Signs a flattened JWS with the ECDSA algorithm of the key's curve.
+func signECDSA(t *testing.T, key *ecdsa.PrivateKey, header map[string]any, payload []byte) []byte {
 	t.Helper()
-	header["alg"] = "ES256"
+	alg := curveAlgorithm(t, key.Curve)
+	header["alg"] = alg
 	protected, err := json.Marshal(header)
 	if err != nil {
 		t.Fatal(err)
 	}
 	p := base64.RawURLEncoding.EncodeToString(protected)
 	pl := base64.RawURLEncoding.EncodeToString(payload)
-	digest := sha256.Sum256([]byte(p + "." + pl))
-	der, err := ecdsa.SignASN1(rand.Reader, key, digest[:])
+	der, err := ecdsa.SignASN1(rand.Reader, key, ecdsaDigest(alg, []byte(p+"."+pl)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -391,15 +392,45 @@ func signES256(t *testing.T, key *ecdsa.PrivateKey, header map[string]any, paylo
 	if _, err := asn1.Unmarshal(der, &rs); err != nil {
 		t.Fatal(err)
 	}
-	sig := make([]byte, 64)
-	rs.R.FillBytes(sig[:32])
-	rs.S.FillBytes(sig[32:])
+	size := (key.Curve.Params().BitSize + 7) / 8
+	sig := make([]byte, 2*size)
+	rs.R.FillBytes(sig[:size])
+	rs.S.FillBytes(sig[size:])
 	body, err := json.Marshal(map[string]string{"protected": p, "payload": pl,
 		"signature": base64.RawURLEncoding.EncodeToString(sig)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return body
+}
+
+// Returns the JWS algorithm an EC curve signs with.
+func curveAlgorithm(t *testing.T, curve elliptic.Curve) string {
+	t.Helper()
+	switch curve {
+	case elliptic.P256():
+		return "ES256"
+	case elliptic.P384():
+		return "ES384"
+	case elliptic.P521():
+		return "ES512"
+	}
+	t.Fatalf("unsupported curve %s", curve.Params().Name)
+	return ""
+}
+
+// Returns the digest an ECDSA JWS algorithm signs.
+func ecdsaDigest(alg string, input []byte) []byte {
+	switch alg {
+	case "ES384":
+		sum := sha512.Sum384(input)
+		return sum[:]
+	case "ES512":
+		sum := sha512.Sum512(input)
+		return sum[:]
+	}
+	sum := sha256.Sum256(input)
+	return sum[:]
 }
 
 // Returns a DER CSR for the names signed by key.

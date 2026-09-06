@@ -287,7 +287,7 @@ func TestAccountOrdersList(t *testing.T) {
 	other.register()
 	assertProblem(t, other.post(location+"/orders", nil), http.StatusForbidden, acmeserver.ErrorUnauthorized)
 	header := map[string]any{"nonce": c.nonce(), "url": location + "/orders", "kid": c.kid}
-	r := httptest.NewRequest(http.MethodPost, location+"/orders?cursor=x", strings.NewReader(string(signES256(t, c.key, header, nil))))
+	r := httptest.NewRequest(http.MethodPost, location+"/orders?cursor=x", strings.NewReader(string(signECDSA(t, c.key, header, nil))))
 	r.Header.Set("Content-Type", "application/jose+json")
 	assertProblem(t, f.do(r), http.StatusForbidden, acmeserver.ErrorUnauthorized)
 }
@@ -302,7 +302,7 @@ func TestKeyChange(t *testing.T) {
 	innerWith := func(signer *ecdsa.PrivateKey, url, account string, oldKey json.RawMessage) []byte {
 		payload, _ := json.Marshal(map[string]any{"account": account, "oldKey": oldKey})
 		header := map[string]any{"url": url, "jwk": publicJWK(t, &signer.PublicKey)}
-		return signES256(t, signer, header, payload)
+		return signECDSA(t, signer, header, payload)
 	}
 	inner := func(_ json.RawMessage, url, account string, oldKey json.RawMessage) []byte {
 		return innerWith(newKey, url, account, oldKey)
@@ -315,10 +315,10 @@ func TestKeyChange(t *testing.T) {
 		"wrong inner url": {inner(newJWK, baseURL+"new-account", location, oldJWK)},
 		"wrong account":   {inner(newJWK, baseURL+"key-change", baseURL+"acct/other", oldJWK)},
 		"wrong old key":   {inner(newJWK, baseURL+"key-change", location, newJWK)},
-		"inner has nonce": {signES256(t, newKey, map[string]any{"url": baseURL + "key-change", "jwk": newJWK, "nonce": "x"}, nil)},
-		"inner uses kid":  {signES256(t, newKey, map[string]any{"url": baseURL + "key-change", "kid": location}, nil)},
+		"inner has nonce": {signECDSA(t, newKey, map[string]any{"url": baseURL + "key-change", "jwk": newJWK, "nonce": "x"}, nil)},
+		"inner uses kid":  {signECDSA(t, newKey, map[string]any{"url": baseURL + "key-change", "kid": location}, nil)},
 		"not a jws":       {[]byte(`{"account":"x"}`)},
-		"inner signed by another key": {signES256(t, c.key, map[string]any{"url": baseURL + "key-change", "jwk": newJWK},
+		"inner signed by another key": {signECDSA(t, c.key, map[string]any{"url": baseURL + "key-change", "jwk": newJWK},
 			mustJSON(t, map[string]any{"account": location, "oldKey": oldJWK}))},
 	}
 	for name, tc := range cases {
