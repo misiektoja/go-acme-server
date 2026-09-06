@@ -151,8 +151,10 @@ func checkTelephoneNumberRange(body []byte) error {
 			return err
 		}
 	}
+	// RFC 8226 defines count only for numeric starts, so a range with a prefix character has no
+	// meaning and is refused rather than accepted with an unchecked count.
 	if strings.ContainsAny(string(start), "#*") {
-		return nil
+		return errTNAuthList
 	}
 	limit := int64(1)
 	for range start {
