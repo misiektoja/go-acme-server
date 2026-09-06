@@ -61,7 +61,7 @@ func certificateSANs(leaf *x509.Certificate) ([]Identifier, error) {
 	return ids, nil
 }
 
-// Returns the identifier the common name of a certificate asserts, or a zero identifier when it
+// Returns the identifier the common name of a certificate asserts. A zero identifier means it
 // asserts none. A STIR certificate names a service provider there instead of one of its identities.
 func certificateCommonName(leaf *x509.Certificate, ids []Identifier) (Identifier, error) {
 	if leaf.Subject.CommonName == "" || authorityListOnly(ids) {
