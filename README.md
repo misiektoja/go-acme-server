@@ -8,11 +8,37 @@ parts that differ between deployments:
 
 * a `Store` that persists resources and background work, with `memstore` for tests and examples
 * an `Issuer` and a `Revoker` that call the host CA
-* one `Validator` per challenge type, with HTTP-01, DNS-01, TLS-ALPN-01 and tkauth-01 implementations
-  in `challenge`
+* one `Validator` per challenge type, with HTTP-01, DNS-01, TLS-ALPN-01 and tkauth-01
+  implementations in `challenge`
 * optional policy hooks, external account binding keys and directory metadata
 
-## Usage
+## Scope
+
+| Standard | Coverage | Enabled by |
+| --- | --- | --- |
+| RFC 8555 ACME | Accounts, external account binding, key rollover, orders, HTTP-01, DNS-01, finalization, certificates, revocation | Always |
+| RFC 8737 TLS-ALPN-01 | Challenge validation | A `ChallengeTLSALPN01` validator |
+| RFC 8738 IP identifiers | IPv4 and IPv6 identifiers through HTTP-01 and TLS-ALPN-01 | `Config.IPIdentifiers` |
+| RFC 9447 and RFC 9448 | tkauth-01 with TNAuthList identifiers | `Config.TNAuthListIdentifiers` |
+| RFC 9773 | Renewal information and `replaces` | `Config.RenewalInfo` |
+
+Account keys may use ES256, ES384, RS256 or EdDSA. External account bindings use HS256, HS384 or
+HS512. Independent clients verify the behavior in the [interoperability module](test/interop/README.md).
+
+### Limitations
+
+* No pre-authorization. The directory omits `newAuthz` and every order receives fresh
+  authorizations, so clients validate each identifier again for every order.
+* No alternate chains. The certificate response carries one chain and no `rel="alternate"` link.
+* No certificate profiles, `dns-account-01`, short-term automatic renewal, delegation, subdomain
+  authorizations or email, onion and device identifiers. Working group drafts are not exposed in
+  the public API.
+* No rate limits. `Policy` and `IssuancePolicy` are the places to refuse accounts, orders or
+  issuance.
+* No TLS termination or CA. The host serves the handler behind its HTTPS origin, signs with its
+  own CA and supplies durable storage. `memstore` keeps everything in memory.
+
+## Getting started
 
 Create a `Server`, mount it under its base URL and run its worker. Both the handler and `Run` are
 required. Without `Run`, challenges are never validated and orders are never issued. `Ready`
@@ -61,41 +87,38 @@ if err != nil {
 ```
 
 Register `http01` as the `ChallengeHTTP01` validator. `NewDNS01` takes the resolver through
-`DNSOptions`. `NewTLSALPN01` takes the same `NetworkOptions` as HTTP-01. Custom resolvers must
+`DNSOptions` and `NewTLSALPN01` takes the same `NetworkOptions` as HTTP-01. Custom resolvers must
 honor context cancellation and bound their work.
 
 The default egress policy allows public unicast destinations and denies special-purpose ranges.
-`AllowedNetworks` adds explicit exceptions for private deployments. Every returned address must
+`AllowedNetworks` adds explicit exceptions for private deployments. Every resolved address must
 pass the policy, including IPv4-mapped addresses. Resolver access is separate from this policy.
 
-HTTP-01 disables environment proxies and rechecks destinations on redirects. Redirects may use
-HTTP or HTTPS on ports 80 and 443. HTTPS redirects authenticate the challenge proof without requiring
-a trusted website certificate. Defaults limit redirects to 10, the body to 4096 bytes and response
-headers to 16 KiB. TLS-ALPN-01 checks the negotiated protocol, one matching SAN and the critical
-proof extension, with a 256 KiB handshake limit.
+Every validator bounds its network work. HTTP-01 ignores environment proxies, follows at most ten
+redirects to HTTP or HTTPS on ports 80 and 443, rechecks each destination against the policy and
+reads a 4096-byte proof. It accepts HTTPS redirects without a trusted website certificate. TLS-ALPN-01
+checks the negotiated protocol, one matching SAN and the critical proof extension within a 256 KiB
+handshake. The supplied resolver uses TCP and caps endpoints, CNAME hops, records and message
+size. DNS-01 accepts any matching TXT record, so a wildcard and its base domain can be proved at
+the same time. Each attempt times out after ten seconds by default. Transport failures are retried
+and incorrect proofs are final. The option types document every limit.
 
-The supplied resolver uses TCP, at most three numeric endpoints, eight CNAME hops, 64 records and
-16 KiB messages by default. DNS-01 accepts any matching TXT record so concurrent base-domain and
-wildcard proofs can coexist. Each validator has a ten-second default attempt timeout. Transport
-failures are retryable. Incorrect proofs and policy refusals are terminal.
-
-`HTTPOptions.TestPort` and `TLSALPNOptions.TestPort` override destination ports 80 and 443 for tests
-only. The HTTP override applies to port 80 connections. Enable IP identifiers with
-`Config.IPIdentifiers` and use HTTP-01 or TLS-ALPN-01. DNS-01 cannot validate IP identifiers.
+`HTTPOptions.TestPort` and `TLSALPNOptions.TestPort` override destination ports 80 and 443 for
+tests only. IP identifiers are validated through HTTP-01 or TLS-ALPN-01, never DNS-01.
 
 ## Authority Token challenges
 
 `tkauth-01` proves authority over a list of telephone numbers instead of control of a network
-resource, as specified in RFC 9447 and RFC 9448. Enable it with `Config.TNAuthListIdentifiers` and a
-`ChallengeTKAuth01` validator. Orders then accept identifiers of type `TNAuthList` whose value is the
-unpadded base64url encoding of a DER `TNAuthorizationList` from RFC 8226 section 9. Such an
-identifier is offered `tkauth-01` alone, and every other identifier type keeps the network challenges.
+resource. Enable it with `Config.TNAuthListIdentifiers` and a `ChallengeTKAuth01` validator. Orders
+then accept one identifier of type `TNAuthList` whose value is the unpadded base64url encoding of a
+DER `TNAuthorizationList` from RFC 8226. That identifier is offered `tkauth-01` alone and every other
+identifier type keeps the network challenges.
 
-A client answers the challenge by posting the Authority Token in a `tkauth` payload member. The
-validator checks the token against the challenge identifier and the responding account key. It never
-fetches the `x5u` URL, because trusting a Token Authority is a deployment decision: the header
-reference is passed to a `TokenAuthorities` implementation that returns the certificate whose key
-must have signed the token. `StaticTokenAuthorities` covers a fixed trust list with no network access.
+A client answers the challenge with the Authority Token in a `tkauth` payload member. The validator
+checks the token against the challenge identifier and the responding account key. It never fetches
+the `x5u` URL. Trusting a Token Authority is a deployment decision, so the header reference goes to
+a `TokenAuthorities` implementation that returns the certificate whose key must have signed the
+token. `StaticTokenAuthorities` covers a fixed trust list.
 
 ```go
 tkauth, err := challenge.NewTKAuth01(challenge.TKAuthOptions{
@@ -106,61 +129,65 @@ tkauth, err := challenge.NewTKAuth01(challenge.TKAuthOptions{
 ```
 
 `Config.TokenAuthority` sets the optional `token-authority` URL advertised on the challenge. The
-`fingerprint` claim may use either the RFC 8555 account key thumbprint or the `SHA256` hex form of
-the same digest, since RFC 9448 shows both. The `tktype` claim is compared without regard to case,
-so tokens that follow the `TnAuthList` spelling of the RFC 9447 example are accepted. The token must
-carry `exp` and `jti`, and a one-minute clock skew is tolerated by default.
+token must carry `exp` and `jti`. Its `fingerprint` may use the account key thumbprint or the
+`SHA256` hex form of the same digest and `tktype` is compared without regard to case, since RFC
+9447 and RFC 9448 spell them differently. One minute of clock skew is tolerated by default.
 
-Finalize such an order with a certificate request that carries the same authority list in its
-`id-pe-TNAuthList` extension request. An order holds at most one `TNAuthList` identifier, because a
-certificate has one such extension. A token whose `atc` claim sets `ca` authorizes a CA certificate
-for delegation. Every authorization of the order must have granted what the request asks for: asking
-for a CA certificate without that grant is refused as `badCSR`, and so is omitting it after the
-grant, including when the order mixes the authority list with DNS names. Network challenges grant
-nothing, so a request for a CA certificate is refused unless every challenge granted one.
-
+The certificate request must carry the same authority list in its `id-pe-TNAuthList` extension
+request. A token whose `atc` claim sets `ca` authorizes a CA certificate. Every authorization of
+the order must have granted what the request asks for, so a request for a CA certificate without
+the grant is refused as `badCSR` and so is a request without the CA constraint after the grant.
 The issued certificate may not outlive the token. The issuer receives the token expiry as the
-requested `notAfter` when the order asks for nothing or for a later time, and a leaf that is valid
-past the token expiry is refused and retained as an unacceptable result.
+requested `notAfter` unless the order asks for an earlier time. A leaf valid past the token
+expiry is refused and retained as an unacceptable result.
 
 ## Renewal information
 
 Set `Config.RenewalInfo` to serve RFC 9773 renewal information. The directory then advertises
-`renewalInfo`, clients fetch a suggested renewal window for a certificate with an unauthenticated
-GET on its identifier and new orders may name the certificate they replace. `LifetimeRenewal` is
+`renewalInfo`, clients fetch a suggested renewal window with an unauthenticated GET on the
+certificate identifier and new orders may name the certificate they replace. `LifetimeRenewal` is
 the built-in advisor. It opens the window at two thirds of the lifetime, closes it at five sixths
-and moves it to the revocation time for revoked certificates. Hosts implement `RenewalAdvisor`
-for other schedules, an explanation URL or a different Retry-After, which defaults to six hours.
+and moves it to the revocation time for revoked certificates. Hosts implement `RenewalAdvisor` for
+other schedules, an explanation URL or a different Retry-After, which defaults to six hours.
 
-A `replaces` member is checked against the stored predecessor. It must belong to the same account
-and share an identifier with the new order. The store marks the certificate replaced when the
-order is created, so a second order naming the same certificate is refused with `alreadyReplaced`
-until the first one is invalid. Stores keep `Certificate.RenewalID` unique and look certificates up
-by it. Without `Config.RenewalInfo` the member is ignored.
+A `replaces` member must name a certificate of the same account that shares an identifier with the
+new order. The store marks the certificate replaced when the order is created, so a second order
+naming it is refused with `alreadyReplaced` until the first one is invalid. Stores keep
+`Certificate.RenewalID` unique and look certificates up by it. Without `Config.RenewalInfo` the
+member is ignored.
 
-## Persistence and issuance
+## Storage, issuance and revocation
 
-`memstore` is for tests and examples. Hosts must supply durable storage for production. Atomic
-operations check resource revisions and task fences. The separate [interop module](test/interop/README.md)
-contains a SQLite test adapter and the same contract suite used for memory storage.
+`memstore` is for tests and examples. Hosts supply durable storage for production. Atomic
+operations check resource revisions and task fences. The [interoperability module](test/interop/README.md)
+contains a SQLite test adapter and runs the same contract suite as the memory store.
 
-An issuer must deduplicate by `OperationID` and recover its original result after an uncertain call.
-The server records authorization evidence and the earliest authorization or order deadline before
-dispatch. `IssuancePolicy` can refuse that first dispatch. The issuer must enforce `Deadline` and
-must never start signing when `RecoveryOnly` is true. Recovery continues after account deactivation,
-expiry or exhausted ordinary retries because an external CA may already have issued a certificate.
+An issuer must deduplicate by `OperationID` and recover its original result after an uncertain
+call. The server records authorization evidence and the earliest authorization or order deadline
+before dispatch. `IssuancePolicy` can refuse that first dispatch. The issuer must enforce
+`Deadline` and must never start signing when `RecoveryOnly` is true. Recovery continues after
+account deactivation, expiry or exhausted ordinary retries because an external CA may already have
+issued a certificate.
 
-Chains that fail publication checks remain in `Order.UnpublishedResult` with the CA reference for
-host reconciliation. They are never returned as successful orders. The host remains responsible for
-reconciling or revoking them. A certificate can be revoked by its issuing account, its private key
-or another valid account authorized for every complete identifier, including wildcard scope.
-The server records a revocation operation ID and reason before calling the `Revoker` and repeats
-the same request after an uncertain answer, so the revoker must deduplicate by `OperationID`.
-A retried revocation keeps the first recorded reason.
+Chains that fail publication checks remain in `Order.UnpublishedResult` with the CA reference and
+are never returned to clients. The host reconciles or revokes them.
+
+A certificate can be revoked by its issuing account, its private key or another valid account
+authorized for every identifier, including wildcard scope. The server stores a revocation
+operation ID and reason before calling the `Revoker` and repeats the same request after an
+uncertain answer, so the revoker must deduplicate by `OperationID`. A retry keeps the first
+recorded reason.
 
 External account bindings are verified with the keys from `ExternalAccounts`. With
-`SingleUseExternalAccounts`, each key identifier binds at most one account. The claim is stored
-with the account, a retry with the same account key returns that account and a different key is
-refused as unauthorized.
+`SingleUseExternalAccounts`, each key identifier binds at most one account. A retry with the same
+account key returns that account and a different key is refused as unauthorized.
+
+## More
+
+* [Interoperability tests](test/interop/README.md) name the clients, versions and scenarios.
+* [CONTRIBUTING.md](CONTRIBUTING.md) lists the development checks.
+* [SECURITY.md](SECURITY.md) explains how to report a vulnerability.
+* [DEPENDENCIES.md](DEPENDENCIES.md) lists third-party code and licenses.
+* [CHANGELOG.md](CHANGELOG.md) records user-visible changes.
 
 Licensed under [Apache-2.0](LICENSE).
