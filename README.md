@@ -30,7 +30,7 @@ parts that differ between deployments:
 | RFC 9447 and RFC 9448 | tkauth-01 with TNAuthList identifiers | `Config.TNAuthListIdentifiers` |
 | RFC 9773 | Renewal information and `replaces` | `Config.RenewalInfo` |
 
-Account keys may use ES256, ES384, RS256 or EdDSA. External account bindings use HS256, HS384 or
+Account keys may use ES256, ES384, ES512, RS256 or EdDSA. External account bindings use HS256, HS384 or
 HS512. Independent clients verify the behavior in the [interoperability module](test/interop/README.md).
 The API may still change before v1.0.0 as described in the
 [compatibility policy](CONTRIBUTING.md#compatibility).
