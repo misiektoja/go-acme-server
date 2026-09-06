@@ -56,6 +56,7 @@ func TestNewValidatesConfig(t *testing.T) {
 		"negative body limit":  func(c *Config) { c.MaxRequestBody = -1 },
 		"negative lifetime":    func(c *Config) { c.OrderLifetime = -1 },
 		"negative workers":     func(c *Config) { c.Workers.Concurrency = -1 },
+		"negative detached":    func(c *Config) { c.DetachedWriteTimeout = -1 },
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {

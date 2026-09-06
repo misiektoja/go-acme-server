@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	acmeserver "github.com/misiektoja/go-acme-server"
 )
@@ -123,5 +124,43 @@ func TestRevocationSurvivesAClientDisconnect(t *testing.T) {
 	stored, err := f.store.Certificate(t.Context(), valid.Certificate[len(baseURL+"cert/"):])
 	if err != nil || !stored.Revoked {
 		t.Fatalf("revocation not persisted: %+v, %v", stored, err)
+	}
+}
+
+// A store whose revocation write waits for its context, so only its deadline ends it.
+type stallingRevocationStore struct {
+	acmeserver.Store
+}
+
+// Blocks the write that marks a certificate revoked until its context ends.
+func (s *stallingRevocationStore) UpdateCertificate(ctx context.Context, cert *acmeserver.Certificate) error {
+	if !cert.Revoked {
+		return s.Store.UpdateCertificate(ctx, cert)
+	}
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+// Bounds the detached revocation write with Config.DetachedWriteTimeout.
+func TestRevocationWriteHonorsTheDetachedTimeout(t *testing.T) {
+	f := newFlow(t, func(cfg *acmeserver.Config) {
+		cfg.Store = &stallingRevocationStore{Store: cfg.Store}
+		cfg.DetachedWriteTimeout = 20 * time.Millisecond
+	})
+	f.runWorker()
+	owner := f.newClient()
+	owner.register()
+	location, order := owner.newOrder("stall.test")
+	owner.respondHTTP01(order)
+	owner.waitOrder(location, statusReady)
+	owner.finalize(order, newKey(t))
+	valid := owner.waitOrder(location, statusValid)
+	chain := parsePEMChain(t, owner.get(valid.Certificate, nil).Body.Bytes())
+	payload := map[string]any{"certificate": base64.RawURLEncoding.EncodeToString(chain[0].Raw)}
+	start := time.Now()
+	rec := owner.post(baseURL+"revoke-cert", payload)
+	assertProblem(t, rec, http.StatusInternalServerError, acmeserver.ErrorServerInternal)
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("the revocation write took %v, so the configured timeout was not used", elapsed)
 	}
 }
