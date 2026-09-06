@@ -6,7 +6,7 @@ description.
 
 ## Versioning
 
-The module follows semantic versioning under the [compatibility policy](../reference/compatibility.md).
+The module follows semantic versioning under the [Compatibility policy](../reference/compatibility.md).
 Before v1.0.0 a minor release may change the public API and the release notes name every such
 change.
 

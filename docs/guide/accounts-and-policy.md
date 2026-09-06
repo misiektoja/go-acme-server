@@ -17,7 +17,7 @@ Meta: acmeserver.DirectoryMeta{
 The `meta` object is included in the directory when any field is set. `TermsOfService` also adds a
 `Link` header with `rel="terms-of-service"` to `newAccount` responses. `CAAIdentities` is
 informational. The library does not check CAA records, so a CA that must honor CAA does so in the
-[issuance policy](issuance.md#issuance-policy).
+issuance policy, see [Issuance policy](issuance.md#issuance-policy).
 
 ## Terms of service
 

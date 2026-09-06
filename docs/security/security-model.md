@@ -52,7 +52,7 @@ called. The deadline stored with it stops late signing.
 **Validation egress.** The bundled validators resolve names through configured resolvers only,
 refuse special-purpose and private destinations unless allowed, recheck every redirect, ignore
 proxy environment variables, bound every read and never include fetched content in error details.
-The rules are on the [validators page](../guide/validators.md).
+The rules are in [Challenge validators](../guide/validators.md).
 
 **Bounded parsing.** JSON is limited in size, nesting depth and duplicate members. JWS, JWK, DNS
 responses, TLS handshakes and TLS-ALPN proofs are parsed with explicit limits. Those parsers

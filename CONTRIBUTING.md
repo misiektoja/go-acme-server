@@ -23,7 +23,7 @@ make docs-build
 
 `make test` runs `go vet` and the tests under the race detector. `make lint` runs golangci-lint at the version CI uses, installed under `bin/`. `make docs-build` builds the documentation site strictly and needs `make docs-deps` once. Run `make actionlint` when a workflow changes, `make govulncheck` when a dependency changes and `make fuzz` when parsing code changes. `make help` lists every target.
 
-The [development](https://misiektoja.github.io/go-acme-server/development/development/) and [testing](https://misiektoja.github.io/go-acme-server/development/testing/) pages describe the repository layout, the test levels, the Certbot environment that `make test-interop` needs and where test artifacts go.
+[Development](https://misiektoja.github.io/go-acme-server/development/development/) and [Testing](https://misiektoja.github.io/go-acme-server/development/testing/) describe the repository layout, the test levels, the Certbot environment that `make test-interop` needs and where test artifacts go.
 
 Protocol changes need negative tests and an RFC citation. Interoperability claims need sanitized evidence naming the client and its version. User-facing behavior changes update the Go doc comments and the relevant page under `docs/`.
 
@@ -31,11 +31,11 @@ Every change must comply with the Developer Certificate of Origin 1.1. Use `git 
 
 ## Compatibility
 
-The module uses semantic versioning and the public API may change in minor releases before v1.0.0. The [compatibility policy](https://misiektoja.github.io/go-acme-server/reference/compatibility/) states which packages form the public API, what may change and how upgrades are announced.
+The module uses semantic versioning and the public API may change in minor releases before v1.0.0. [Compatibility policy](https://misiektoja.github.io/go-acme-server/reference/compatibility/) states which packages form the public API, what may change and how upgrades are announced.
 
 ## Releasing
 
-A release is started by pushing a version tag that is reachable from `main` and by nothing else. The [release process](https://misiektoja.github.io/go-acme-server/development/release-process/) lists the steps, the checks and the artifacts every release carries.
+A release is started by pushing a version tag that is reachable from `main` and by nothing else. [Release process](https://misiektoja.github.io/go-acme-server/development/release-process/) lists the steps, the checks and the artifacts every release carries.
 
 ## Code style
 

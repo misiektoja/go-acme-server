@@ -21,7 +21,7 @@ reason. Patch releases keep the API.
 1. Read the release notes section for the new version.
 2. Run `go get github.com/misiektoja/go-acme-server@vX.Y.Z` and build. A new interface method is a compile error that names what to implement.
 3. Run your `storetest` suite.
-4. Run your own integration tests against the ACME clients you support. The [tested clients](../interoperability/tested-clients.md) page names the versions each release was verified with.
+4. Run your own integration tests against the ACME clients you support. [Tested clients](../interoperability/tested-clients.md) names the versions each release was verified with.
 
 ## Go version
 

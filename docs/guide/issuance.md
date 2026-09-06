@@ -67,7 +67,7 @@ leaf's `NotBefore` must not be earlier than the requested one and its `NotAfter`
 The leaf must already be valid when it is returned unless the order asked for a future start.
 
 **Match the request.** The leaf must carry the CSR's public key, exactly the order's identifiers
-as SANs and no CA basic constraint unless an [authority token](authority-tokens.md) granted one.
+as SANs and no CA basic constraint unless an Authority Token granted one, see [Authority Token challenges](authority-tokens.md).
 
 **Return the full chain.** `Chain` holds the DER leaf followed by the DER issuer chain in signing
 order. Each element must be signed by the next one.

@@ -1,7 +1,6 @@
 # Support matrix
 
-What the library implements, what a configuration field turns on and what is out of scope. The
-[known limitations](known-limitations.md) page explains the consequences of the gaps.
+What the library implements, what a configuration field turns on and what is out of scope. [Known limitations](known-limitations.md) explains the consequences of the gaps.
 
 ## Legend
 
@@ -72,6 +71,6 @@ The CSR key must differ from the account key.
 
 ## Compatibility
 
-The API may change before v1.0.0 as the [compatibility policy](reference/compatibility.md)
+The API may change before v1.0.0 as the [Compatibility policy](reference/compatibility.md)
 describes. Every release names the module version, the Go version and the tested client versions in
 its release notes.

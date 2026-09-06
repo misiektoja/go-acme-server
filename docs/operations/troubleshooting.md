@@ -28,9 +28,10 @@ loopback, link-local or otherwise special-purpose address. Add the range to
 `NetworkOptions.AllowedNetworks` when the CA issues to that network on purpose. The resolver
 address itself does not need an exception.
 
-## unauthorized: JWS url does not match the request URL
+## The signed URL does not match
 
-The URL the client signed differs from the one the server built from `Config.BaseURL`. Compare the
+The client receives `unauthorized` with the detail `JWS url does not match the request URL`. The
+URL the client signed differs from the one the server built from `Config.BaseURL`. Compare the
 directory URL the client uses with the base URL, character by character, including the scheme,
 port and trailing slash. Common causes:
 
@@ -38,7 +39,7 @@ port and trailing slash. Common causes:
 * a base URL with the internal listen address instead of the public origin
 * TLS terminated at a proxy while the base URL says `http` or the reverse
 
-## badNonce on many requests
+## Repeated `badNonce` errors
 
 A single `badNonce` is normal after a restart or when a nonce expires. Clients retry with the nonce
 in the response. Persistent `badNonce`:
@@ -46,7 +47,7 @@ in the response. Persistent `badNonce`:
 * **Several handler replicas** with in-memory nonces. See [Deployment](deployment.md#replicas).
 * **Nonce capacity exceeded.** `nonce.Options.Capacity` bounds outstanding nonces and the oldest are dropped. Raise it or shorten the TTL.
 
-## accountDoesNotExist after a restart
+## The account is gone after a restart
 
 The store forgot the account. `memstore` keeps nothing across restarts. The client keeps its account
 URL and key, so it is refused until it registers again. Use a durable store or delete the client's
@@ -65,7 +66,7 @@ Read `Order.Error`:
 | `account is no longer valid` | The account was deactivated |
 | a problem from your `IssuancePolicy` | The policy refused the dispatch |
 
-## badCSR at finalization
+## Finalization fails with `badCSR`
 
 * The CSR key equals the account key, is an RSA key outside 2048 to 4096 bits, an unsupported curve or an unsupported type.
 * The SANs plus the common name do not equal the order's identifiers. The common name counts unless a TNAuthList is the only identifier.
@@ -77,7 +78,7 @@ The directory advertises it only with `Config.RenewalInfo` set. A certificate wi
 key identifier has no renewal identifier and no renewal information. Check that your CA sets the
 extension.
 
-## alreadyReplaced on a renewal
+## A renewal is refused with `alreadyReplaced`
 
 Another order already named this certificate in `replaces` and is not invalid yet. Clients such as
 lego and acmez retry without `replaces`. If the earlier order belongs to a crashed client, it frees

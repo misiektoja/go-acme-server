@@ -2,7 +2,7 @@
 
 This page covers the pieces every host needs regardless of its CA or database: constructing the
 `Server`, mounting it, running the worker, checking readiness and shutting down. The
-[getting started](../getting-started.md) program shows all of them together.
+[Getting started](../getting-started.md) program shows all of them together.
 
 ## Construct the server
 

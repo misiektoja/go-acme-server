@@ -3,7 +3,7 @@
 A validator proves that the client controls one identifier. The server offers a challenge type
 only when `Config.Validators` holds a validator for it, so the map decides what clients see in
 their authorizations. The `challenge` package implements the three network challenges of RFC 8555
-and RFC 8737 and the Authority Token challenge of RFC 9447, which has [its own page](authority-tokens.md).
+and RFC 8737 and the Authority Token challenge of RFC 9447, described in [Authority Token challenges](authority-tokens.md).
 
 ```go
 Validators: map[acmeserver.ChallengeType]acmeserver.Validator{
@@ -75,7 +75,7 @@ ignores proxy environment variables. An HTTPS redirect target is not checked aga
 because the key authorization is the proof, not the website certificate.
 
 `MaxRedirects` and `MaxResponseBytes` change the limits. `TestPort` replaces port 80 for local
-tests only, which is how the [getting started](../getting-started.md) program reaches a client on
+tests only, which is how the [Getting started](../getting-started.md) program reaches a client on
 port 5002.
 
 ## DNS-01

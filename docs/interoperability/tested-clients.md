@@ -38,6 +38,6 @@ RFC 8555, RFC 8737, RFC 8738 and RFC 9448.
 
 ## Running them
 
-The [testing page](../development/testing.md) explains how to install the pinned Certbot
+[Testing](../development/testing.md) explains how to install the pinned Certbot
 environment and run the gate locally. The module README at `test/interop/README.md` describes each
 scenario and the SQLite adapter in detail.

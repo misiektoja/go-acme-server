@@ -66,7 +66,7 @@ Account keys may use ES256, ES384, ES512, RS256 or EdDSA. External account bindi
 HS512. Independent clients verify the behavior, see
 [Tested clients](https://misiektoja.github.io/go-acme-server/interoperability/tested-clients/).
 The API may still change before v1.0.0 as described in the
-[compatibility policy](https://misiektoja.github.io/go-acme-server/reference/compatibility/).
+[Compatibility policy](https://misiektoja.github.io/go-acme-server/reference/compatibility/).
 
 ### Limitations
 
@@ -109,7 +109,7 @@ http.Handle("/acme/", srv)
 `BaseURL` must use https unless `AllowInsecureBaseURL` is set for local tests. Signed request URLs
 must match it exactly, so run the handler behind the public origin it advertises.
 
-The [getting started guide](https://misiektoja.github.io/go-acme-server/getting-started/) builds a
+[Getting started](https://misiektoja.github.io/go-acme-server/getting-started/) builds a
 complete local server in one file, issues a certificate with lego and names what to replace before
 production. That program is in [examples/quickstart](examples/quickstart/) and runs with
 `go run ./examples/quickstart`. The package example in `example_test.go` shows the same wiring in
@@ -130,7 +130,7 @@ Full documentation is at
 * [Accounts and policy](https://misiektoja.github.io/go-acme-server/guide/accounts-and-policy/)
 * [Authority Token challenges](https://misiektoja.github.io/go-acme-server/guide/authority-tokens/)
 * [Renewal information](https://misiektoja.github.io/go-acme-server/guide/renewal-information/)
-* [Configuration reference](https://misiektoja.github.io/go-acme-server/reference/configuration/)
+* [Configuration](https://misiektoja.github.io/go-acme-server/reference/configuration/)
 * [Deployment](https://misiektoja.github.io/go-acme-server/operations/deployment/)
 * [Troubleshooting](https://misiektoja.github.io/go-acme-server/operations/troubleshooting/)
 * [Security model](https://misiektoja.github.io/go-acme-server/security/security-model/)
@@ -147,8 +147,8 @@ describes every exported type. Repository files:
 ## Support
 
 [SUPPORT.md](SUPPORT.md) directs usage questions, bug reports, feature requests and security
-reports. Check the
-[troubleshooting page](https://misiektoja.github.io/go-acme-server/operations/troubleshooting/)
+reports. Check
+[Troubleshooting](https://misiektoja.github.io/go-acme-server/operations/troubleshooting/)
 and gather the versions, the problem document and the server log before posting.
 
 ## License

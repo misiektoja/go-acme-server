@@ -35,9 +35,9 @@ The program has four parts and each one is a seam where your own code goes later
 
 | Part | What the quickstart does | What replaces it |
 | --- | --- | --- |
-| `devCA` | Signs with an in-process root and remembers results by operation ID | Your CA behind [`Issuer`](guide/issuance.md) and [`Revoker`](guide/revocation.md) |
-| `memstore.New()` | Keeps accounts, orders and tasks in memory until the process exits | A durable [`Store`](guide/storage.md) over your database |
-| `localResolver` and `TestPort` | Send HTTP-01 requests to the loopback address on port 5002 | A [resolver and egress policy](guide/validators.md) that reach real clients on port 80 |
+| `devCA` | Signs with an in-process root and remembers results by operation ID | Your CA behind `Issuer` and `Revoker`, see [Issuing certificates](guide/issuance.md) and [Revocation](guide/revocation.md) |
+| `memstore.New()` | Keeps accounts, orders and tasks in memory until the process exits | A durable `Store` over your database, see [Storage](guide/storage.md) |
+| `localResolver` and `TestPort` | Send HTTP-01 requests to the loopback address on port 5002 | A resolver and egress policy that reach real clients on port 80, see [Challenge validators](guide/validators.md) |
 | `nonce.New` | Single-process replay protection | A shared nonce manager when several replicas serve one origin, see [Deployment](operations/deployment.md) |
 
 Two calls are required and easy to forget. `mux.Handle` serves the protocol and `srv.Run` processes

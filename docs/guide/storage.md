@@ -82,7 +82,7 @@ given has changed since the worker read it.
 
 ## Replacement claims
 
-With [renewal information](renewal-information.md) enabled, an order may name the certificate it
+With [Renewal information](renewal-information.md) enabled, an order may name the certificate it
 replaces. `CreateOrder` then marks that certificate as replaced by the order in the same
 transaction. It returns `ErrNotFound` when no certificate has that `RenewalID` and
 `ErrAlreadyReplaced` when another order that is not invalid at `order.CreatedAt` already claimed
@@ -102,7 +102,7 @@ type, value and wildcard flag.
 * `Account.Key` is a `crypto.PublicKey`. Store the PKIX DER from `x509.MarshalPKIXPublicKey` and parse it back with `x509.ParsePKIXPublicKey`. The `KeyThumbprint` is precomputed for you.
 * `Order.Error`, `Challenge.Error` and `Order.UnpublishedResult` are structs with JSON tags. Storing them as JSON columns works.
 * `Certificate.Chain` is a list of DER blobs. Keep the order.
-* Structs may gain fields in later releases. A store that serializes whole resources as JSON must ignore fields it does not know. See the [compatibility policy](../reference/compatibility.md).
+* Structs may gain fields in later releases. A store that serializes whole resources as JSON must ignore fields it does not know. See [Compatibility policy](../reference/compatibility.md).
 * Store times in UTC with at least second precision.
 
 ## Verify with storetest

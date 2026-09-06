@@ -128,5 +128,5 @@ current tasks or lets their leases lapse for another worker.
 
 The library makes no policy decisions beyond the protocol. It does not choose validity periods,
 key usages, rate limits or which identifiers a CA may issue for. Those belong in `Policy`,
-`IssuancePolicy` and the CA behind `Issuer`. The [security model](security/security-model.md) lists
+`IssuancePolicy` and the CA behind `Issuer`. [Security model](security/security-model.md) lists
 the boundaries in detail.

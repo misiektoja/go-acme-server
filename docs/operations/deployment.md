@@ -9,7 +9,7 @@ handler at the origin `Config.BaseURL` names.
 ACME clients require HTTPS. Either serve TLS in the host process or terminate it in front. The
 library never inspects the connection, so both work. Use a certificate for the host name in the
 base URL from a CA the clients trust. Clients such as lego and Certbot accept a private root through
-their own options, which is how the [getting started](../getting-started.md) example works.
+their own options, which is how the [Getting started](../getting-started.md) example works.
 
 ## Reverse proxies
 

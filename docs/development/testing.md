@@ -54,7 +54,7 @@ alone, without Certbot.
 `test/interop/README.md` describes every scenario, the SQLite adapter and the evidence the gate
 writes.
 
-## cert-manager
+## The cert-manager scenario
 
 ```bash
 make test-cert-manager

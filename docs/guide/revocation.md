@@ -63,7 +63,7 @@ code carries it.
 ## After revocation
 
 `Certificate.Revoked` and `RevokedAt` are visible to the host through the store. With
-[renewal information](renewal-information.md) enabled, `LifetimeRenewal` answers a revoked
+[Renewal information](renewal-information.md) enabled, `LifetimeRenewal` answers a revoked
 certificate with a window that opened at the revocation time, which tells clients to renew at once.
 
 A replacement certificate goes through a new order with fresh authorizations, as every order does.

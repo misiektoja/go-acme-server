@@ -71,4 +71,4 @@ implementation by following the integration guide.
 
 ## Support
 
-[SUPPORT.md](https://github.com/misiektoja/go-acme-server/blob/main/SUPPORT.md) routes usage questions, bug reports, feature requests and private security reports. Check the [troubleshooting page](operations/troubleshooting.md) and collect sanitized diagnostics before posting.
+[SUPPORT.md](https://github.com/misiektoja/go-acme-server/blob/main/SUPPORT.md) routes usage questions, bug reports, feature requests and private security reports. Check [Troubleshooting](operations/troubleshooting.md) and collect sanitized diagnostics before posting.

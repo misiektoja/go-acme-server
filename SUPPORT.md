@@ -1,6 +1,6 @@
 # Getting help
 
-Start with the [documentation site](https://misiektoja.github.io/go-acme-server/). The [getting started guide](https://misiektoja.github.io/go-acme-server/getting-started/) builds a working server. The integration guide covers embedding, storage, the CA contracts, validators, Authority Token challenges and renewal information. The [troubleshooting page](https://misiektoja.github.io/go-acme-server/operations/troubleshooting/) maps common symptoms to their causes. The package documentation on [pkg.go.dev](https://pkg.go.dev/github.com/misiektoja/go-acme-server) describes every exported type. [Tested clients](https://misiektoja.github.io/go-acme-server/interoperability/tested-clients/) names the clients and scenarios the release was tested with.
+Start with the [documentation site](https://misiektoja.github.io/go-acme-server/). [Getting started](https://misiektoja.github.io/go-acme-server/getting-started/) builds a working server. The integration guide covers embedding, storage, the CA contracts, validators, Authority Token challenges and renewal information. [Troubleshooting](https://misiektoja.github.io/go-acme-server/operations/troubleshooting/) maps common symptoms to their causes. The package documentation on [pkg.go.dev](https://pkg.go.dev/github.com/misiektoja/go-acme-server) describes every exported type. [Tested clients](https://misiektoja.github.io/go-acme-server/interoperability/tested-clients/) names the clients and scenarios the release was tested with.
 
 ## Check your integration first
 

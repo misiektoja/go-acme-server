@@ -78,7 +78,7 @@ finalize a CA certificate.
 
 The issuer receives the token expiry as `IssueRequest.NotAfter` unless the order asked for an
 earlier time. A leaf valid past the token expiry fails the publication check and is retained as an
-[unpublished result](issuance.md#unpublished-results). The issuer recognizes a STIR order by the
+unpublished result, see [Unpublished results](issuance.md#unpublished-results). The issuer recognizes a STIR order by the
 `TNAuthList` identifier in `req.Identifiers` and copies the list from the CSR extension into the
 certificate.
 

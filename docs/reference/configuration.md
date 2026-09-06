@@ -38,7 +38,7 @@ problem. Zero values select the defaults below. Negative limits are refused.
 | `RenewalInfo` | none | Serves RFC 9773 renewal information and accepts `replaces`. `LifetimeRenewal{}` is the built-in advisor |
 | `Workers` | see below | Tunes `Run` and `Ready` |
 
-## DirectoryMeta
+## `DirectoryMeta`
 
 | Field | Wire member | Notes |
 | --- | --- | --- |
@@ -49,7 +49,7 @@ problem. Zero values select the defaults below. Negative limits are refused.
 
 The `meta` object is omitted from the directory when every field is empty.
 
-## WorkerConfig
+## `WorkerConfig`
 
 | Field | Default | Purpose |
 | --- | --- | --- |
