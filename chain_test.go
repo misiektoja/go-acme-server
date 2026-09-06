@@ -50,6 +50,14 @@ func TestChainChecksCompleteIdentityAndValidity(t *testing.T) {
 			o.NotBefore = now.Add(-time.Minute)
 		}, false},
 		{"notBefore later than requested", func(_ *x509.Certificate, o *Order) { o.NotBefore = now.Add(-time.Hour) }, true},
+		{"notBefore long after a past start", func(c *x509.Certificate, o *Order) {
+			c.NotBefore, c.NotAfter = now.Add(10*time.Hour), now.Add(20*time.Hour)
+			o.NotBefore = now.Add(-time.Hour)
+		}, false},
+		{"notBefore later than a future start", func(c *x509.Certificate, o *Order) {
+			c.NotBefore, c.NotAfter = now.Add(2*time.Hour), now.Add(3*time.Hour)
+			o.NotBefore = now.Add(time.Hour)
+		}, false},
 		{"notAfter later than requested", func(_ *x509.Certificate, o *Order) { o.NotAfter = now.Add(time.Hour) }, false},
 		{"notAfter earlier than requested", func(c *x509.Certificate, o *Order) {
 			c.NotAfter = now.Add(time.Hour)
