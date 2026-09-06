@@ -6,7 +6,10 @@ Clients reach the server over HTTPS and trust a generated root explicitly. Tests
 key, exact identifiers, validity, chain and stored resource state. An incorrect proof of any
 challenge type must leave the order invalid without any CA issuance.
 
-acmez obtains certificates through HTTP-01, DNS-01 and TLS-ALPN-01. acmez and lego also read
+acmez obtains certificates through HTTP-01, DNS-01 and TLS-ALPN-01, and for the loopback IP
+identifier next to a DNS name, where the IP authorization offers HTTP-01 alone as RFC 8738
+requires and the same order is refused as `unsupportedIdentifier` when IP identifiers are off.
+acmez and lego also read
 RFC 9773 renewal information for an issued certificate, replace it through an order that names it
 and, when they name it again, drop the claim after the server answers `alreadyReplaced`. The DNS-01 scenario orders a
 wildcard together with its base domain, so two proofs share one TXT owner name in the local TCP DNS
