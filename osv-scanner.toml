@@ -1,0 +1,5 @@
+# Advisories that Scorecard's osv-scanner reports for the module graph but that do not reach this
+# code. Every entry names why. govulncheck over both modules is the reachability check.
+[[IgnoredVulns]]
+id = "GO-2026-5932"
+reason = "The interoperability test module needs golang.org/x/crypto for the Go ACME client and go-jose, but nothing imports the affected and unmaintained golang.org/x/crypto/openpgp packages. The root library does not depend on golang.org/x/crypto at all. govulncheck reports no reachable vulnerable symbols and the advisory has no fixed version."
