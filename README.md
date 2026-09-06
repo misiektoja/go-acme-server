@@ -190,6 +190,6 @@ account key returns that account and a different key is refused as unauthorized.
 * [CONTRIBUTING.md](CONTRIBUTING.md) lists the development checks.
 * [SECURITY.md](SECURITY.md) explains how to report a vulnerability.
 * [DEPENDENCIES.md](DEPENDENCIES.md) lists third-party code and licenses.
-* [CHANGELOG.md](CHANGELOG.md) records user-visible changes.
+* [RELEASE_NOTES.md](RELEASE_NOTES.md) records user-visible changes per release.
 
 Licensed under [Apache-2.0](LICENSE).

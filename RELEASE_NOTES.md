@@ -1,47 +1,39 @@
-# Changelog
+# Release notes
 
-## 0.1.0 (2026-09-06)
+All notable changes to this project are documented in this file.
 
-First release. Embed an ACME server in a Go CA or PKI application. The library implements
-RFC 8555 with TLS-ALPN-01, IP identifiers, Authority Token challenges and renewal information.
-The host supplies storage, the CA and the challenge validators.
+## [0.1.0] - 6 Sep 2026
 
-### Features
+The first release of **go-acme-server**, a Go library for embedding an ACME server into a CA or PKI application.
 
-* **ACME resources** support accounts, external account binding, key rollover, orders, authorizations,
-  finalization, certificate retrieval and revocation through replaceable host interfaces.
-  Processing orders and challenges carry a Retry-After header and every order response names the
-  order in Location. `SingleUseExternalAccounts` binds
-  each external account key identifier to one account.
-* **HTTP-01, DNS-01 and TLS-ALPN-01** validators use explicit resolvers, bounded network work and
-  public-destination egress by default. Private networks require explicit exceptions. HTTP and TLS
-  destination port overrides are for tests only.
-* **tkauth-01 and TNAuthList identifiers** implement RFC 9447 and RFC 9448. `TNAuthListIdentifiers`
-  accepts orders for one base64url DER TN authorization list, which is offered the Authority Token
-  challenge alone. The validator checks the token against the challenge identifier and the account
-  key, accepts the `tktype` spelling of either RFC, and asks a host `TokenAuthorities`
-  implementation for the signing certificate instead of fetching `x5u`. `Config.TokenAuthority`
-  advertises where clients may obtain a token. Every authorization of an order must have granted
-  the CA basic constraint the certificate request asks for, so a request for a CA certificate is
-  refused unless every challenge granted one. Issued certificates may not outlive the token.
-* **Renewal information** implements RFC 9773 behind `Config.RenewalInfo`. The directory
-  advertises `renewalInfo`, an unauthenticated GET returns the suggested window with Retry-After
-  and `replaces` on a new order claims the predecessor for one live order at a time, answering
-  `alreadyReplaced` otherwise. `LifetimeRenewal` is the built-in schedule and hosts can supply
-  their own `RenewalAdvisor`. Stores index certificates by their RFC 9773 identifier.
-* **Issuance recovery** preserves a durable dispatch decision and retains unpublished CA results for
-  host reconciliation. Host issuers must deduplicate operations and enforce authorization deadlines.
-  Revocations carry a durable operation ID that retries repeat, so revokers deduplicate the same way.
-* **`make test-interop`** runs independent clients against the server over trusted HTTPS.
-  acmez, Certbot, lego and the Go crypto/acme client issue through HTTP-01, DNS-01 with a wildcard
-  and its base domain, TLS-ALPN-01 and an IP identifier, revoke, replace certificates through
-  renewal information and wait out delayed issuance. An incorrect proof of every challenge type is
-  rejected. go-jose signs raw requests to check tkauth-01 with a local Token Authority, external
-  account binding, key changes and retried or concurrent requests. Two workers share one SQLite
-  store and a killed worker is recovered. Test artifacts use a configurable output directory. The
-  SQLite adapter is test infrastructure.
-* **`make test-cert-manager`** issues and renews a certificate through cert-manager 1.21.1 in a
-  throwaway kind cluster against a small server built from the library. CI runs it weekly and on
-  request.
-* **`make fuzz`** runs bounded fuzz targets for JWS, compact JWS, JWK, JSON, identifier, DNS response
-  and TLS-ALPN proof parsing. `FUZZ_TIME` sets the budget per target. CI runs a short pass.
+The library implements the ACME protocol of RFC 8555. The host application supplies storage, the CA and the challenge validators through Go interfaces. Bundled validators cover HTTP-01, DNS-01, TLS-ALPN-01 and the Authority Token challenge. IP identifiers, TNAuthList identifiers and RFC 9773 renewal information are enabled by configuration.
+
+This release was tested with **acmez v3.1.6**, **Certbot 5.8.0**, **lego v4.35.2**, the Go **crypto/acme** client v0.56.0 and **cert-manager v1.21.1**.
+
+The API may change before v1.0.0 as the [compatibility policy](https://github.com/misiektoja/go-acme-server/blob/main/CONTRIBUTING.md#compatibility) describes.
+
+### Protocol
+
+* **Complete RFC 8555 flow** - Accounts with external account binding, key rollover and deactivation, orders, authorizations, challenges, finalization, certificate download and revocation by the account, the certificate key or another authorized account. Processing orders and challenges carry a Retry-After header.
+* **Three network challenges** - The HTTP-01, DNS-01 and TLS-ALPN-01 validators resolve names through an explicitly configured resolver, refuse private and special-purpose destinations unless the host allows them and bound every response they read. An incorrect proof is final and a transport failure is retried.
+* **IP identifiers** - RFC 8738 IPv4 and IPv6 identifiers are validated through HTTP-01 and TLS-ALPN-01 when `Config.IPIdentifiers` is set.
+* **Authority Token challenges** - RFC 9447 `tkauth-01` with RFC 9448 TNAuthList identifiers when `Config.TNAuthListIdentifiers` is set. The host names the trusted Token Authorities. A token can authorize a CA certificate and its expiry bounds the certificate validity.
+* **Renewal information** - RFC 9773 behind `Config.RenewalInfo`. Clients fetch a suggested renewal window per certificate and name the certificate they replace on a new order. A second order for the same certificate is refused with `alreadyReplaced`. `LifetimeRenewal` is the built-in schedule.
+
+### Host integration
+
+* **Bring your own storage and CA** - `Store`, `Issuer`, `Revoker` and `Validator` are the host interfaces. An in-memory store and a store contract test suite are included. Issuers and revokers receive a durable operation ID so retries are deduplicated.
+* **Issuance survives restarts** - The dispatch decision is stored before the CA is called. A worker that dies after the CA issued recovers the same certificate. Chains that fail publication checks are kept for host reconciliation instead of being served.
+* **Policy hooks** - Review new accounts, new orders and the first issuance dispatch. Directory metadata, terms of service and single-use external account keys are configuration.
+
+### Verification
+
+* **Independent clients** - acmez, Certbot, lego, crypto/acme and go-jose issue, revoke and replace certificates against the server over HTTPS in `make test-interop`. cert-manager issues and renews in a kind cluster in a weekly job.
+* **Fuzzed parsers** - JWS, JWK, JSON, identifier, DNS response and TLS-ALPN proof parsing have bounded fuzz targets that CI runs.
+
+### Known limitations
+
+* **No pre-authorization or authorization reuse** - The directory omits `newAuthz` and every order validates each identifier again.
+* **No alternate chains** - One chain per certificate and no `rel="alternate"` link.
+* **No rate limits, TLS termination or CA** - The host serves the handler behind its HTTPS origin, signs with its own CA and supplies durable storage. `memstore` is for tests and examples.
+* **Drafts are not exposed** - Certificate profiles, `dns-account-01`, short-term automatic renewal, delegation, subdomain authorizations and email, onion or device identifiers are not implemented.
