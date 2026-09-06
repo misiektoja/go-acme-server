@@ -351,6 +351,38 @@ func TestTKAuth01TokenExpiryBoundsCertificate(t *testing.T) {
 	}
 }
 
+// Publishes a certificate that the Authority Token expiry clamped below the requested notAfter.
+func TestTKAuth01TokenExpiryClampsRequestedNotAfter(t *testing.T) {
+	f, authority := newTKAuthFlow(t)
+	f.runWorker()
+	c := f.newClient()
+	c.register()
+	exp := time.Now().Add(30 * time.Minute).Truncate(time.Second)
+	rec := c.post(baseURL+"new-order", map[string]any{
+		"identifiers": []map[string]string{
+			{"type": "TNAuthList", "value": base64.RawURLEncoding.EncodeToString(flowAuthorityList)}},
+		"notAfter": exp.Add(time.Hour).Format(time.RFC3339)})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("new-order = %d %s", rec.Code, rec.Body.String())
+	}
+	var order orderBody
+	decode(t, rec, &order)
+	orderURL := rec.Header().Get("Location")
+	ch := c.onlyChallenge(order)
+	token := authority.tokenUntil(t, thumbprint(t, &c.key.PublicKey), flowAuthorityList, false, exp)
+	if rec := c.post(ch.URL, map[string]any{"tkauth": token}); rec.Code != http.StatusOK {
+		t.Fatalf("challenge response = %d %s", rec.Code, rec.Body.String())
+	}
+	order = c.waitOrder(orderURL, statusReady)
+	if rec := c.finalizeCSR(order, makeTNAuthListCSR(t, newKey(t), flowAuthorityList, false)); rec.Code != http.StatusOK {
+		t.Fatalf("finalize = %d %s", rec.Code, rec.Body.String())
+	}
+	order = c.waitOrder(orderURL, statusValid)
+	if leaf := c.downloadLeaf(order); !leaf.NotAfter.Equal(exp) {
+		t.Fatalf("leaf NotAfter = %v, want the token expiry %v", leaf.NotAfter, exp)
+	}
+}
+
 // Refuses responses and orders that do not follow the tkauth-01 rules.
 func TestTKAuth01Refusals(t *testing.T) {
 	f, authority := newTKAuthFlow(t)

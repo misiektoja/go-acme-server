@@ -55,6 +55,15 @@ func TestChainChecksCompleteIdentityAndValidity(t *testing.T) {
 			c.NotAfter = now.Add(30 * time.Minute)
 			o.Issuance = &IssuanceState{Validations: []Validation{{}, {GrantExpires: now.Add(time.Hour)}}}
 		}, true},
+		{"notAfter clamped to the grant", func(c *x509.Certificate, o *Order) {
+			c.NotAfter = now.Add(time.Hour)
+			o.NotAfter = now.Add(2 * time.Hour)
+			o.Issuance = &IssuanceState{Validations: []Validation{{GrantExpires: now.Add(time.Hour)}}}
+		}, true},
+		{"notAfter ignoring the grant", func(_ *x509.Certificate, o *Order) {
+			o.NotAfter = now.Add(2 * time.Hour)
+			o.Issuance = &IssuanceState{Validations: []Validation{{GrantExpires: now.Add(time.Hour)}}}
+		}, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			leaf := &x509.Certificate{SerialNumber: big.NewInt(2), DNSNames: []string{"a.test"},
