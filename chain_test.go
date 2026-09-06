@@ -148,7 +148,7 @@ func TestRevocationIdentifiersCoverTheCommonName(t *testing.T) {
 		{"provider name on an authority list", x509.Certificate{
 			Subject: pkix.Name{CommonName: "SHAKEN 1234"}, Extensions: []pkix.Extension{list}},
 			[]Identifier{authorityListID}, true},
-		{"provider name on a mixed certificate", x509.Certificate{
+		{"common name outside a mixed SAN set", x509.Certificate{
 			Subject: pkix.Name{CommonName: "b.test"}, DNSNames: []string{"a.test"},
 			Extensions: []pkix.Extension{list}},
 			[]Identifier{authorityListID, {Type: IdentifierDNS, Value: "a.test"},
