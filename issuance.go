@@ -10,90 +10,126 @@ import (
 )
 
 // Dispatches an authorized order or recovers its existing CA operation.
-func (s *Server) runIssuance(ctx context.Context, task *Task) {
-	order, err := s.store.Order(ctx, task.TargetID)
-	if err != nil {
-		s.dropOnNotFound(ctx, task, err, "order")
+func (s *Server) runIssuance(base context.Context, task *Task) {
+	order, ok := s.issuanceOrder(base, task)
+	if !ok {
 		return
 	}
-	if order.Status != OrderProcessing {
-		s.finishTask(ctx, task)
-		return
-	}
-	if order.Issuance == nil && !s.beginIssuance(ctx, task, order) {
+	if order.Issuance == nil && !s.beginIssuance(base, task, order) {
 		return
 	}
 	req, err := s.issueRequest(order)
 	if err != nil {
-		s.logError(ctx, "persisted issuance request is invalid", err, slog.String("order", order.ID))
-		s.reschedule(ctx, task, s.clock.Now())
+		s.logError(base, "persisted issuance request is invalid", err, slog.String("order", order.ID))
+		s.reschedule(base, task, s.clock.Now())
 		return
 	}
-	result, err := s.issuer.Issue(ctx, req)
+	result, err := s.issue(base, req)
 	now := s.clock.Now()
 	if len(result.Chain) > 0 {
-		s.recordIssuedResult(ctx, task, order, req.CSR, result, now, err)
+		s.recordIssuedResult(base, task, order, req.CSR, result, now, err)
 		return
 	}
 	switch {
 	case err != nil:
-		s.logError(ctx, "issuance outcome remains unresolved", err, slog.String("operation", task.ID))
-		s.reschedule(ctx, task, now)
+		s.logError(base, "issuance outcome remains unresolved", err, slog.String("operation", task.ID))
+		s.reschedule(base, task, now)
 	case result.Rejected != nil && !result.Pending:
-		s.failOrder(ctx, task, order, result.Rejected)
+		s.failOrder(base, task, order, result.Rejected)
 	case result.Pending && result.Rejected == nil:
 		task.RunAt = now.Add(max(result.RetryAfter, s.workers.PollInterval))
-		s.storeReschedule(ctx, task)
+		s.storeReschedule(base, task)
 	default:
-		s.logError(ctx, "issuer returned an ambiguous outcome", errors.New("missing or conflicting outcome"),
+		s.logError(base, "issuer returned an ambiguous outcome", errors.New("missing or conflicting outcome"),
 			slog.String("operation", task.ID))
-		s.reschedule(ctx, task, now)
+		s.reschedule(base, task, now)
 	}
 }
 
+// Loads the order of an issuance task and reports whether it still needs the CA.
+func (s *Server) issuanceOrder(base context.Context, task *Task) (*Order, bool) {
+	ctx, cancel := s.taskPhase(base)
+	defer cancel()
+	order, err := s.store.Order(ctx, task.TargetID)
+	if err != nil {
+		s.dropOnNotFound(base, task, err, "order")
+		return nil, false
+	}
+	if order.Status != OrderProcessing {
+		s.finishTask(base, task)
+		return nil, false
+	}
+	return order, true
+}
+
+// Calls the issuer under its own task timeout.
+func (s *Server) issue(base context.Context, req IssueRequest) (IssueResult, error) {
+	ctx, cancel := s.taskPhase(base)
+	defer cancel()
+	return s.issuer.Issue(ctx, req)
+}
+
 // Commits the first authorization decision before any external CA operation.
-func (s *Server) beginIssuance(ctx context.Context, task *Task, order *Order) bool {
+func (s *Server) beginIssuance(base context.Context, task *Task, order *Order) bool {
+	authzs, account, ok := s.dispatchSnapshot(base, task, order)
+	if !ok {
+		return false
+	}
+	if !s.checkIssuancePolicy(base, task, order) {
+		return false
+	}
+	if !order.Issuance.Deadline.After(s.clock.Now()) {
+		order.Issuance = nil
+		s.failOrder(base, task, order, NewProblem(ErrorUnauthorized, "authorization expired before issuance dispatch"))
+		return false
+	}
+	return s.storeDispatch(base, task, order, account, authzs)
+}
+
+// Reads the account and authorizations one dispatch rests on and sets the issuance state it proposes.
+func (s *Server) dispatchSnapshot(base context.Context, task *Task, order *Order) ([]*Authorization, *Account, bool) {
+	ctx, cancel := s.taskPhase(base)
+	defer cancel()
 	now := s.clock.Now()
 	if !order.Expires.After(now) {
-		s.failOrder(ctx, task, order, NewProblem(ErrorUnauthorized, "order expired before issuance dispatch"))
-		return false
+		s.failOrder(base, task, order, NewProblem(ErrorUnauthorized, "order expired before issuance dispatch"))
+		return nil, nil, false
 	}
 	account, err := s.store.Account(ctx, order.AccountID)
 	if err != nil {
-		s.dropOnNotFound(ctx, task, err, "account")
-		return false
+		s.dropOnNotFound(base, task, err, "account")
+		return nil, nil, false
 	}
 	if account.Status != AccountValid {
-		s.failOrder(ctx, task, order, NewProblem(ErrorUnauthorized, "account is no longer valid"))
-		return false
+		s.failOrder(base, task, order, NewProblem(ErrorUnauthorized, "account is no longer valid"))
+		return nil, nil, false
 	}
 	authzs, state, p, err := s.issuanceAuthorization(ctx, task.ID, order, now)
 	if err != nil {
-		s.dropOnNotFound(ctx, task, err, "authorization")
-		return false
+		s.dropOnNotFound(base, task, err, "authorization")
+		return nil, nil, false
 	}
 	if p != nil {
-		s.failOrder(ctx, task, order, p)
-		return false
+		s.failOrder(base, task, order, p)
+		return nil, nil, false
 	}
 	order.Issuance = state
-	if !s.checkIssuancePolicy(ctx, task, order) {
-		return false
+	return authzs, account, true
+}
+
+// Records the dispatch decision and releases the task when the checked snapshot no longer holds.
+func (s *Server) storeDispatch(base context.Context, task *Task, order *Order, account *Account, authzs []*Authorization) bool {
+	ctx, cancel := s.taskPhase(base)
+	defer cancel()
+	err := s.store.BeginIssuance(ctx, task, order, account, authzs)
+	if err == nil {
+		return true
 	}
-	if !state.Deadline.After(s.clock.Now()) {
-		order.Issuance = nil
-		s.failOrder(ctx, task, order, NewProblem(ErrorUnauthorized, "authorization expired before issuance dispatch"))
-		return false
+	if !errors.Is(err, ErrRevisionMismatch) {
+		s.logError(base, "issuance dispatch could not be recorded", err, slog.String("order", order.ID))
 	}
-	err = s.store.BeginIssuance(ctx, task, order, account, authzs)
-	if err != nil {
-		if !errors.Is(err, ErrRevisionMismatch) {
-			s.logError(ctx, "issuance dispatch could not be recorded", err, slog.String("order", order.ID))
-		}
-		s.reschedule(ctx, task, s.clock.Now())
-		return false
-	}
-	return true
+	s.reschedule(base, task, s.clock.Now())
+	return false
 }
 
 // Collects the authorization revisions, evidence and earliest deadline for one dispatch.
@@ -172,34 +208,41 @@ func grantExpiry(validations []Validation) time.Time {
 }
 
 // Applies current host policy before persisting a dispatch decision.
-func (s *Server) checkIssuancePolicy(ctx context.Context, task *Task, order *Order) bool {
+func (s *Server) checkIssuancePolicy(base context.Context, task *Task, order *Order) bool {
 	req, err := s.issueRequest(order)
 	if err == nil && s.issuancePolicy != nil {
-		err = s.issuancePolicy.AuthorizeIssuance(ctx, req)
+		err = s.authorizeIssuance(base, req)
 	}
 	if err == nil {
 		return true
 	}
 	order.Issuance = nil
 	if p, ok := AsProblem(err); ok {
-		s.failOrder(ctx, task, order, p)
+		s.failOrder(base, task, order, p)
 	} else if task.Attempts < s.workers.MaxAttempts {
-		s.logError(ctx, "issuance policy will be retried", err)
-		s.reschedule(ctx, task, s.clock.Now())
+		s.logError(base, "issuance policy will be retried", err)
+		s.reschedule(base, task, s.clock.Now())
 	} else {
-		s.failOrder(ctx, task, order, NewProblem(ErrorServerInternal, "issuance policy could not be evaluated"))
+		s.failOrder(base, task, order, NewProblem(ErrorServerInternal, "issuance policy could not be evaluated"))
 	}
 	return false
 }
 
+// Runs the issuance policy under its own task timeout.
+func (s *Server) authorizeIssuance(base context.Context, req IssueRequest) error {
+	ctx, cancel := s.taskPhase(base)
+	defer cancel()
+	return s.issuancePolicy.AuthorizeIssuance(ctx, req)
+}
+
 // Retains every returned chain and publishes only an unambiguous acceptable result.
-func (s *Server) recordIssuedResult(ctx context.Context, task *Task, order *Order, csr *x509.CertificateRequest, result IssueResult, now time.Time, issueErr error) {
+func (s *Server) recordIssuedResult(base context.Context, task *Task, order *Order, csr *x509.CertificateRequest, result IssueResult, now time.Time, issueErr error) {
 	leaf, err := checkChain(result.Chain, csr, order, now)
 	if err != nil || issueErr != nil || result.Pending || result.Rejected != nil {
 		order.UnpublishedResult = &result
-		s.log.LogAttrs(ctx, slog.LevelError, "issuer returned an unacceptable certificate", slog.String("order", order.ID),
+		s.log.LogAttrs(base, slog.LevelError, "issuer returned an unacceptable certificate", slog.String("order", order.ID),
 			slog.String("operation", task.ID))
-		s.failOrder(ctx, task, order, NewProblem(ErrorServerInternal, "issuer returned an unacceptable certificate"))
+		s.failOrder(base, task, order, NewProblem(ErrorServerInternal, "issuer returned an unacceptable certificate"))
 		return
 	}
 	cert := &Certificate{
@@ -208,21 +251,28 @@ func (s *Server) recordIssuedResult(ctx context.Context, task *Task, order *Orde
 		RenewalID: renewalID(leaf), Validations: order.Issuance.Validations, CreatedAt: now,
 	}
 	order.Status, order.CertificateID, order.Error = OrderValid, cert.ID, nil
-	err = s.store.CompleteIssuance(ctx, task, order, cert)
+	err = s.completeIssuance(base, task, order, cert)
 	if errors.Is(err, ErrConflict) {
 		order.UnpublishedResult = &result
 		order.CertificateID = ""
-		s.failOrder(ctx, task, order, NewProblem(ErrorServerInternal, "issuer returned a duplicate certificate"))
+		s.failOrder(base, task, order, NewProblem(ErrorServerInternal, "issuer returned a duplicate certificate"))
 		return
 	}
-	s.handleIssuanceCommit(ctx, order, err)
+	s.handleIssuanceCommit(base, order, err)
 }
 
 // Records a definitive refusal without discarding any retained CA result.
-func (s *Server) failOrder(ctx context.Context, task *Task, order *Order, p *Problem) {
+func (s *Server) failOrder(base context.Context, task *Task, order *Order, p *Problem) {
 	order.Status = OrderInvalid
 	order.Error = p
-	s.handleIssuanceCommit(ctx, order, s.store.CompleteIssuance(ctx, task, order, nil))
+	s.handleIssuanceCommit(base, order, s.completeIssuance(base, task, order, nil))
+}
+
+// Stores an issuance outcome under its own task timeout.
+func (s *Server) completeIssuance(base context.Context, task *Task, order *Order, cert *Certificate) error {
+	ctx, cancel := s.taskPhase(base)
+	defer cancel()
+	return s.store.CompleteIssuance(ctx, task, order, cert)
 }
 
 // Reports a failed fenced commit while leaving persisted work available for recovery.

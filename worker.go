@@ -75,50 +75,47 @@ func (s *Server) workAccepted(ctx context.Context) {
 	}
 }
 
-// Runs one claimed task with the task timeout, detached from the Run context.
+// Runs one claimed task, detached from the Run context so a shutdown does not interrupt work that
+// is already in flight. Every phase of the run takes its own deadline from taskPhase.
 func (s *Server) process(ctx context.Context, task *Task) {
-	taskCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.workers.TaskTimeout)
-	defer cancel()
+	base := context.WithoutCancel(ctx)
 	switch task.Kind {
 	case TaskValidate:
-		s.runValidation(taskCtx, task)
+		s.runValidation(base, task)
 	case TaskIssue:
-		s.runIssuance(taskCtx, task)
+		s.runIssuance(base, task)
 	default:
-		s.logError(taskCtx, "unknown task kind dropped", errors.New(string(task.Kind)), slog.String("task", task.ID))
-		s.finishTask(taskCtx, task)
+		s.logError(base, "unknown task kind dropped", errors.New(string(task.Kind)), slog.String("task", task.ID))
+		s.finishTask(base, task)
 	}
 }
 
+// Returns a context for one phase of a task run, bounded by WorkerConfig.TaskTimeout. A validator
+// or issuer call and the store operations that record its outcome never share a deadline, so a host
+// call that uses all of its budget still leaves the worker able to commit the result.
+func (s *Server) taskPhase(base context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(base, s.workers.TaskTimeout)
+}
+
 // Validates a challenge and records the result on the challenge, its authorization and its order.
-func (s *Server) runValidation(ctx context.Context, task *Task) {
-	ch, err := s.store.Challenge(ctx, task.TargetID)
-	if err != nil {
-		s.dropOnNotFound(ctx, task, err, "challenge")
-		return
-	}
-	if ch.Status != ChallengeProcessing {
-		s.finishTask(ctx, task)
-		return
-	}
-	authz, err := s.store.Authorization(ctx, ch.AuthorizationID)
-	if err != nil {
-		s.dropOnNotFound(ctx, task, err, "authorization")
+func (s *Server) runValidation(base context.Context, task *Task) {
+	ch, authz, ok := s.validationTargets(base, task)
+	if !ok {
 		return
 	}
 	now := s.clock.Now()
 	if status := effectiveAuthzStatus(authz, now); status != AuthorizationPending {
 		ch.Status = ChallengeInvalid
 		ch.Error = Problemf(ErrorMalformed, "authorization was %s before validation", string(status))
-		s.completeValidation(ctx, task, ch, authz)
+		s.completeValidation(base, task, ch, authz)
 		return
 	}
-	validator, ok := s.validators[ch.Type]
-	if !ok {
+	validator, found := s.validators[ch.Type]
+	if !found {
 		ch.Status = ChallengeInvalid
 		ch.Error = NewProblem(ErrorServerInternal, "no validator is configured for this challenge type")
 		authz.Status = AuthorizationInvalid
-		s.completeValidation(ctx, task, ch, authz)
+		s.completeValidation(base, task, ch, authz)
 		return
 	}
 	req := ValidationRequest{
@@ -129,7 +126,7 @@ func (s *Server) runValidation(ctx context.Context, task *Task) {
 		AccountKeyThumbprint: ch.KeyThumbprint,
 		AuthorityToken:       ch.AuthorityToken,
 	}
-	grant, err := validate(ctx, validator, req)
+	grant, err := s.validate(base, validator, req)
 	now = s.clock.Now()
 	if !authz.Expires.After(now) {
 		err = NewProblem(ErrorUnauthorized, "authorization expired during validation")
@@ -142,28 +139,51 @@ func (s *Server) runValidation(ctx context.Context, task *Task) {
 		authz.Expires = now.Add(s.authzLifetime)
 		authz.CACertificate = grant.CACertificate
 		authz.GrantExpires = grant.Expires
-		s.completeValidation(ctx, task, ch, authz)
+		s.completeValidation(base, task, ch, authz)
 		return
 	}
 	p, terminal := AsProblem(err)
 	if !terminal {
 		if task.Attempts < s.workers.MaxAttempts && authz.Expires.After(now) {
-			s.log.LogAttrs(ctx, slog.LevelWarn, "validation will be retried", slog.String("challenge", ch.ID),
+			s.log.LogAttrs(base, slog.LevelWarn, "validation will be retried", slog.String("challenge", ch.ID),
 				slog.Int("attempt", task.Attempts), slog.Any("error", err))
-			s.reschedule(ctx, task, now)
+			s.reschedule(base, task, now)
 			return
 		}
-		s.logError(ctx, "validation gave up", err, slog.String("challenge", ch.ID), slog.Int("attempts", task.Attempts))
+		s.logError(base, "validation gave up", err, slog.String("challenge", ch.ID), slog.Int("attempts", task.Attempts))
 		p = NewProblem(ErrorServerInternal, "validation could not be completed")
 	}
 	ch.Status = ChallengeInvalid
 	ch.Error = p
 	authz.Status = AuthorizationInvalid
-	s.completeValidation(ctx, task, ch, authz)
+	s.completeValidation(base, task, ch, authz)
 }
 
-// Runs a validator and reports what the response authorizes.
-func validate(ctx context.Context, v Validator, req ValidationRequest) (ValidationGrant, error) {
+// Loads the challenge and authorization of a validation task and reports whether a proof is still needed.
+func (s *Server) validationTargets(base context.Context, task *Task) (*Challenge, *Authorization, bool) {
+	ctx, cancel := s.taskPhase(base)
+	defer cancel()
+	ch, err := s.store.Challenge(ctx, task.TargetID)
+	if err != nil {
+		s.dropOnNotFound(base, task, err, "challenge")
+		return nil, nil, false
+	}
+	if ch.Status != ChallengeProcessing {
+		s.finishTask(base, task)
+		return nil, nil, false
+	}
+	authz, err := s.store.Authorization(ctx, ch.AuthorizationID)
+	if err != nil {
+		s.dropOnNotFound(base, task, err, "authorization")
+		return nil, nil, false
+	}
+	return ch, authz, true
+}
+
+// Runs a validator under its own task timeout and reports what the response authorizes.
+func (s *Server) validate(base context.Context, v Validator, req ValidationRequest) (ValidationGrant, error) {
+	ctx, cancel := s.taskPhase(base)
+	defer cancel()
 	if granting, ok := v.(GrantingValidator); ok {
 		return granting.ValidateGrant(ctx, req)
 	}
@@ -172,16 +192,18 @@ func validate(ctx context.Context, v Validator, req ValidationRequest) (Validati
 
 // Commits a validation result, deriving the order status from every authorization. A concurrent
 // change to the order or authorization is reloaded and retried.
-func (s *Server) completeValidation(ctx context.Context, task *Task, ch *Challenge, authz *Authorization) {
+func (s *Server) completeValidation(base context.Context, task *Task, ch *Challenge, authz *Authorization) {
+	ctx, cancel := s.taskPhase(base)
+	defer cancel()
 	for range 3 {
 		order, err := s.store.Order(ctx, authz.OrderID)
 		if err != nil {
-			s.dropOnNotFound(ctx, task, err, "order")
+			s.dropOnNotFound(base, task, err, "order")
 			return
 		}
 		status, err := s.deriveOrderStatus(ctx, order, authz)
 		if err != nil {
-			s.logError(ctx, "order status derivation failed", err, slog.String("order", order.ID))
+			s.logError(base, "order status derivation failed", err, slog.String("order", order.ID))
 			return
 		}
 		if order.Status == OrderPending && status != OrderPending {
@@ -192,21 +214,21 @@ func (s *Server) completeValidation(ctx context.Context, task *Task, ch *Challen
 			return
 		}
 		if !errors.Is(err, ErrRevisionMismatch) {
-			s.logError(ctx, "validation result could not be stored", err, slog.String("challenge", ch.ID))
+			s.logError(base, "validation result could not be stored", err, slog.String("challenge", ch.ID))
 			return
 		}
 		current, err := s.store.Authorization(ctx, authz.ID)
 		if err != nil {
-			s.dropOnNotFound(ctx, task, err, "authorization")
+			s.dropOnNotFound(base, task, err, "authorization")
 			return
 		}
 		if current.Status != AuthorizationPending {
-			s.finishTask(ctx, task)
+			s.finishTask(base, task)
 			return
 		}
 		authz.Revision = current.Revision
 	}
-	s.logError(ctx, "validation result abandoned after repeated conflicts", ErrRevisionMismatch,
+	s.logError(base, "validation result abandoned after repeated conflicts", ErrRevisionMismatch,
 		slog.String("challenge", ch.ID))
 }
 
@@ -244,35 +266,41 @@ func (s *Server) deriveOrderStatus(ctx context.Context, order *Order, updated *A
 }
 
 // Releases the task for a later attempt with exponential backoff.
-func (s *Server) reschedule(ctx context.Context, task *Task, now time.Time) {
+func (s *Server) reschedule(base context.Context, task *Task, now time.Time) {
 	delay := s.workers.RetryDelay
 	for i := 1; i < task.Attempts && delay < 32*s.workers.RetryDelay; i++ {
 		delay *= 2
 	}
 	task.RunAt = now.Add(delay)
-	s.storeReschedule(ctx, task)
+	s.storeReschedule(base, task)
 }
 
 // Stores a rescheduled task and logs failures.
-func (s *Server) storeReschedule(ctx context.Context, task *Task) {
+func (s *Server) storeReschedule(base context.Context, task *Task) {
+	ctx, cancel := s.taskPhase(base)
+	defer cancel()
 	if err := s.store.RescheduleTask(ctx, task); err != nil {
-		s.logError(ctx, "task reschedule failed", err, slog.String("task", task.ID))
+		s.logError(base, "task reschedule failed", err, slog.String("task", task.ID))
 	}
 }
 
 // Removes a task that has nothing left to do.
-func (s *Server) finishTask(ctx context.Context, task *Task) {
+func (s *Server) finishTask(base context.Context, task *Task) {
+	ctx, cancel := s.taskPhase(base)
+	defer cancel()
 	if err := s.store.FinishTask(ctx, task); err != nil && !errors.Is(err, ErrNotFound) {
-		s.logError(ctx, "task removal failed", err, slog.String("task", task.ID))
+		s.logError(base, "task removal failed", err, slog.String("task", task.ID))
 	}
 }
 
-// Drops a task whose target vanished and logs any other lookup failure.
-func (s *Server) dropOnNotFound(ctx context.Context, task *Task, err error, resource string) {
+// Drops a task whose target vanished and releases one whose lookup failed for another reason, so a
+// store that is briefly unavailable costs a backoff instead of the remainder of the lease.
+func (s *Server) dropOnNotFound(base context.Context, task *Task, err error, resource string) {
 	if errors.Is(err, ErrNotFound) {
-		s.log.LogAttrs(ctx, slog.LevelWarn, resource+" of a task no longer exists", slog.String("task", task.ID))
-		s.finishTask(ctx, task)
+		s.log.LogAttrs(base, slog.LevelWarn, resource+" of a task no longer exists", slog.String("task", task.ID))
+		s.finishTask(base, task)
 		return
 	}
-	s.logError(ctx, resource+" lookup failed", err, slog.String("task", task.ID))
+	s.logError(base, resource+" lookup failed", err, slog.String("task", task.ID))
+	s.reschedule(base, task, s.clock.Now())
 }
