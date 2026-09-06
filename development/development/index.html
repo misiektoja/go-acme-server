@@ -1547,6 +1547,10 @@ need them.</p>
 <td>JWS, JWK and strict JSON parsing, not part of the public API</td>
 </tr>
 <tr>
+<td><code>examples/</code></td>
+<td>Runnable host programs, built with the root module</td>
+</tr>
+<tr>
 <td><code>test/interop/</code></td>
 <td>A separate module with the independent client tests, the SQLite adapter and the cert-manager harness</td>
 </tr>
@@ -1581,7 +1585,8 @@ publishes the site from the default branch.</p>
 <p>Package documentation on <a href="https://pkg.go.dev/github.com/misiektoja/go-acme-server">pkg.go.dev</a>
 comes from the Go doc comments. Every exported identifier and every configuration field has one.
 User-facing behavior changes belong in both places: the doc comment for the API and the relevant
-page here for the walkthrough.</p>
+page here for the walkthrough. Code listings that a page shows in full come from <code>examples/</code>
+through snippet includes, so change the program and the page follows.</p>
 <h2 id="test-artifacts">Test artifacts<a class="headerlink" href="#test-artifacts" title="Permanent link">&para;</a></h2>
 <p>Tests write generated keys, databases and client logs under <code>.cache/acme-tests</code> by default. Set
 <code>ACME_TEST_SCRATCH</code> to an absolute path to use another directory. These files must never be
