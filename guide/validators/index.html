@@ -1549,7 +1549,7 @@
 <p>A validator proves that the client controls one identifier. The server offers a challenge type
 only when <code>Config.Validators</code> holds a validator for it, so the map decides what clients see in
 their authorizations. The <code>challenge</code> package implements the three network challenges of RFC 8555
-and RFC 8737 and the Authority Token challenge of RFC 9447, which has <a href="../authority-tokens/">its own page</a>.</p>
+and RFC 8737 and the Authority Token challenge of RFC 9447, described in <a href="../authority-tokens/">Authority Token challenges</a>.</p>
 <div class="highlight"><pre><span></span><code><span class="nx">Validators</span><span class="p">:</span><span class="w"> </span><span class="kt">map</span><span class="p">[</span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">ChallengeType</span><span class="p">]</span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">Validator</span><span class="p">{</span>
 <span class="w">    </span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">ChallengeHTTP01</span><span class="p">:</span><span class="w">    </span><span class="nx">http01</span><span class="p">,</span>
 <span class="w">    </span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">ChallengeDNS01</span><span class="p">:</span><span class="w">     </span><span class="nx">dns01</span><span class="p">,</span>
@@ -1618,7 +1618,7 @@ every hop, reads at most 4096 bytes and compares the trimmed body with the key a
 ignores proxy environment variables. An HTTPS redirect target is not checked against the web PKI,
 because the key authorization is the proof, not the website certificate.</p>
 <p><code>MaxRedirects</code> and <code>MaxResponseBytes</code> change the limits. <code>TestPort</code> replaces port 80 for local
-tests only, which is how the <a href="../../getting-started/">getting started</a> program reaches a client on
+tests only, which is how the <a href="../../getting-started/">Getting started</a> program reaches a client on
 port 5002.</p>
 <h2 id="dns-01">DNS-01<a class="headerlink" href="#dns-01" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><span class="nx">dns01</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">challenge</span><span class="p">.</span><span class="nx">NewDNS01</span><span class="p">(</span><span class="nx">challenge</span><span class="p">.</span><span class="nx">DNSOptions</span><span class="p">{</span><span class="nx">Resolver</span><span class="p">:</span><span class="w"> </span><span class="nx">resolver</span><span class="p">})</span>

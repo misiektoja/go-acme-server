@@ -1785,17 +1785,17 @@ where <code>go run ./examples/quickstart</code> starts it without any setup. Sav
 <tr>
 <td><code>devCA</code></td>
 <td>Signs with an in-process root and remembers results by operation ID</td>
-<td>Your CA behind <a href="../guide/issuance/"><code>Issuer</code></a> and <a href="../guide/revocation/"><code>Revoker</code></a></td>
+<td>Your CA behind <code>Issuer</code> and <code>Revoker</code>, see <a href="../guide/issuance/">Issuing certificates</a> and <a href="../guide/revocation/">Revocation</a></td>
 </tr>
 <tr>
 <td><code>memstore.New()</code></td>
 <td>Keeps accounts, orders and tasks in memory until the process exits</td>
-<td>A durable <a href="../guide/storage/"><code>Store</code></a> over your database</td>
+<td>A durable <code>Store</code> over your database, see <a href="../guide/storage/">Storage</a></td>
 </tr>
 <tr>
 <td><code>localResolver</code> and <code>TestPort</code></td>
 <td>Send HTTP-01 requests to the loopback address on port 5002</td>
-<td>A <a href="../guide/validators/">resolver and egress policy</a> that reach real clients on port 80</td>
+<td>A resolver and egress policy that reach real clients on port 80, see <a href="../guide/validators/">Challenge validators</a></td>
 </tr>
 <tr>
 <td><code>nonce.New</code></td>

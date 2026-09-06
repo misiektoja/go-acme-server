@@ -1649,7 +1649,7 @@ when <code>RecoveryOnly</code> is set. Returning an existing result is always al
 leaf's <code>NotBefore</code> must not be earlier than the requested one and its <code>NotAfter</code> must not be later.
 The leaf must already be valid when it is returned unless the order asked for a future start.</p>
 <p><strong>Match the request.</strong> The leaf must carry the CSR's public key, exactly the order's identifiers
-as SANs and no CA basic constraint unless an <a href="../authority-tokens/">authority token</a> granted one.</p>
+as SANs and no CA basic constraint unless an Authority Token granted one, see <a href="../authority-tokens/">Authority Token challenges</a>.</p>
 <p><strong>Return the full chain.</strong> <code>Chain</code> holds the DER leaf followed by the DER issuer chain in signing
 order. Each element must be signed by the next one.</p>
 <p>A minimal implementation over a database looks like this:</p>

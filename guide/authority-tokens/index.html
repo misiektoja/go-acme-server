@@ -1544,7 +1544,7 @@ CA basic constraint after the grant. Network challenges grant nothing, so a mixe
 finalize a CA certificate.</p>
 <p>The issuer receives the token expiry as <code>IssueRequest.NotAfter</code> unless the order asked for an
 earlier time. A leaf valid past the token expiry fails the publication check and is retained as an
-<a href="../issuance/#unpublished-results">unpublished result</a>. The issuer recognizes a STIR order by the
+unpublished result, see <a href="../issuance/#unpublished-results">Unpublished results</a>. The issuer recognizes a STIR order by the
 <code>TNAuthList</code> identifier in <code>req.Identifiers</code> and copies the list from the CSR extension into the
 certificate.</p>
 <h2 id="testing">Testing<a class="headerlink" href="#testing" title="Permanent link">&para;</a></h2>

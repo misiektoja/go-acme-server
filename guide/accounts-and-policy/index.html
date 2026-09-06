@@ -1515,7 +1515,7 @@ the directory tells clients. All of it is configuration on <code>Config</code> p
 <p>The <code>meta</code> object is included in the directory when any field is set. <code>TermsOfService</code> also adds a
 <code>Link</code> header with <code>rel="terms-of-service"</code> to <code>newAccount</code> responses. <code>CAAIdentities</code> is
 informational. The library does not check CAA records, so a CA that must honor CAA does so in the
-<a href="../issuance/#issuance-policy">issuance policy</a>.</p>
+issuance policy, see <a href="../issuance/#issuance-policy">Issuance policy</a>.</p>
 <h2 id="terms-of-service">Terms of service<a class="headerlink" href="#terms-of-service" title="Permanent link">&para;</a></h2>
 <p><code>RequireTermsOfServiceAgreed</code> refuses a <code>newAccount</code> whose payload does not set
 <code>termsOfServiceAgreed</code> with a <code>userActionRequired</code> problem. It needs <code>Meta.TermsOfService</code>, so

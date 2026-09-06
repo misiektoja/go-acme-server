@@ -1703,7 +1703,7 @@ and hold no lease past it, which <code>Ready</code> uses to detect that no worke
 with the evidence and the deadline. It must fail with <code>ErrRevisionMismatch</code> if anything it was
 given has changed since the worker read it.</p>
 <h2 id="replacement-claims">Replacement claims<a class="headerlink" href="#replacement-claims" title="Permanent link">&para;</a></h2>
-<p>With <a href="../renewal-information/">renewal information</a> enabled, an order may name the certificate it
+<p>With <a href="../renewal-information/">Renewal information</a> enabled, an order may name the certificate it
 replaces. <code>CreateOrder</code> then marks that certificate as replaced by the order in the same
 transaction. It returns <code>ErrNotFound</code> when no certificate has that <code>RenewalID</code> and
 <code>ErrAlreadyReplaced</code> when another order that is not invalid at <code>order.CreatedAt</code> already claimed
@@ -1720,7 +1720,7 @@ type, value and wildcard flag.</p>
 <li><code>Account.Key</code> is a <code>crypto.PublicKey</code>. Store the PKIX DER from <code>x509.MarshalPKIXPublicKey</code> and parse it back with <code>x509.ParsePKIXPublicKey</code>. The <code>KeyThumbprint</code> is precomputed for you.</li>
 <li><code>Order.Error</code>, <code>Challenge.Error</code> and <code>Order.UnpublishedResult</code> are structs with JSON tags. Storing them as JSON columns works.</li>
 <li><code>Certificate.Chain</code> is a list of DER blobs. Keep the order.</li>
-<li>Structs may gain fields in later releases. A store that serializes whole resources as JSON must ignore fields it does not know. See the <a href="../../reference/compatibility/">compatibility policy</a>.</li>
+<li>Structs may gain fields in later releases. A store that serializes whole resources as JSON must ignore fields it does not know. See <a href="../../reference/compatibility/">Compatibility policy</a>.</li>
 <li>Store times in UTC with at least second precision.</li>
 </ul>
 <h2 id="verify-with-storetest">Verify with storetest<a class="headerlink" href="#verify-with-storetest" title="Permanent link">&para;</a></h2>
