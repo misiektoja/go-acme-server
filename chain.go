@@ -31,9 +31,8 @@ func checkSANExtensions(extensions []pkix.Extension) error {
 	return nil
 }
 
-// Returns the complete supported SAN set and checks the common name against it, unless an
-// authority list is the certificate's only identity.
-func certificateIdentifiers(leaf *x509.Certificate) ([]Identifier, error) {
+// Returns the complete supported SAN set of a certificate.
+func certificateSANs(leaf *x509.Certificate) ([]Identifier, error) {
 	if err := checkSANExtensions(leaf.Extensions); err != nil {
 		return nil, err
 	}
@@ -59,12 +58,45 @@ func certificateIdentifiers(leaf *x509.Certificate) ([]Identifier, error) {
 	if err != nil || len(ids) == 0 {
 		return nil, errors.New("invalid certificate identifiers")
 	}
-	// A STIR certificate names a service provider in the common name, not one of its identifiers.
-	if leaf.Subject.CommonName != "" && !authorityListOnly(ids) {
-		cn, err := commonNameIdentifier(leaf.Subject.CommonName).Normalize()
-		if err != nil || !slices.Contains(ids, cn) {
-			return nil, errors.New("common name is outside the SAN set")
-		}
+	return ids, nil
+}
+
+// Returns the identifier the common name of a certificate asserts, or a zero identifier when it
+// asserts none. A STIR certificate names a service provider there instead of one of its identities.
+func certificateCommonName(leaf *x509.Certificate, ids []Identifier) (Identifier, error) {
+	if leaf.Subject.CommonName == "" || authorityListOnly(ids) {
+		return Identifier{}, nil
+	}
+	return commonNameIdentifier(leaf.Subject.CommonName).Normalize()
+}
+
+// Returns the complete supported SAN set and checks the common name against it, unless an
+// authority list is the certificate's only identity.
+func certificateIdentifiers(leaf *x509.Certificate) ([]Identifier, error) {
+	ids, err := certificateSANs(leaf)
+	if err != nil {
+		return nil, err
+	}
+	cn, err := certificateCommonName(leaf, ids)
+	if err != nil || (cn.Value != "" && !slices.Contains(ids, cn)) {
+		return nil, errors.New("common name is outside the SAN set")
+	}
+	return ids, nil
+}
+
+// Returns every identity a certificate asserts, adding a common name that its SAN set does not
+// cover, so a revoking account has to prove control of that name too.
+func revocationIdentifiers(leaf *x509.Certificate) ([]Identifier, error) {
+	ids, err := certificateSANs(leaf)
+	if err != nil {
+		return nil, err
+	}
+	cn, err := certificateCommonName(leaf, ids)
+	if err != nil {
+		return nil, err
+	}
+	if cn.Value != "" && !slices.Contains(ids, cn) {
+		ids = append(ids, cn)
 	}
 	return ids, nil
 }

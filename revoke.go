@@ -106,7 +106,7 @@ func (s *Server) authorizeRevocation(ctx context.Context, req *signedRequest, ce
 		if req.Account.ID == cert.AccountID {
 			return nil
 		}
-		ids, err := certificateIdentifiers(leaf)
+		ids, err := revocationIdentifiers(leaf)
 		if err != nil {
 			return NewProblem(ErrorUnauthorized, "certificate identifiers cannot be authorized")
 		}
