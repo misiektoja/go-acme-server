@@ -19,7 +19,8 @@ type IssueRequest struct {
 	CSRDER []byte
 	// The normalized identifiers the order covers.
 	Identifiers []Identifier
-	// The requested validity. Zero values mean the host decides.
+	// The requested validity. Zero values mean the host decides. An authority token expiry
+	// narrows NotAfter, and the issued leaf is checked against the narrowed value.
 	NotBefore time.Time
 	NotAfter  time.Time
 	// How each identifier was validated.
