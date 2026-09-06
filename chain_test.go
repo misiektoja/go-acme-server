@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
+	"encoding/base64"
 	"math/big"
 	"net/url"
 	"testing"
@@ -121,6 +122,45 @@ func TestCertificateIdentifiersCommonName(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			if _, err := certificateIdentifiers(&test.leaf); (err == nil) != test.ok {
 				t.Fatalf("certificateIdentifiers = %v, ok = %v", err, test.ok)
+			}
+		})
+	}
+}
+
+// Adds a common name the SAN set does not cover to the identities a revoker must prove, where the
+// publication check refuses the same certificate outright.
+func TestRevocationIdentifiersCoverTheCommonName(t *testing.T) {
+	list := pkix.Extension{Id: tnAuthListOID, Value: authorityList(spcEntry("1234"))}
+	authorityListID := Identifier{Type: IdentifierTNAuthList,
+		Value: base64.RawURLEncoding.EncodeToString(list.Value)}
+	for _, test := range []struct {
+		name      string
+		leaf      x509.Certificate
+		want      []Identifier
+		published bool
+	}{
+		{"common name inside the SAN set", x509.Certificate{
+			Subject: pkix.Name{CommonName: "a.test"}, DNSNames: []string{"a.test"}},
+			[]Identifier{{Type: IdentifierDNS, Value: "a.test"}}, true},
+		{"common name outside the SAN set", x509.Certificate{
+			Subject: pkix.Name{CommonName: "b.test"}, DNSNames: []string{"a.test"}},
+			[]Identifier{{Type: IdentifierDNS, Value: "a.test"}, {Type: IdentifierDNS, Value: "b.test"}}, false},
+		{"provider name on an authority list", x509.Certificate{
+			Subject: pkix.Name{CommonName: "SHAKEN 1234"}, Extensions: []pkix.Extension{list}},
+			[]Identifier{authorityListID}, true},
+		{"provider name on a mixed certificate", x509.Certificate{
+			Subject: pkix.Name{CommonName: "b.test"}, DNSNames: []string{"a.test"},
+			Extensions: []pkix.Extension{list}},
+			[]Identifier{authorityListID, {Type: IdentifierDNS, Value: "a.test"},
+				{Type: IdentifierDNS, Value: "b.test"}}, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ids, err := revocationIdentifiers(&test.leaf)
+			if err != nil || !sameIdentifiers(ids, test.want) {
+				t.Fatalf("revocationIdentifiers = %v, %v, want %v", ids, err, test.want)
+			}
+			if _, err := certificateIdentifiers(&test.leaf); (err == nil) != test.published {
+				t.Fatalf("certificateIdentifiers = %v, published = %v", err, test.published)
 			}
 		})
 	}
