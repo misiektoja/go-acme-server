@@ -1,0 +1,58 @@
+name: cert-manager
+
+# A cluster run costs minutes, so it is scheduled and manual rather than part of every push.
+on:
+  schedule:
+    # Tuesdays at 06:23 UTC.
+    - cron: "23 6 * * 2"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cert-manager:
+    name: cert-manager issuance and renewal
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            test/interop/go.sum
+
+      - name: Install kind
+        uses: helm/kind-action@06c1ae10762d3b9c1644e7fe69596ae519e015a2 # v1.15.0
+        with:
+          version: v0.33.0
+          install_only: true
+
+      - name: Issue and renew through cert-manager
+        env:
+          ACME_TEST_SCRATCH: ${{ runner.temp }}/acme-tests
+        run: make test-cert-manager
+
+      - name: Upload logs and outcome
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cert-manager-outcome
+          path: |
+            ${{ runner.temp }}/acme-tests/cert-manager-summary.json
+            ${{ runner.temp }}/acme-tests/cert-manager/*.log
+            ${{ runner.temp }}/acme-tests/cert-manager/*.txt
+          if-no-files-found: error
+          retention-days: 7
