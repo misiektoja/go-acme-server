@@ -34,4 +34,8 @@
 //
 // RFC 8738 IP identifiers, RFC 9448 TNAuthList identifiers with the RFC 9447 tkauth-01 challenge
 // and RFC 9773 renewal information are off until the matching Config field enables them.
+//
+// # Documentation
+//
+// Step-by-step guides for hosts are at https://misiektoja.github.io/go-acme-server/.
 package acmeserver

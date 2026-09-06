@@ -16,7 +16,7 @@
 
 ## Documentation and release notes
 
-- [ ] User-facing behavior is documented in the README or the package documentation
+- [ ] User-facing behavior is documented in the package documentation and under `docs/`
 - [ ] `RELEASE_NOTES.md` carries an entry, or the change is not user facing
 - [ ] A protocol change cites the RFC section and has a negative test
 
