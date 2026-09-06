@@ -61,6 +61,10 @@ test-interop: test-scratch ## Require acmez, Certbot, durable storage and proces
 test-recovery: test-scratch ## Exercise two-process fencing and recovery after a killed worker.
 	cd test/interop && go test -race -count=1 -timeout=2m -run 'Test(CrashAfterIssuance|TwoProcessLeaseAndFence)$$' ./...
 
+.PHONY: test-cert-manager
+test-cert-manager: test-scratch ## Issue and renew through cert-manager in a throwaway kind cluster. Needs Docker, kind and kubectl.
+	test/interop/cert-manager/run.sh
+
 # FUZZ_TIME bounds each target. go test fuzzes one target per invocation, so the targets run in turn.
 FUZZ_TIME ?= 20s
 FUZZ_TARGETS := ./internal/jws:FuzzParse ./internal/jws:FuzzParseProfiles ./internal/jws:FuzzParseCompact \
