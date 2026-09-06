@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/x509"
+	"net"
 	"strconv"
 	"strings"
 	"testing"
@@ -14,6 +15,7 @@ import (
 	"github.com/go-acme/lego/v4/certificate"
 	"github.com/go-acme/lego/v4/challenge/dns01"
 	"github.com/go-acme/lego/v4/challenge/http01"
+	"github.com/go-acme/lego/v4/challenge/tlsalpn01"
 	"github.com/go-acme/lego/v4/lego"
 	"github.com/go-acme/lego/v4/registration"
 
@@ -137,6 +139,23 @@ func TestLegoDelayedIssuance(t *testing.T) {
 	order := h.verify(t, resource.Certificate, &key.PublicKey, []string{testHost}, acmeserver.ChallengeHTTP01)
 	h.verifyDelayed(t, order)
 	t.Log("lego v4.35.2 waited for a delayed issuance and received the certificate")
+}
+
+// Issues through lego's TLS-ALPN-01 listener and confirms lego closed it afterwards.
+func TestLegoTLSALPN01(t *testing.T) {
+	port := availablePort(t)
+	h := newHarness(t, harnessOptions{tlsPort: port})
+	client := h.lego(t)
+	if err := client.Challenge.SetTLSALPN01Provider(tlsalpn01.NewProviderServer("127.0.0.1", strconv.Itoa(port))); err != nil {
+		t.Fatal(err)
+	}
+	key, resource := legoObtain(t, client, testHost)
+	h.verify(t, resource.Certificate, &key.PublicKey, []string{testHost}, acmeserver.ChallengeTLSALPN01)
+	if connection, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), time.Second); err == nil {
+		connection.Close()
+		t.Fatal("the lego challenge listener is still accepting connections")
+	}
+	t.Log("lego v4.35.2 TLS-ALPN-01 issuance passed and the challenge listener was closed")
 }
 
 // Issues a wildcard with its base domain through lego's DNS-01 solver against the local responder.
