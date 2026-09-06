@@ -11,6 +11,7 @@ The implementation is original. Third-party code is consumed through versioned p
 | github.com/go-acme/lego/v4 | Independent Go client tests | MIT |
 | golang.org/x/crypto | Independent Go client tests through its `acme` package | BSD-3-Clause |
 | Certbot and acme | Independent Python client tests | Apache-2.0 with component notices |
+| cert-manager | Independent Kubernetes client tests in a kind cluster | Apache-2.0 |
 
 Exact Go versions and checksums are in each module's `go.mod` and `go.sum`. The Python test
 environment is pinned in `test/interop/requirements.txt`. Each dependency retains its own license

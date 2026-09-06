@@ -50,6 +50,15 @@ a five-second busy timeout and `BEGIN IMMEDIATE` writes. It is test infrastructu
 migration or production support contract. SQLite lock conflicts return `ErrRevisionMismatch` so
 the caller can retry the atomic operation. Unique IDs and account keys return `ErrConflict`.
 
+`make test-cert-manager` runs cert-manager v1.21.1 in a throwaway kind cluster against the server
+from `cmd/server`, which wraps the library with the same test CA, the SQLite adapter and an
+HTTP-01 validator in a scratch image. A fixed-address Service selects the solver pods cert-manager
+creates and a CoreDNS hosts entry points the test domain at it, so cert-manager's own self-check
+and the server's validation reach the same solver. The script waits for the ClusterIssuer and the
+Certificate, verifies the secret against the test root, triggers a renewal the way `cmctl renew`
+does and verifies the second certificate. The cluster is deleted afterwards unless
+`ACME_KEEP_CLUSTER=1` is set. CI runs it weekly and on request rather than on every push.
+
 Two live processes exercise lease exclusion and fencing. Another test keeps the HTTP process
 running while killing a worker after the test CA commits issuance but before ACME publication.
 A new worker recovers identical DER with one issuance across two CA calls.
@@ -68,8 +77,10 @@ ACME_CERTBOT="$PWD/.cache/certbot/bin/certbot" make test-interop
 `ACME_CERTBOT` selects the executable. Its version must match the pin. Missing tools, failed tests
 and skipped required scenarios fail the gate. The DNS, TLS and go-jose scenarios need no extra
 tools. lego runs in process and reads no host resolver because CNAME discovery is disabled.
-`make test-recovery` runs process recovery and fencing without needing Certbot. `make lint`
-and `make tidy-check` cover both modules.
+`make test-recovery` runs process recovery and fencing without needing Certbot.
+`make test-cert-manager` needs Docker, kind, kubectl and openssl and downloads the pinned
+cert-manager manifest, which the script checks against its SHA-256. `make lint` and
+`make tidy-check` cover both modules.
 
 `go.mod` and `go.sum` pin the Go dependencies. `requirements.txt` pins every Certbot dependency.
 CI uses Python 3.14.7 and the Go version from the root `go.mod`. Refresh these pins together and
@@ -83,7 +94,7 @@ these files. The gate prints diagnostics and writes `interop-summary.json` in th
 only Go version, operating system, architecture, test names, outcomes and elapsed times. CI uses
 its temporary directory and uploads only the summary, including after failure.
 
-These tests establish the named acmez, Certbot, lego, crypto/acme, go-jose, tkauth-01, concurrency
-and recovery scenarios. Local validator tests separately check RFC 8555, RFC 8737, RFC 8738 and
-RFC 9448 proof and egress rules. They do not establish complete RFC conformance, alternate chain
-selection or cert-manager behavior.
+These tests establish the named acmez, Certbot, lego, crypto/acme, go-jose, cert-manager,
+tkauth-01, concurrency and recovery scenarios. Local validator tests separately check RFC 8555, RFC 8737, RFC 8738 and
+RFC 9448 proof and egress rules. They do not establish complete RFC conformance or alternate chain
+selection.
