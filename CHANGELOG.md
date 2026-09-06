@@ -23,13 +23,19 @@ through a host CA.
   advertises where clients may obtain a token. Every authorization of an order must have granted
   the CA basic constraint the certificate request asks for, so a request for a CA certificate is
   refused unless every challenge granted one. Issued certificates may not outlive the token.
+* **Renewal information** implements RFC 9773 behind `Config.RenewalInfo`. The directory
+  advertises `renewalInfo`, an unauthenticated GET returns the suggested window with Retry-After
+  and `replaces` on a new order claims the predecessor for one live order at a time, answering
+  `alreadyReplaced` otherwise. `LifetimeRenewal` is the built-in schedule and hosts can supply
+  their own `RenewalAdvisor`. Stores index certificates by their RFC 9773 identifier.
 * **Issuance recovery** preserves a durable dispatch decision and retains unpublished CA results for
   host reconciliation. Host issuers must deduplicate operations and enforce authorization deadlines.
   Revocations carry a durable operation ID that retries repeat, so revokers deduplicate the same way.
 * **`make test-interop`** requires acmez issuance through HTTP-01, DNS-01 with a wildcard and its
   base domain, and TLS-ALPN-01, Certbot HTTP-01 and manual-hook DNS-01 wildcard issuance with
   revocation, lego HTTP-01 issuance with revocation, DNS-01 wildcard and TLS-ALPN-01 issuance,
-  delayed issuance through Certbot and lego, Go crypto/acme account changes, issuance, key-signed revocation and
+  renewal information and certificate replacement through acmez and lego, delayed issuance
+  through Certbot and lego, Go crypto/acme account changes, issuance, key-signed revocation and
   deactivation, tkauth-01 issuance with a local Token Authority, incorrect-proof rejection for
   every challenge type, go-jose signed account, key change and external account binding requests,
   retried and concurrent registrations, challenge responses, finalizations, key changes and nonce
