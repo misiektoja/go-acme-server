@@ -102,13 +102,15 @@ func checkChain(chain [][]byte, csr *x509.CertificateRequest, order *Order, now 
 	if !leaf.NotAfter.After(now) || !leaf.NotAfter.After(leaf.NotBefore) {
 		return nil, errors.New("leaf certificate validity is invalid or expired")
 	}
-	if order.NotBefore.IsZero() && leaf.NotBefore.After(now) {
-		return nil, errors.New("leaf certificate is not valid yet")
-	}
 	// A CA may shorten the requested validity to its own lifetime policy, so the leaf only has to
-	// stay inside the window the order asked for.
-	if !order.NotBefore.IsZero() && leaf.NotBefore.Before(order.NotBefore.Truncate(time.Second)) {
+	// stay inside the window the order asked for. It may not be postponed either: a leaf is late
+	// once it starts after both the present and any start the order named.
+	start := order.NotBefore.Truncate(time.Second)
+	if leaf.NotBefore.Before(start) {
 		return nil, errors.New("leaf notBefore is earlier than the accepted order")
+	}
+	if leaf.NotBefore.After(now) && leaf.NotBefore.After(start) {
+		return nil, errors.New("leaf certificate is not valid yet")
 	}
 	if order.Issuance != nil {
 		if bound := grantExpiry(order.Issuance.Validations); !bound.IsZero() && leaf.NotAfter.After(bound) {
