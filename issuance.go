@@ -270,14 +270,14 @@ func (s *Server) recordIssuedResult(base context.Context, task *Task, order *Ord
 		s.failOrder(base, task, order, NewProblem(ErrorServerInternal, "issuer returned a duplicate certificate"))
 		return
 	}
-	s.handleIssuanceCommit(base, order, err)
+	s.handleIssuanceCommit(base, task, order, err)
 }
 
 // Records a definitive refusal without discarding any retained CA result.
 func (s *Server) failOrder(base context.Context, task *Task, order *Order, p *Problem) {
 	order.Status = OrderInvalid
 	order.Error = p
-	s.handleIssuanceCommit(base, order, s.completeIssuance(base, task, order, nil))
+	s.handleIssuanceCommit(base, task, order, s.completeIssuance(base, task, order, nil))
 }
 
 // Stores an issuance outcome under its own task timeout.
@@ -287,9 +287,12 @@ func (s *Server) completeIssuance(base context.Context, task *Task, order *Order
 	return s.store.CompleteIssuance(ctx, task, order, cert)
 }
 
-// Reports a failed fenced commit while leaving persisted work available for recovery.
-func (s *Server) handleIssuanceCommit(ctx context.Context, order *Order, err error) {
-	if err != nil {
-		s.logError(ctx, "issuance result could not be stored", err, slog.String("order", order.ID))
+// Releases the task of a failed fenced commit so the persisted work is recovered on the next
+// attempt instead of waiting out the lease.
+func (s *Server) handleIssuanceCommit(base context.Context, task *Task, order *Order, err error) {
+	if err == nil {
+		return
 	}
+	s.logError(base, "issuance result could not be stored", err, slog.String("order", order.ID))
+	s.reschedule(base, task, s.clock.Now())
 }

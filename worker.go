@@ -206,7 +206,8 @@ func (s *Server) validate(base context.Context, v Validator, req ValidationReque
 }
 
 // Commits a validation result, deriving the order status from every authorization. A concurrent
-// change to the order or authorization is reloaded and retried.
+// change to the order or authorization is reloaded and retried, and a commit that does not settle
+// releases the task for a later attempt instead of holding its lease.
 func (s *Server) completeValidation(base context.Context, task *Task, ch *Challenge, authz *Authorization) {
 	ctx, cancel := s.taskPhase(base)
 	defer cancel()
@@ -219,6 +220,7 @@ func (s *Server) completeValidation(base context.Context, task *Task, ch *Challe
 		status, err := s.deriveOrderStatus(ctx, order, authz)
 		if err != nil {
 			s.logError(base, "order status derivation failed", err, slog.String("order", order.ID))
+			s.reschedule(base, task, s.clock.Now())
 			return
 		}
 		if order.Status == OrderPending && status != OrderPending {
@@ -230,6 +232,7 @@ func (s *Server) completeValidation(base context.Context, task *Task, ch *Challe
 		}
 		if !errors.Is(err, ErrRevisionMismatch) {
 			s.logError(base, "validation result could not be stored", err, slog.String("challenge", ch.ID))
+			s.reschedule(base, task, s.clock.Now())
 			return
 		}
 		current, err := s.store.Authorization(ctx, authz.ID)
@@ -243,8 +246,9 @@ func (s *Server) completeValidation(base context.Context, task *Task, ch *Challe
 		}
 		authz.Revision = current.Revision
 	}
-	s.logError(base, "validation result abandoned after repeated conflicts", ErrRevisionMismatch,
+	s.logError(base, "validation result could not be stored after repeated conflicts", ErrRevisionMismatch,
 		slog.String("challenge", ch.ID))
+	s.reschedule(base, task, s.clock.Now())
 }
 
 // Returns the order status implied by its authorizations, with updated standing in for its
