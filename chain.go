@@ -105,16 +105,18 @@ func checkChain(chain [][]byte, csr *x509.CertificateRequest, order *Order, now 
 	if order.NotBefore.IsZero() && leaf.NotBefore.After(now) {
 		return nil, errors.New("leaf certificate is not valid yet")
 	}
-	if !order.NotBefore.IsZero() && !leaf.NotBefore.Equal(order.NotBefore.Truncate(time.Second)) {
-		return nil, errors.New("leaf notBefore differs from the accepted order")
-	}
-	if !order.NotAfter.IsZero() && !leaf.NotAfter.Equal(issuedNotAfter(order).Truncate(time.Second)) {
-		return nil, errors.New("leaf notAfter differs from the requested validity")
+	// A CA may shorten the requested validity to its own lifetime policy, so the leaf only has to
+	// stay inside the window the order asked for.
+	if !order.NotBefore.IsZero() && leaf.NotBefore.Before(order.NotBefore.Truncate(time.Second)) {
+		return nil, errors.New("leaf notBefore is earlier than the accepted order")
 	}
 	if order.Issuance != nil {
 		if bound := grantExpiry(order.Issuance.Validations); !bound.IsZero() && leaf.NotAfter.After(bound) {
 			return nil, errors.New("leaf certificate outlives the authority token")
 		}
+	}
+	if requested := issuedNotAfter(order); !requested.IsZero() && leaf.NotAfter.After(requested.Truncate(time.Second)) {
+		return nil, errors.New("leaf notAfter is later than the requested validity")
 	}
 	ids, err := certificateIdentifiers(leaf)
 	if err != nil || !sameIdentifiers(ids, order.Identifiers) {
