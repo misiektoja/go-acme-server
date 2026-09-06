@@ -1,0 +1,1933 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A Go library for embedding an ACME server into CA and PKI applications">
+      
+      
+      
+        <link rel="canonical" href="https://misiektoja.github.io/go-acme-server/getting-started/">
+      
+      
+        <link rel="prev" href="..">
+      
+      
+        <link rel="next" href="../support-matrix/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Getting started - go-acme-server</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#getting-started" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="go-acme-server" class="md-header__button md-logo" aria-label="go-acme-server" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            go-acme-server
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Getting started
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/misiektoja/go-acme-server" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    misiektoja/go-acme-server
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="go-acme-server" class="md-nav__button md-logo" aria-label="go-acme-server" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    go-acme-server
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/misiektoja/go-acme-server" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    misiektoja/go-acme-server
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-you-need" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What you need
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-1-create-the-program" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1: create the program
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-2-run-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2: run it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-3-issue-a-certificate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3: issue a certificate
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-happens-behind-the-scenes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What happens behind the scenes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#before-production" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before production
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../support-matrix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Support matrix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integration guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Integration guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/embedding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Embedding the server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/issuance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Issuing certificates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/revocation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Revocation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/validators/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Challenge validators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/accounts-and-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accounts and policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/authority-tokens/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authority Token challenges
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/renewal-information/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Renewal information
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/endpoints/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Endpoints
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/errors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Errors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compatibility policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interoperability
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Interoperability
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../interoperability/tested-clients/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tested clients
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Security
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/security-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development/development/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development/testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development/release-process/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release process
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../known-limitations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Known limitations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-you-need" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What you need
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-1-create-the-program" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1: create the program
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-2-run-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2: run it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-3-issue-a-certificate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3: issue a certificate
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-happens-behind-the-scenes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What happens behind the scenes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#before-production" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before production
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="getting-started">Getting started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h1>
+<p>This page builds a complete local ACME server in one Go file and issues a certificate with an
+independent client. Every placeholder in it maps to a page of the integration guide, so once it
+runs you know exactly what to replace for production.</p>
+<p>The server keeps everything in memory, signs with a throwaway root and validates HTTP-01 against
+the loopback address. It runs over HTTPS because ACME clients such as lego refuse a plain HTTP directory.</p>
+<h2 id="what-you-need">What you need<a class="headerlink" href="#what-you-need" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Go 1.26.8 or newer, the minimum the module declares</li>
+<li><a href="https://go-acme.github.io/lego/">lego</a> as the client, run below with <code>go run</code></li>
+<li>Ports 4000 and 5002 free on the local machine</li>
+</ul>
+<h2 id="step-1-create-the-program">Step 1: create the program<a class="headerlink" href="#step-1-create-the-program" title="Permanent link">&para;</a></h2>
+<p>Create a module and add the library:</p>
+<div class="highlight"><pre><span></span><code>mkdir<span class="w"> </span>acme-quickstart<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>acme-quickstart
+go<span class="w"> </span>mod<span class="w"> </span>init<span class="w"> </span>example.com/acme-quickstart
+go<span class="w"> </span>get<span class="w"> </span>github.com/misiektoja/go-acme-server
+</code></pre></div>
+<p>Save the following as <code>main.go</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="c1">// A local ACME server for trying go-acme-server: in-memory storage, a throwaway CA and HTTP-01.</span>
+<span class="kn">package</span><span class="w"> </span><span class="nx">main</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="p">(</span>
+<span class="w">    </span><span class="s">"context"</span>
+<span class="w">    </span><span class="s">"crypto/ecdsa"</span>
+<span class="w">    </span><span class="s">"crypto/elliptic"</span>
+<span class="w">    </span><span class="s">"crypto/rand"</span>
+<span class="w">    </span><span class="s">"crypto/tls"</span>
+<span class="w">    </span><span class="s">"crypto/x509"</span>
+<span class="w">    </span><span class="s">"crypto/x509/pkix"</span>
+<span class="w">    </span><span class="s">"encoding/pem"</span>
+<span class="w">    </span><span class="s">"errors"</span>
+<span class="w">    </span><span class="s">"log/slog"</span>
+<span class="w">    </span><span class="s">"math/big"</span>
+<span class="w">    </span><span class="s">"net"</span>
+<span class="w">    </span><span class="s">"net/http"</span>
+<span class="w">    </span><span class="s">"net/netip"</span>
+<span class="w">    </span><span class="s">"os"</span>
+<span class="w">    </span><span class="s">"os/signal"</span>
+<span class="w">    </span><span class="s">"strings"</span>
+<span class="w">    </span><span class="s">"sync"</span>
+<span class="w">    </span><span class="s">"time"</span>
+
+<span class="w">    </span><span class="nx">acmeserver</span><span class="w"> </span><span class="s">"github.com/misiektoja/go-acme-server"</span>
+<span class="w">    </span><span class="s">"github.com/misiektoja/go-acme-server/challenge"</span>
+<span class="w">    </span><span class="s">"github.com/misiektoja/go-acme-server/memstore"</span>
+<span class="w">    </span><span class="s">"github.com/misiektoja/go-acme-server/nonce"</span>
+<span class="p">)</span>
+
+<span class="c1">// A throwaway CA. It remembers every result by operation ID, which is what a real CA must do too.</span>
+<span class="kd">type</span><span class="w"> </span><span class="nx">devCA</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">key</span><span class="w">  </span><span class="o">*</span><span class="nx">ecdsa</span><span class="p">.</span><span class="nx">PrivateKey</span>
+<span class="w">    </span><span class="nx">root</span><span class="w"> </span><span class="o">*</span><span class="nx">x509</span><span class="p">.</span><span class="nx">Certificate</span>
+
+<span class="w">    </span><span class="nx">mu</span><span class="w">      </span><span class="nx">sync</span><span class="p">.</span><span class="nx">Mutex</span>
+<span class="w">    </span><span class="nx">issued</span><span class="w">  </span><span class="kt">map</span><span class="p">[</span><span class="kt">string</span><span class="p">][]</span><span class="kt">byte</span>
+<span class="w">    </span><span class="nx">revoked</span><span class="w"> </span><span class="kt">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">bool</span>
+<span class="p">}</span>
+
+<span class="c1">// Generates a self-signed root that lives as long as the process.</span>
+<span class="kd">func</span><span class="w"> </span><span class="nx">newDevCA</span><span class="p">()</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="nx">devCA</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">key</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">ecdsa</span><span class="p">.</span><span class="nx">GenerateKey</span><span class="p">(</span><span class="nx">elliptic</span><span class="p">.</span><span class="nx">P256</span><span class="p">(),</span><span class="w"> </span><span class="nx">rand</span><span class="p">.</span><span class="nx">Reader</span><span class="p">)</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="kc">nil</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="nx">now</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
+<span class="w">    </span><span class="nx">template</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">x509</span><span class="p">.</span><span class="nx">Certificate</span><span class="p">{</span>
+<span class="w">        </span><span class="nx">SerialNumber</span><span class="p">:</span><span class="w">          </span><span class="nx">big</span><span class="p">.</span><span class="nx">NewInt</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span>
+<span class="w">        </span><span class="nx">Subject</span><span class="p">:</span><span class="w">               </span><span class="nx">pkix</span><span class="p">.</span><span class="nx">Name</span><span class="p">{</span><span class="nx">CommonName</span><span class="p">:</span><span class="w"> </span><span class="s">"go-acme-server quickstart root"</span><span class="p">},</span>
+<span class="w">        </span><span class="nx">NotBefore</span><span class="p">:</span><span class="w">             </span><span class="nx">now</span><span class="p">.</span><span class="nx">Add</span><span class="p">(</span><span class="o">-</span><span class="nx">time</span><span class="p">.</span><span class="nx">Hour</span><span class="p">),</span>
+<span class="w">        </span><span class="nx">NotAfter</span><span class="p">:</span><span class="w">              </span><span class="nx">now</span><span class="p">.</span><span class="nx">Add</span><span class="p">(</span><span class="mi">30</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">24</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Hour</span><span class="p">),</span>
+<span class="w">        </span><span class="nx">IsCA</span><span class="p">:</span><span class="w">                  </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">        </span><span class="nx">BasicConstraintsValid</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">        </span><span class="nx">KeyUsage</span><span class="p">:</span><span class="w">              </span><span class="nx">x509</span><span class="p">.</span><span class="nx">KeyUsageCertSign</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="nx">x509</span><span class="p">.</span><span class="nx">KeyUsageCRLSign</span><span class="p">,</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="nx">der</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">x509</span><span class="p">.</span><span class="nx">CreateCertificate</span><span class="p">(</span><span class="nx">rand</span><span class="p">.</span><span class="nx">Reader</span><span class="p">,</span><span class="w"> </span><span class="nx">template</span><span class="p">,</span><span class="w"> </span><span class="nx">template</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">key</span><span class="p">.</span><span class="nx">PublicKey</span><span class="p">,</span><span class="w"> </span><span class="nx">key</span><span class="p">)</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="kc">nil</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="nx">root</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">x509</span><span class="p">.</span><span class="nx">ParseCertificate</span><span class="p">(</span><span class="nx">der</span><span class="p">)</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="kc">nil</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">devCA</span><span class="p">{</span><span class="nx">key</span><span class="p">:</span><span class="w"> </span><span class="nx">key</span><span class="p">,</span><span class="w"> </span><span class="nx">root</span><span class="p">:</span><span class="w"> </span><span class="nx">root</span><span class="p">,</span><span class="w"> </span><span class="nx">issued</span><span class="p">:</span><span class="w"> </span><span class="kt">map</span><span class="p">[</span><span class="kt">string</span><span class="p">][]</span><span class="kt">byte</span><span class="p">{},</span><span class="w"> </span><span class="nx">revoked</span><span class="p">:</span><span class="w"> </span><span class="kt">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">bool</span><span class="p">{}},</span><span class="w"> </span><span class="kc">nil</span>
+<span class="p">}</span>
+
+<span class="c1">// Signs one certificate per operation ID and returns the same chain on every retry.</span>
+<span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">ca</span><span class="w"> </span><span class="o">*</span><span class="nx">devCA</span><span class="p">)</span><span class="w"> </span><span class="nx">Issue</span><span class="p">(</span><span class="nx">_</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="w"> </span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">IssueRequest</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">IssueResult</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">ca</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nx">Lock</span><span class="p">()</span>
+<span class="w">    </span><span class="k">defer</span><span class="w"> </span><span class="nx">ca</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nx">Unlock</span><span class="p">()</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">der</span><span class="p">,</span><span class="w"> </span><span class="nx">ok</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">ca</span><span class="p">.</span><span class="nx">issued</span><span class="p">[</span><span class="nx">req</span><span class="p">.</span><span class="nx">OperationID</span><span class="p">];</span><span class="w"> </span><span class="nx">ok</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">IssueResult</span><span class="p">{</span><span class="nx">Chain</span><span class="p">:</span><span class="w"> </span><span class="p">[][]</span><span class="kt">byte</span><span class="p">{</span><span class="nx">der</span><span class="p">,</span><span class="w"> </span><span class="nx">ca</span><span class="p">.</span><span class="nx">root</span><span class="p">.</span><span class="nx">Raw</span><span class="p">}},</span><span class="w"> </span><span class="kc">nil</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="c1">// The server forbids new signing after the deadline or during recovery of an earlier attempt.</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">RecoveryOnly</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="o">!</span><span class="nx">req</span><span class="p">.</span><span class="nx">Deadline</span><span class="p">.</span><span class="nx">After</span><span class="p">(</span><span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">IssueResult</span><span class="p">{</span><span class="nx">Rejected</span><span class="p">:</span><span class="w"> </span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">NewProblem</span><span class="p">(</span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">ErrorUnauthorized</span><span class="p">,</span>
+<span class="w">            </span><span class="s">"the signing deadline has passed"</span><span class="p">)},</span><span class="w"> </span><span class="kc">nil</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="nx">serial</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">rand</span><span class="p">.</span><span class="nx">Int</span><span class="p">(</span><span class="nx">rand</span><span class="p">.</span><span class="nx">Reader</span><span class="p">,</span><span class="w"> </span><span class="nb">new</span><span class="p">(</span><span class="nx">big</span><span class="p">.</span><span class="nx">Int</span><span class="p">).</span><span class="nx">Lsh</span><span class="p">(</span><span class="nx">big</span><span class="p">.</span><span class="nx">NewInt</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="mi">128</span><span class="p">))</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">IssueResult</span><span class="p">{},</span><span class="w"> </span><span class="nx">err</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="nx">now</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">().</span><span class="nx">Truncate</span><span class="p">(</span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">)</span>
+<span class="w">    </span><span class="nx">leaf</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">x509</span><span class="p">.</span><span class="nx">Certificate</span><span class="p">{</span>
+<span class="w">        </span><span class="nx">SerialNumber</span><span class="p">:</span><span class="w"> </span><span class="nx">serial</span><span class="p">,</span>
+<span class="w">        </span><span class="nx">NotBefore</span><span class="p">:</span><span class="w">    </span><span class="nx">now</span><span class="p">.</span><span class="nx">Add</span><span class="p">(</span><span class="o">-</span><span class="nx">time</span><span class="p">.</span><span class="nx">Minute</span><span class="p">),</span>
+<span class="w">        </span><span class="nx">NotAfter</span><span class="p">:</span><span class="w">     </span><span class="nx">now</span><span class="p">.</span><span class="nx">Add</span><span class="p">(</span><span class="mi">24</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Hour</span><span class="p">),</span>
+<span class="w">        </span><span class="nx">KeyUsage</span><span class="p">:</span><span class="w">     </span><span class="nx">x509</span><span class="p">.</span><span class="nx">KeyUsageDigitalSignature</span><span class="p">,</span>
+<span class="w">        </span><span class="nx">ExtKeyUsage</span><span class="p">:</span><span class="w">  </span><span class="p">[]</span><span class="nx">x509</span><span class="p">.</span><span class="nx">ExtKeyUsage</span><span class="p">{</span><span class="nx">x509</span><span class="p">.</span><span class="nx">ExtKeyUsageServerAuth</span><span class="p">},</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="c1">// The issued leaf must stay inside the validity the order asked for.</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="o">!</span><span class="nx">req</span><span class="p">.</span><span class="nx">NotBefore</span><span class="p">.</span><span class="nx">IsZero</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">leaf</span><span class="p">.</span><span class="nx">NotBefore</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">NotBefore</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="o">!</span><span class="nx">req</span><span class="p">.</span><span class="nx">NotAfter</span><span class="p">.</span><span class="nx">IsZero</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">NotAfter</span><span class="p">.</span><span class="nx">Before</span><span class="p">(</span><span class="nx">leaf</span><span class="p">.</span><span class="nx">NotAfter</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">leaf</span><span class="p">.</span><span class="nx">NotAfter</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">NotAfter</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="nx">_</span><span class="p">,</span><span class="w"> </span><span class="nx">id</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="k">range</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">Identifiers</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">switch</span><span class="w"> </span><span class="nx">id</span><span class="p">.</span><span class="nx">Type</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">case</span><span class="w"> </span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">IdentifierDNS</span><span class="p">:</span>
+<span class="w">            </span><span class="nx">leaf</span><span class="p">.</span><span class="nx">DNSNames</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">append</span><span class="p">(</span><span class="nx">leaf</span><span class="p">.</span><span class="nx">DNSNames</span><span class="p">,</span><span class="w"> </span><span class="nx">id</span><span class="p">.</span><span class="nx">Value</span><span class="p">)</span>
+<span class="w">        </span><span class="k">case</span><span class="w"> </span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">IdentifierIP</span><span class="p">:</span>
+<span class="w">            </span><span class="nx">leaf</span><span class="p">.</span><span class="nx">IPAddresses</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">append</span><span class="p">(</span><span class="nx">leaf</span><span class="p">.</span><span class="nx">IPAddresses</span><span class="p">,</span><span class="w"> </span><span class="nx">net</span><span class="p">.</span><span class="nx">ParseIP</span><span class="p">(</span><span class="nx">id</span><span class="p">.</span><span class="nx">Value</span><span class="p">))</span>
+<span class="w">        </span><span class="k">default</span><span class="p">:</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">IssueResult</span><span class="p">{</span><span class="nx">Rejected</span><span class="p">:</span><span class="w"> </span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">NewProblem</span><span class="p">(</span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">ErrorRejectedIdentifier</span><span class="p">,</span>
+<span class="w">                </span><span class="s">"unsupported identifier type"</span><span class="p">)},</span><span class="w"> </span><span class="kc">nil</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="nx">der</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">x509</span><span class="p">.</span><span class="nx">CreateCertificate</span><span class="p">(</span><span class="nx">rand</span><span class="p">.</span><span class="nx">Reader</span><span class="p">,</span><span class="w"> </span><span class="nx">leaf</span><span class="p">,</span><span class="w"> </span><span class="nx">ca</span><span class="p">.</span><span class="nx">root</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">CSR</span><span class="p">.</span><span class="nx">PublicKey</span><span class="p">,</span><span class="w"> </span><span class="nx">ca</span><span class="p">.</span><span class="nx">key</span><span class="p">)</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">IssueResult</span><span class="p">{},</span><span class="w"> </span><span class="nx">err</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="nx">ca</span><span class="p">.</span><span class="nx">issued</span><span class="p">[</span><span class="nx">req</span><span class="p">.</span><span class="nx">OperationID</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">der</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">IssueResult</span><span class="p">{</span><span class="nx">Chain</span><span class="p">:</span><span class="w"> </span><span class="p">[][]</span><span class="kt">byte</span><span class="p">{</span><span class="nx">der</span><span class="p">,</span><span class="w"> </span><span class="nx">ca</span><span class="p">.</span><span class="nx">root</span><span class="p">.</span><span class="nx">Raw</span><span class="p">}},</span><span class="w"> </span><span class="kc">nil</span>
+<span class="p">}</span>
+
+<span class="c1">// Signs a TLS server certificate for localhost so clients can reach the directory over HTTPS.</span>
+<span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">ca</span><span class="w"> </span><span class="o">*</span><span class="nx">devCA</span><span class="p">)</span><span class="w"> </span><span class="nx">serverCertificate</span><span class="p">()</span><span class="w"> </span><span class="p">(</span><span class="nx">tls</span><span class="p">.</span><span class="nx">Certificate</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">key</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">ecdsa</span><span class="p">.</span><span class="nx">GenerateKey</span><span class="p">(</span><span class="nx">elliptic</span><span class="p">.</span><span class="nx">P256</span><span class="p">(),</span><span class="w"> </span><span class="nx">rand</span><span class="p">.</span><span class="nx">Reader</span><span class="p">)</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nx">tls</span><span class="p">.</span><span class="nx">Certificate</span><span class="p">{},</span><span class="w"> </span><span class="nx">err</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="nx">now</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Now</span><span class="p">()</span>
+<span class="w">    </span><span class="nx">template</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">x509</span><span class="p">.</span><span class="nx">Certificate</span><span class="p">{</span>
+<span class="w">        </span><span class="nx">SerialNumber</span><span class="p">:</span><span class="w"> </span><span class="nx">big</span><span class="p">.</span><span class="nx">NewInt</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span>
+<span class="w">        </span><span class="nx">NotBefore</span><span class="p">:</span><span class="w">    </span><span class="nx">now</span><span class="p">.</span><span class="nx">Add</span><span class="p">(</span><span class="o">-</span><span class="nx">time</span><span class="p">.</span><span class="nx">Minute</span><span class="p">),</span>
+<span class="w">        </span><span class="nx">NotAfter</span><span class="p">:</span><span class="w">     </span><span class="nx">now</span><span class="p">.</span><span class="nx">Add</span><span class="p">(</span><span class="mi">30</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">24</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Hour</span><span class="p">),</span>
+<span class="w">        </span><span class="nx">KeyUsage</span><span class="p">:</span><span class="w">     </span><span class="nx">x509</span><span class="p">.</span><span class="nx">KeyUsageDigitalSignature</span><span class="p">,</span>
+<span class="w">        </span><span class="nx">ExtKeyUsage</span><span class="p">:</span><span class="w">  </span><span class="p">[]</span><span class="nx">x509</span><span class="p">.</span><span class="nx">ExtKeyUsage</span><span class="p">{</span><span class="nx">x509</span><span class="p">.</span><span class="nx">ExtKeyUsageServerAuth</span><span class="p">},</span>
+<span class="w">        </span><span class="nx">DNSNames</span><span class="p">:</span><span class="w">     </span><span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">"localhost"</span><span class="p">},</span>
+<span class="w">        </span><span class="nx">IPAddresses</span><span class="p">:</span><span class="w">  </span><span class="p">[]</span><span class="nx">net</span><span class="p">.</span><span class="nx">IP</span><span class="p">{</span><span class="nx">net</span><span class="p">.</span><span class="nx">ParseIP</span><span class="p">(</span><span class="s">"127.0.0.1"</span><span class="p">),</span><span class="w"> </span><span class="nx">net</span><span class="p">.</span><span class="nx">ParseIP</span><span class="p">(</span><span class="s">"::1"</span><span class="p">)},</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="nx">der</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">x509</span><span class="p">.</span><span class="nx">CreateCertificate</span><span class="p">(</span><span class="nx">rand</span><span class="p">.</span><span class="nx">Reader</span><span class="p">,</span><span class="w"> </span><span class="nx">template</span><span class="p">,</span><span class="w"> </span><span class="nx">ca</span><span class="p">.</span><span class="nx">root</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">key</span><span class="p">.</span><span class="nx">PublicKey</span><span class="p">,</span><span class="w"> </span><span class="nx">ca</span><span class="p">.</span><span class="nx">key</span><span class="p">)</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nx">tls</span><span class="p">.</span><span class="nx">Certificate</span><span class="p">{},</span><span class="w"> </span><span class="nx">err</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">tls</span><span class="p">.</span><span class="nx">Certificate</span><span class="p">{</span><span class="nx">Certificate</span><span class="p">:</span><span class="w"> </span><span class="p">[][]</span><span class="kt">byte</span><span class="p">{</span><span class="nx">der</span><span class="p">,</span><span class="w"> </span><span class="nx">ca</span><span class="p">.</span><span class="nx">root</span><span class="p">.</span><span class="nx">Raw</span><span class="p">},</span><span class="w"> </span><span class="nx">PrivateKey</span><span class="p">:</span><span class="w"> </span><span class="nx">key</span><span class="p">},</span><span class="w"> </span><span class="kc">nil</span>
+<span class="p">}</span>
+
+<span class="c1">// Records the revocation. A real CA publishes it through its CRL or OCSP responder.</span>
+<span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">ca</span><span class="w"> </span><span class="o">*</span><span class="nx">devCA</span><span class="p">)</span><span class="w"> </span><span class="nx">Revoke</span><span class="p">(</span><span class="nx">_</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="w"> </span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">RevokeRequest</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">ca</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nx">Lock</span><span class="p">()</span>
+<span class="w">    </span><span class="k">defer</span><span class="w"> </span><span class="nx">ca</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nx">Unlock</span><span class="p">()</span>
+<span class="w">    </span><span class="nx">ca</span><span class="p">.</span><span class="nx">revoked</span><span class="p">[</span><span class="nx">req</span><span class="p">.</span><span class="nx">OperationID</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="kc">nil</span>
+<span class="p">}</span>
+
+<span class="c1">// Answers the quickstart name with the loopback address instead of asking DNS.</span>
+<span class="kd">type</span><span class="w"> </span><span class="nx">localResolver</span><span class="w"> </span><span class="kd">struct</span><span class="p">{}</span>
+
+<span class="c1">// Resolves quickstart.example.test to 127.0.0.1 and refuses every other name.</span>
+<span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">localResolver</span><span class="p">)</span><span class="w"> </span><span class="nx">LookupNetIP</span><span class="p">(</span><span class="nx">_</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">_</span><span class="p">,</span><span class="w"> </span><span class="nx">host</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">([]</span><span class="nx">netip</span><span class="p">.</span><span class="nx">Addr</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">strings</span><span class="p">.</span><span class="nx">TrimSuffix</span><span class="p">(</span><span class="nx">host</span><span class="p">,</span><span class="w"> </span><span class="s">"."</span><span class="p">)</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="s">"quickstart.example.test"</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="kc">nil</span><span class="p">,</span><span class="w"> </span><span class="nx">errors</span><span class="p">.</span><span class="nx">New</span><span class="p">(</span><span class="s">"unknown host "</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">host</span><span class="p">)</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="p">[]</span><span class="nx">netip</span><span class="p">.</span><span class="nx">Addr</span><span class="p">{</span><span class="nx">netip</span><span class="p">.</span><span class="nx">MustParseAddr</span><span class="p">(</span><span class="s">"127.0.0.1"</span><span class="p">)},</span><span class="w"> </span><span class="kc">nil</span>
+<span class="p">}</span>
+
+<span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">logger</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">slog</span><span class="p">.</span><span class="nx">New</span><span class="p">(</span><span class="nx">slog</span><span class="p">.</span><span class="nx">NewTextHandler</span><span class="p">(</span><span class="nx">os</span><span class="p">.</span><span class="nx">Stderr</span><span class="p">,</span><span class="w"> </span><span class="kc">nil</span><span class="p">))</span>
+<span class="w">    </span><span class="nx">ca</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">newDevCA</span><span class="p">()</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">logger</span><span class="p">.</span><span class="nx">Error</span><span class="p">(</span><span class="s">"create CA"</span><span class="p">,</span><span class="w"> </span><span class="s">"error"</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">)</span>
+<span class="w">        </span><span class="nx">os</span><span class="p">.</span><span class="nx">Exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="c1">// Clients trust this file so they can talk to the server and verify the issued chain.</span>
+<span class="w">    </span><span class="nx">rootPEM</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">pem</span><span class="p">.</span><span class="nx">EncodeToMemory</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">pem</span><span class="p">.</span><span class="nx">Block</span><span class="p">{</span><span class="nx">Type</span><span class="p">:</span><span class="w"> </span><span class="s">"CERTIFICATE"</span><span class="p">,</span><span class="w"> </span><span class="nx">Bytes</span><span class="p">:</span><span class="w"> </span><span class="nx">ca</span><span class="p">.</span><span class="nx">root</span><span class="p">.</span><span class="nx">Raw</span><span class="p">})</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">os</span><span class="p">.</span><span class="nx">WriteFile</span><span class="p">(</span><span class="s">"quickstart-root.pem"</span><span class="p">,</span><span class="w"> </span><span class="nx">rootPEM</span><span class="p">,</span><span class="w"> </span><span class="mo">0o600</span><span class="p">);</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">logger</span><span class="p">.</span><span class="nx">Error</span><span class="p">(</span><span class="s">"write root"</span><span class="p">,</span><span class="w"> </span><span class="s">"error"</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">)</span>
+<span class="w">        </span><span class="nx">os</span><span class="p">.</span><span class="nx">Exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="nx">serverCert</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">ca</span><span class="p">.</span><span class="nx">serverCertificate</span><span class="p">()</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">logger</span><span class="p">.</span><span class="nx">Error</span><span class="p">(</span><span class="s">"create server certificate"</span><span class="p">,</span><span class="w"> </span><span class="s">"error"</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">)</span>
+<span class="w">        </span><span class="nx">os</span><span class="p">.</span><span class="nx">Exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="c1">// Loopback is denied by the default egress policy, so the quickstart allows it explicitly.</span>
+<span class="w">    </span><span class="c1">// TestPort sends HTTP-01 requests to port 5002 instead of port 80.</span>
+<span class="w">    </span><span class="nx">http01</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">challenge</span><span class="p">.</span><span class="nx">NewHTTP01</span><span class="p">(</span><span class="nx">challenge</span><span class="p">.</span><span class="nx">HTTPOptions</span><span class="p">{</span>
+<span class="w">        </span><span class="nx">Network</span><span class="p">:</span><span class="w"> </span><span class="nx">challenge</span><span class="p">.</span><span class="nx">NetworkOptions</span><span class="p">{</span>
+<span class="w">            </span><span class="nx">Resolver</span><span class="p">:</span><span class="w">        </span><span class="nx">localResolver</span><span class="p">{},</span>
+<span class="w">            </span><span class="nx">AllowedNetworks</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="nx">netip</span><span class="p">.</span><span class="nx">Prefix</span><span class="p">{</span><span class="nx">netip</span><span class="p">.</span><span class="nx">MustParsePrefix</span><span class="p">(</span><span class="s">"127.0.0.0/8"</span><span class="p">)},</span>
+<span class="w">        </span><span class="p">},</span>
+<span class="w">        </span><span class="nx">TestPort</span><span class="p">:</span><span class="w"> </span><span class="mi">5002</span><span class="p">,</span>
+<span class="w">    </span><span class="p">})</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">logger</span><span class="p">.</span><span class="nx">Error</span><span class="p">(</span><span class="s">"create validator"</span><span class="p">,</span><span class="w"> </span><span class="s">"error"</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">)</span>
+<span class="w">        </span><span class="nx">os</span><span class="p">.</span><span class="nx">Exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="nx">srv</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">New</span><span class="p">(</span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span>
+<span class="w">        </span><span class="nx">BaseURL</span><span class="p">:</span><span class="w"> </span><span class="s">"https://localhost:4000/acme/"</span><span class="p">,</span>
+<span class="w">        </span><span class="nx">Store</span><span class="p">:</span><span class="w">   </span><span class="nx">memstore</span><span class="p">.</span><span class="nx">New</span><span class="p">(),</span>
+<span class="w">        </span><span class="nx">Nonces</span><span class="p">:</span><span class="w">  </span><span class="nx">nonce</span><span class="p">.</span><span class="nx">New</span><span class="p">(</span><span class="nx">nonce</span><span class="p">.</span><span class="nx">Options</span><span class="p">{}),</span>
+<span class="w">        </span><span class="nx">Issuer</span><span class="p">:</span><span class="w">  </span><span class="nx">ca</span><span class="p">,</span>
+<span class="w">        </span><span class="nx">Revoker</span><span class="p">:</span><span class="w"> </span><span class="nx">ca</span><span class="p">,</span>
+<span class="w">        </span><span class="nx">Validators</span><span class="p">:</span><span class="w"> </span><span class="kt">map</span><span class="p">[</span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">ChallengeType</span><span class="p">]</span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">Validator</span><span class="p">{</span>
+<span class="w">            </span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">ChallengeHTTP01</span><span class="p">:</span><span class="w"> </span><span class="nx">http01</span><span class="p">,</span>
+<span class="w">        </span><span class="p">},</span>
+<span class="w">        </span><span class="nx">RenewalInfo</span><span class="p">:</span><span class="w"> </span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">LifetimeRenewal</span><span class="p">{},</span>
+<span class="w">        </span><span class="nx">Logger</span><span class="p">:</span><span class="w">      </span><span class="nx">logger</span><span class="p">,</span>
+<span class="w">    </span><span class="p">})</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">logger</span><span class="p">.</span><span class="nx">Error</span><span class="p">(</span><span class="s">"create server"</span><span class="p">,</span><span class="w"> </span><span class="s">"error"</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">)</span>
+<span class="w">        </span><span class="nx">os</span><span class="p">.</span><span class="nx">Exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">stop</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">signal</span><span class="p">.</span><span class="nx">NotifyContext</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nx">Background</span><span class="p">(),</span><span class="w"> </span><span class="nx">os</span><span class="p">.</span><span class="nx">Interrupt</span><span class="p">)</span>
+<span class="w">    </span><span class="k">defer</span><span class="w"> </span><span class="nx">stop</span><span class="p">()</span>
+<span class="w">    </span><span class="c1">// The worker validates challenges and issues certificates. Without it nothing progresses.</span>
+<span class="w">    </span><span class="k">go</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">srv</span><span class="p">.</span><span class="nx">Run</span><span class="p">(</span><span class="nx">ctx</span><span class="p">);</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nx">logger</span><span class="p">.</span><span class="nx">Error</span><span class="p">(</span><span class="s">"worker"</span><span class="p">,</span><span class="w"> </span><span class="s">"error"</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">)</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}()</span>
+
+<span class="w">    </span><span class="nx">mux</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">NewServeMux</span><span class="p">()</span>
+<span class="w">    </span><span class="nx">mux</span><span class="p">.</span><span class="nx">Handle</span><span class="p">(</span><span class="s">"/acme/"</span><span class="p">,</span><span class="w"> </span><span class="nx">srv</span><span class="p">)</span>
+<span class="w">    </span><span class="nx">mux</span><span class="p">.</span><span class="nx">HandleFunc</span><span class="p">(</span><span class="s">"/healthz"</span><span class="p">,</span><span class="w"> </span><span class="kd">func</span><span class="p">(</span><span class="nx">w</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span><span class="w"> </span><span class="nx">r</span><span class="w"> </span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">srv</span><span class="p">.</span><span class="nx">Ready</span><span class="p">(</span><span class="nx">r</span><span class="p">.</span><span class="nx">Context</span><span class="p">());</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nx">http</span><span class="p">.</span><span class="nx">Error</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">.</span><span class="nx">Error</span><span class="p">(),</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusServiceUnavailable</span><span class="p">)</span>
+<span class="w">            </span><span class="k">return</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="nx">w</span><span class="p">.</span><span class="nx">WriteHeader</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusNoContent</span><span class="p">)</span>
+<span class="w">    </span><span class="p">})</span>
+<span class="w">    </span><span class="nx">httpServer</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Server</span><span class="p">{</span>
+<span class="w">        </span><span class="nx">Addr</span><span class="p">:</span><span class="w">              </span><span class="s">"localhost:4000"</span><span class="p">,</span>
+<span class="w">        </span><span class="nx">Handler</span><span class="p">:</span><span class="w">           </span><span class="nx">mux</span><span class="p">,</span>
+<span class="w">        </span><span class="nx">ReadHeaderTimeout</span><span class="p">:</span><span class="w"> </span><span class="mi">10</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span>
+<span class="w">        </span><span class="nx">TLSConfig</span><span class="p">:</span><span class="w">         </span><span class="o">&amp;</span><span class="nx">tls</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span><span class="nx">MinVersion</span><span class="p">:</span><span class="w"> </span><span class="nx">tls</span><span class="p">.</span><span class="nx">VersionTLS12</span><span class="p">,</span><span class="w"> </span><span class="nx">Certificates</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="nx">tls</span><span class="p">.</span><span class="nx">Certificate</span><span class="p">{</span><span class="nx">serverCert</span><span class="p">}},</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">go</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="o">&lt;-</span><span class="nx">ctx</span><span class="p">.</span><span class="nx">Done</span><span class="p">()</span>
+<span class="w">        </span><span class="nx">shutdown</span><span class="p">,</span><span class="w"> </span><span class="nx">cancel</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">WithTimeout</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nx">Background</span><span class="p">(),</span><span class="w"> </span><span class="mi">5</span><span class="o">*</span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">)</span>
+<span class="w">        </span><span class="k">defer</span><span class="w"> </span><span class="nx">cancel</span><span class="p">()</span>
+<span class="w">        </span><span class="nx">_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">httpServer</span><span class="p">.</span><span class="nx">Shutdown</span><span class="p">(</span><span class="nx">shutdown</span><span class="p">)</span>
+<span class="w">    </span><span class="p">}()</span>
+<span class="w">    </span><span class="nx">logger</span><span class="p">.</span><span class="nx">Info</span><span class="p">(</span><span class="s">"serving"</span><span class="p">,</span><span class="w"> </span><span class="s">"directory"</span><span class="p">,</span><span class="w"> </span><span class="s">"https://localhost:4000/acme/directory"</span><span class="p">,</span><span class="w"> </span><span class="s">"root"</span><span class="p">,</span><span class="w"> </span><span class="s">"quickstart-root.pem"</span><span class="p">)</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">httpServer</span><span class="p">.</span><span class="nx">ListenAndServeTLS</span><span class="p">(</span><span class="s">""</span><span class="p">,</span><span class="w"> </span><span class="s">""</span><span class="p">);</span><span class="w"> </span><span class="o">!</span><span class="nx">errors</span><span class="p">.</span><span class="nx">Is</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">ErrServerClosed</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">logger</span><span class="p">.</span><span class="nx">Error</span><span class="p">(</span><span class="s">"serve"</span><span class="p">,</span><span class="w"> </span><span class="s">"error"</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">)</span>
+<span class="w">        </span><span class="nx">os</span><span class="p">.</span><span class="nx">Exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>The program has four parts and each one is a seam where your own code goes later:</p>
+<table>
+<thead>
+<tr>
+<th>Part</th>
+<th>What the quickstart does</th>
+<th>What replaces it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>devCA</code></td>
+<td>Signs with an in-process root and remembers results by operation ID</td>
+<td>Your CA behind <a href="../guide/issuance/"><code>Issuer</code></a> and <a href="../guide/revocation/"><code>Revoker</code></a></td>
+</tr>
+<tr>
+<td><code>memstore.New()</code></td>
+<td>Keeps accounts, orders and tasks in memory until the process exits</td>
+<td>A durable <a href="../guide/storage/"><code>Store</code></a> over your database</td>
+</tr>
+<tr>
+<td><code>localResolver</code> and <code>TestPort</code></td>
+<td>Send HTTP-01 requests to the loopback address on port 5002</td>
+<td>A <a href="../guide/validators/">resolver and egress policy</a> that reach real clients on port 80</td>
+</tr>
+<tr>
+<td><code>nonce.New</code></td>
+<td>Single-process replay protection</td>
+<td>A shared nonce manager when several replicas serve one origin, see <a href="../operations/deployment/">Deployment</a></td>
+</tr>
+</tbody>
+</table>
+<p>Two calls are required and easy to forget. <code>mux.Handle</code> serves the protocol and <code>srv.Run</code> processes
+the validation and issuance work. Without the worker, challenges stay pending forever and orders never
+issue. The <code>/healthz</code> handler calls <code>Ready</code>, which fails once accepted work has waited too long for a
+worker.</p>
+<h2 id="step-2-run-it">Step 2: run it<a class="headerlink" href="#step-2-run-it" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>go<span class="w"> </span>run<span class="w"> </span>.
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>level=INFO msg=serving directory=https://localhost:4000/acme/directory root=quickstart-root.pem
+</code></pre></div>
+<p>The server wrote its root certificate to <code>quickstart-root.pem</code>. Check the directory with that root:</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>--cacert<span class="w"> </span>quickstart-root.pem<span class="w"> </span>https://localhost:4000/acme/directory
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"keyChange"</span><span class="p">:</span><span class="s2">"https://localhost:4000/acme/key-change"</span><span class="p">,</span><span class="nt">"newAccount"</span><span class="p">:</span><span class="s2">"https://localhost:4000/acme/new-account"</span><span class="p">,</span><span class="nt">"newNonce"</span><span class="p">:</span><span class="s2">"https://localhost:4000/acme/new-nonce"</span><span class="p">,</span><span class="nt">"newOrder"</span><span class="p">:</span><span class="s2">"https://localhost:4000/acme/new-order"</span><span class="p">,</span><span class="nt">"renewalInfo"</span><span class="p">:</span><span class="s2">"https://localhost:4000/acme/renewal-info"</span><span class="p">,</span><span class="nt">"revokeCert"</span><span class="p">:</span><span class="s2">"https://localhost:4000/acme/revoke-cert"</span><span class="p">}</span>
+</code></pre></div>
+<p>Every URL starts with the configured base URL. <code>renewalInfo</code> appears because the program set
+<code>Config.RenewalInfo</code>.</p>
+<h2 id="step-3-issue-a-certificate">Step 3: issue a certificate<a class="headerlink" href="#step-3-issue-a-certificate" title="Permanent link">&para;</a></h2>
+<p>In a second terminal, from the same directory, run lego against the server. <code>LEGO_CA_CERTIFICATES</code>
+makes lego trust the quickstart root for the HTTPS connection and <code>--http.port :5002</code> is where the
+validator will look for the proof:</p>
+<div class="highlight"><pre><span></span><code>mkdir<span class="w"> </span>lego<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>lego
+<span class="nv">LEGO_CA_CERTIFICATES</span><span class="o">=</span>../quickstart-root.pem<span class="w"> </span>go<span class="w"> </span>run<span class="w"> </span>github.com/go-acme/lego/v4/cmd/lego@v4.35.2<span class="w"> </span>--server<span class="w"> </span>https://localhost:4000/acme/directory<span class="w"> </span>--email<span class="w"> </span>admin@example.test<span class="w"> </span>--accept-tos<span class="w"> </span>--http<span class="w"> </span>--http.port<span class="w"> </span>:5002<span class="w"> </span>--domains<span class="w"> </span>quickstart.example.test<span class="w"> </span>--path<span class="w"> </span>.<span class="w"> </span>run
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>[INFO] [quickstart.example.test] acme: Obtaining bundled SAN certificate
+[INFO] [quickstart.example.test] acme: use http-01 solver
+[INFO] [quickstart.example.test] acme: Trying to solve HTTP-01
+[INFO] [quickstart.example.test] Served key authentication
+[INFO] [quickstart.example.test] The server validated our request
+[INFO] [quickstart.example.test] acme: Validations succeeded; requesting certificates
+[INFO] [quickstart.example.test] Server responded with a certificate.
+</code></pre></div>
+<p>The certificate is in <code>certificates/quickstart.example.test.crt</code>, signed by the quickstart root:</p>
+<div class="highlight"><pre><span></span><code>openssl<span class="w"> </span>verify<span class="w"> </span>-CAfile<span class="w"> </span>../quickstart-root.pem<span class="w"> </span>-untrusted<span class="w"> </span>certificates/quickstart.example.test.issuer.crt<span class="w"> </span>certificates/quickstart.example.test.crt
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>certificates/quickstart.example.test.crt: OK
+</code></pre></div>
+<p>Revocation goes through the same account:</p>
+<div class="highlight"><pre><span></span><code><span class="nv">LEGO_CA_CERTIFICATES</span><span class="o">=</span>../quickstart-root.pem<span class="w"> </span>go<span class="w"> </span>run<span class="w"> </span>github.com/go-acme/lego/v4/cmd/lego@v4.35.2<span class="w"> </span>--server<span class="w"> </span>https://localhost:4000/acme/directory<span class="w"> </span>--email<span class="w"> </span>admin@example.test<span class="w"> </span>--accept-tos<span class="w"> </span>--domains<span class="w"> </span>quickstart.example.test<span class="w"> </span>--path<span class="w"> </span>.<span class="w"> </span>revoke<span class="w"> </span>--reason<span class="w"> </span><span class="m">1</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>Certificate was revoked.
+</code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Restarting the quickstart</p>
+<p>The in-memory store forgets every account when the process exits. A client that kept its account
+from the previous run is refused with <code>accountDoesNotExist</code>. Delete the client's <code>accounts</code>
+directory or register again.</p>
+</div>
+<h2 id="what-happens-behind-the-scenes">What happens behind the scenes<a class="headerlink" href="#what-happens-behind-the-scenes" title="Permanent link">&para;</a></h2>
+<ol>
+<li>lego registers an account and creates an order for <code>quickstart.example.test</code>.</li>
+<li>The server creates one authorization for the name with an <code>http-01</code> challenge, because HTTP-01 is the only configured validator.</li>
+<li>lego serves the key authorization on port 5002 and tells the server the challenge is ready.</li>
+<li>The worker claims the validation task, resolves the name through <code>localResolver</code>, connects to <code>127.0.0.1:5002</code> and compares the proof.</li>
+<li>lego finalizes the order with a CSR. The server checks the CSR against the order and enqueues issuance.</li>
+<li>The worker records the dispatch decision in the store, calls <code>devCA.Issue</code>, checks the returned chain against the order and stores the certificate.</li>
+<li>lego downloads the chain from the certificate URL.</li>
+</ol>
+<p><a href="../architecture/">Architecture</a> describes these steps in detail, including what is persisted at each point and why.</p>
+<h2 id="before-production">Before production<a class="headerlink" href="#before-production" title="Permanent link">&para;</a></h2>
+<p>Work through these pages in order. Each one names the contract your implementation must meet and the
+test suite or client that verifies it.</p>
+<ol>
+<li><a href="../guide/embedding/">Embedding the server</a> - the base URL, the worker, readiness and shutdown</li>
+<li><a href="../guide/storage/">Storage</a> - implement <code>Store</code> and run the <code>storetest</code> suite against it</li>
+<li><a href="../guide/issuance/">Issuing certificates</a> - implement <code>Issuer</code> with operation ID deduplication</li>
+<li><a href="../guide/revocation/">Revocation</a> - implement <code>Revoker</code> the same way</li>
+<li><a href="../guide/validators/">Challenge validators</a> - configure a real resolver and decide the egress policy</li>
+<li><a href="../guide/accounts-and-policy/">Accounts and policy</a> - external account binding, terms of service and order policy</li>
+<li><a href="../operations/deployment/">Deployment</a> - TLS termination, replicas and health checks</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright the go-acme-server Authors, licensed under Apache-2.0
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
