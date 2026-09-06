@@ -318,8 +318,13 @@ func TestFinalizeRejectsBadCSRs(t *testing.T) {
 	tampered[len(tampered)-1] ^= 0xff
 	post(base64.RawURLEncoding.EncodeToString(tampered))
 	assertProblem(t, c.post(order.Finalize, map[string]string{"csr": "not base64!"}), http.StatusBadRequest, acmeserver.ErrorMalformed)
-	assertProblem(t, c.post(order.Finalize, map[string]string{"csr": base64.StdEncoding.EncodeToString(makeCSR(t, certKey, []string{"a.test"}, nil))}),
-		http.StatusBadRequest, acmeserver.ErrorMalformed)
+	// Standard and raw URL base64 coincide when the length is a multiple of three and no plus or
+	// slash occurs, so keep generating until the encoding differs and the check means something.
+	std := base64.StdEncoding.EncodeToString(makeCSR(t, certKey, []string{"a.test"}, nil))
+	for !strings.ContainsAny(std, "+/=") {
+		std = base64.StdEncoding.EncodeToString(makeCSR(t, certKey, []string{"a.test"}, nil))
+	}
+	assertProblem(t, c.post(order.Finalize, map[string]string{"csr": std}), http.StatusBadRequest, acmeserver.ErrorMalformed)
 	var current orderBody
 	c.get(location, &current)
 	if current.Status != statusReady {
