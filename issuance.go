@@ -184,16 +184,28 @@ func (s *Server) issueRequest(order *Order) (IssueRequest, error) {
 		return IssueRequest{}, err
 	}
 	state := order.Issuance
-	notAfter := order.NotAfter
-	if bound := grantExpiry(state.Validations); !bound.IsZero() && (notAfter.IsZero() || notAfter.After(bound)) {
-		notAfter = bound
-	}
 	return IssueRequest{
 		OperationID: state.OperationID, AccountID: order.AccountID, AccountURL: s.accountURL(order.AccountID),
 		OrderID: order.ID, CSR: csr, CSRDER: der, Identifiers: slices.Clone(order.Identifiers),
-		NotBefore: order.NotBefore, NotAfter: notAfter, Validations: slices.Clone(state.Validations),
+		NotBefore: order.NotBefore, NotAfter: issuedNotAfter(order), Validations: slices.Clone(state.Validations),
 		Deadline: state.Deadline, RecoveryOnly: !state.Deadline.After(s.clock.Now()),
 	}, nil
+}
+
+// Returns the notAfter an issuance asks the CA for: the accepted order value narrowed by an
+// authority token expiry, or that expiry alone when the order left the validity to the CA. A zero
+// time means nothing bounds the certificate. Publication checks the issued leaf against the same
+// value, so a certificate clamped to the token is accepted.
+func issuedNotAfter(order *Order) time.Time {
+	notAfter := order.NotAfter
+	var bound time.Time
+	if order.Issuance != nil {
+		bound = grantExpiry(order.Issuance.Validations)
+	}
+	if !bound.IsZero() && (notAfter.IsZero() || notAfter.After(bound)) {
+		return bound
+	}
+	return notAfter
 }
 
 // Returns the earliest grant expiry among the validations, or zero when none is bounded.

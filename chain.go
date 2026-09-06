@@ -102,8 +102,8 @@ func checkChain(chain [][]byte, csr *x509.CertificateRequest, order *Order, now 
 	if !order.NotBefore.IsZero() && !leaf.NotBefore.Equal(order.NotBefore.Truncate(time.Second)) {
 		return nil, errors.New("leaf notBefore differs from the accepted order")
 	}
-	if !order.NotAfter.IsZero() && !leaf.NotAfter.Equal(order.NotAfter.Truncate(time.Second)) {
-		return nil, errors.New("leaf notAfter differs from the accepted order")
+	if !order.NotAfter.IsZero() && !leaf.NotAfter.Equal(issuedNotAfter(order).Truncate(time.Second)) {
+		return nil, errors.New("leaf notAfter differs from the requested validity")
 	}
 	if order.Issuance != nil {
 		if bound := grantExpiry(order.Issuance.Validations); !bound.IsZero() && leaf.NotAfter.After(bound) {
