@@ -27,6 +27,11 @@ Fuzzes the JWS, JWK, strict JSON, identifier, DNS response and TLS-ALPN proof pa
 `FUZZ_TIME` each. CI runs 30 seconds per target on every push. Go writes a failing input under the
 package's `testdata/fuzz` directory. Commit that input with the fix so it stays a regression test.
 
+The target passes `-fuzzminimizetime 0`, so Go does not minimize inputs. Minimization stalls the
+workers for seconds at a time and a worker that is still busy when `FUZZ_TIME` expires makes Go
+report the run as failed with `context deadline exceeded`. Set `FUZZ_MINIMIZE_TIME` to a duration
+such as `1m` when a crash is found and a smaller reproducer is wanted.
+
 ## Interoperability
 
 ```bash
