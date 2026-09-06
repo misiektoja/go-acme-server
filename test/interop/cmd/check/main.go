@@ -24,6 +24,7 @@ type event struct {
 var required = map[string]string{
 	"github.com/misiektoja/go-acme-server/test/interop/TestAcmezHTTP01":                         "",
 	"github.com/misiektoja/go-acme-server/test/interop/TestAcmezRejectsWrongProof":              "",
+	"github.com/misiektoja/go-acme-server/test/interop/TestAcmezIPIdentifier":                   "",
 	"github.com/misiektoja/go-acme-server/test/interop/TestAcmezDNS01Wildcard":                  "",
 	"github.com/misiektoja/go-acme-server/test/interop/TestAcmezRejectsWrongDNSProof":           "",
 	"github.com/misiektoja/go-acme-server/test/interop/TestAcmezTLSALPN01":                      "",
