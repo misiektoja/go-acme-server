@@ -28,8 +28,8 @@ through a host CA.
   Revocations carry a durable operation ID that retries repeat, so revokers deduplicate the same way.
 * **`make test-interop`** requires acmez issuance through HTTP-01, DNS-01 with a wildcard and its
   base domain, and TLS-ALPN-01, Certbot HTTP-01 and manual-hook DNS-01 wildcard issuance with
-  revocation, lego HTTP-01 issuance with revocation and DNS-01 wildcard issuance, delayed issuance
-  through Certbot and lego, Go crypto/acme account changes, issuance, key-signed revocation and
+  revocation, lego HTTP-01 issuance with revocation, DNS-01 wildcard and TLS-ALPN-01 issuance,
+  delayed issuance through Certbot and lego, Go crypto/acme account changes, issuance, key-signed revocation and
   deactivation, tkauth-01 issuance with a local Token Authority, incorrect-proof rejection for
   every challenge type, go-jose signed account, key change and external account binding requests,
   retried and concurrent registrations, challenge responses, finalizations, key changes and nonce
