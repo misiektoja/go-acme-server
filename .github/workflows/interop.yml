@@ -46,7 +46,7 @@ jobs:
 
       - name: Install pinned clients
         run: |
-          "$RUNNER_TEMP/certbot/bin/python" -m pip install --no-deps --only-binary=:all: -r test/interop/requirements.txt
+          "$RUNNER_TEMP/certbot/bin/python" -m pip install --no-deps --only-binary=:all: --require-hashes -r test/interop/requirements.txt
 
       - name: Check client dependencies
         run: '"$RUNNER_TEMP/certbot/bin/python" -m pip check'
