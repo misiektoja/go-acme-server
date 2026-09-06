@@ -82,7 +82,7 @@ func (v *TKAuth01) Validate(ctx context.Context, request acmeserver.ValidationRe
 
 // Performs the token checks an ACME server owns at response time, that is steps 1 to 8 of
 // RFC 9448 section 6. The CA basic constraint of step 9 is compared with the certificate request
-// at finalization.
+// at finalization, and the token expiry bounds the validity of the issued certificate.
 func (v *TKAuth01) ValidateGrant(ctx context.Context,
 	request acmeserver.ValidationRequest) (acmeserver.ValidationGrant, error) {
 	none := acmeserver.ValidationGrant{}
@@ -119,7 +119,7 @@ func (v *TKAuth01) ValidateGrant(ctx context.Context,
 	if err := v.checkClaims(claims, id, request.AccountKeyThumbprint, now); err != nil {
 		return none, err
 	}
-	return acmeserver.ValidationGrant{CACertificate: claims.ATC.CA}, nil
+	return acmeserver.ValidationGrant{CACertificate: claims.ATC.CA, Expires: time.Unix(*claims.Expires, 0)}, nil
 }
 
 // Checks the claims of a verified token against the challenge identifier and the account key.

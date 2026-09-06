@@ -123,7 +123,7 @@ func (s *Server) issuanceAuthorization(ctx context.Context, operationID string, 
 
 // Loads the successful challenge that authorized an identifier.
 func (s *Server) validationEvidence(ctx context.Context, a *Authorization) (Validation, error) {
-	v := Validation{Identifier: a.Identifier, CACertificate: a.CACertificate}
+	v := Validation{Identifier: a.Identifier, CACertificate: a.CACertificate, GrantExpires: a.GrantExpires}
 	if a.Wildcard {
 		v.Identifier.Value = "*." + v.Identifier.Value
 	}
@@ -148,12 +148,27 @@ func (s *Server) issueRequest(order *Order) (IssueRequest, error) {
 		return IssueRequest{}, err
 	}
 	state := order.Issuance
+	notAfter := order.NotAfter
+	if bound := grantExpiry(state.Validations); !bound.IsZero() && (notAfter.IsZero() || notAfter.After(bound)) {
+		notAfter = bound
+	}
 	return IssueRequest{
 		OperationID: state.OperationID, AccountID: order.AccountID, AccountURL: s.accountURL(order.AccountID),
 		OrderID: order.ID, CSR: csr, CSRDER: der, Identifiers: slices.Clone(order.Identifiers),
-		NotBefore: order.NotBefore, NotAfter: order.NotAfter, Validations: slices.Clone(state.Validations),
+		NotBefore: order.NotBefore, NotAfter: notAfter, Validations: slices.Clone(state.Validations),
 		Deadline: state.Deadline, RecoveryOnly: !state.Deadline.After(s.clock.Now()),
 	}, nil
+}
+
+// Returns the earliest grant expiry among the validations, or zero when none is bounded.
+func grantExpiry(validations []Validation) time.Time {
+	var bound time.Time
+	for _, v := range validations {
+		if !v.GrantExpires.IsZero() && (bound.IsZero() || v.GrantExpires.Before(bound)) {
+			bound = v.GrantExpires
+		}
+	}
+	return bound
 }
 
 // Applies current host policy before persisting a dispatch decision.

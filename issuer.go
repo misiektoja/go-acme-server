@@ -91,6 +91,9 @@ type ValidationGrant struct {
 	// Allows the order to be finalized with a certificate request that asks for a CA
 	// certificate, see RFC 9448 section 6.
 	CACertificate bool
+	// Bounds the validity of certificates issued on this proof, see RFC 9447 section 7. The zero
+	// value leaves the validity to the order and the issuer.
+	Expires time.Time
 }
 
 // Checks a challenge response. A nil result marks the challenge valid, a returned *Problem

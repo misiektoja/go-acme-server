@@ -141,6 +141,7 @@ func (s *Server) runValidation(ctx context.Context, task *Task) {
 		authz.Status = AuthorizationValid
 		authz.Expires = now.Add(s.authzLifetime)
 		authz.CACertificate = grant.CACertificate
+		authz.GrantExpires = grant.Expires
 		s.completeValidation(ctx, task, ch, authz)
 		return
 	}

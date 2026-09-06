@@ -80,8 +80,10 @@ type Authorization struct {
 	ChallengeIDs []string
 	// Records that the successful challenge also authorized a CA certificate for the identifier.
 	CACertificate bool
-	CreatedAt     time.Time
-	Revision      uint64
+	// The time after which the proof no longer covers a certificate, zero when unbounded.
+	GrantExpires time.Time
+	CreatedAt    time.Time
+	Revision     uint64
 }
 
 // A stored challenge resource.
@@ -143,4 +145,6 @@ type Validation struct {
 	Validated  time.Time
 	// Reports that the validation authorized a CA certificate rather than an end-entity one.
 	CACertificate bool
+	// The latest acceptable certificate expiry under this proof, zero when unbounded.
+	GrantExpires time.Time
 }

@@ -105,6 +105,11 @@ func checkChain(chain [][]byte, csr *x509.CertificateRequest, order *Order, now 
 	if !order.NotAfter.IsZero() && !leaf.NotAfter.Equal(order.NotAfter.Truncate(time.Second)) {
 		return nil, errors.New("leaf notAfter differs from the accepted order")
 	}
+	if order.Issuance != nil {
+		if bound := grantExpiry(order.Issuance.Validations); !bound.IsZero() && leaf.NotAfter.After(bound) {
+			return nil, errors.New("leaf certificate outlives the authority token")
+		}
+	}
 	ids, err := certificateIdentifiers(leaf)
 	if err != nil || !sameIdentifiers(ids, order.Identifiers) {
 		return nil, errors.New("leaf identifiers do not match the order")
