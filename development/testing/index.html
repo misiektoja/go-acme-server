@@ -1518,8 +1518,12 @@ CA and test validators, including account, order, renewal, revocation, timeout, 
 make<span class="w"> </span>fuzz<span class="w"> </span><span class="nv">FUZZ_TIME</span><span class="o">=</span>2m
 </code></pre></div>
 <p>Fuzzes the JWS, JWK, strict JSON, identifier, DNS response and TLS-ALPN proof parsers for
-<code>FUZZ_TIME</code> each. CI runs a shorter pass on every push. Go writes a failing input under the
+<code>FUZZ_TIME</code> each. CI runs 30 seconds per target on every push. Go writes a failing input under the
 package's <code>testdata/fuzz</code> directory. Commit that input with the fix so it stays a regression test.</p>
+<p>The target passes <code>-fuzzminimizetime 0</code>, so Go does not minimize inputs. Minimization stalls the
+workers for seconds at a time and a worker that is still busy when <code>FUZZ_TIME</code> expires makes Go
+report the run as failed with <code>context deadline exceeded</code>. Set <code>FUZZ_MINIMIZE_TIME</code> to a duration
+such as <code>1m</code> when a crash is found and a smaller reproducer is wanted.</p>
 <h2 id="interoperability">Interoperability<a class="headerlink" href="#interoperability" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code>make<span class="w"> </span>test-interop
 </code></pre></div>
