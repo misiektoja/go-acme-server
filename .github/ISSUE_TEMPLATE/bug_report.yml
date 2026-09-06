@@ -1,0 +1,62 @@
+name: Bug report
+description: A client fails against the server, a resource is stuck, or behavior does not match the documentation or an RFC
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not report a suspected vulnerability here. Follow [SECURITY.md](https://github.com/misiektoja/go-acme-server/blob/main/SECURITY.md) instead.
+
+        Never paste account keys, private keys, external account binding secrets or full CSRs into an issue.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, and what you got instead. Cite the RFC section when the server deviates from it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: The steps, the relevant `Config` fields and the client command or code. Redact hostnames and credentials.
+      render: go
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem document and log
+      description: The problem document the client received and the server log lines around it.
+      render: shell
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: go-acme-server version
+      placeholder: v0.1.0 or commit
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Go version and ACME client
+      placeholder: go1.26.8, lego v4.35.2
+    validations:
+      required: true
+
+  - type: input
+    id: host
+    attributes:
+      label: Host implementations
+      description: Which of Store, Issuer, Revoker and Validator are your own, and whether the store passes `storetest`.
+      placeholder: own PostgreSQL store passing storetest, bundled HTTP-01 validator
+    validations:
+      required: false

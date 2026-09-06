@@ -1,0 +1,41 @@
+name: Feature request
+description: Ask for a capability that go-acme-server does not have yet
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The [scope section](https://github.com/misiektoja/go-acme-server/blob/main/README.md#scope) of the README lists what is implemented and what is not, including pre-authorization, alternate chains and the ACME drafts.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: The integration or operational problem, not the implementation you have in mind.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would solve it
+      description: The behavior, configuration field or interface you would like. Name the RFC or draft section when the request is protocol level.
+    validations:
+      required: true
+
+  - type: input
+    id: client
+    attributes:
+      label: ACME client this concerns
+      placeholder: Certbot 5.8.0, lego v4.35.2, cert-manager v1.21.1, other
+    validations:
+      required: false
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Current workaround
+      description: What you do today instead, if anything.
+    validations:
+      required: false
