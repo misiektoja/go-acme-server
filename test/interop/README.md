@@ -74,7 +74,7 @@ Run from the repository root. Install Python 3.14 and create an isolated client 
 
 ```bash
 python3 -m venv .cache/certbot
-.cache/certbot/bin/python -m pip install --no-deps --only-binary=:all: -r test/interop/requirements.txt
+.cache/certbot/bin/python -m pip install --no-deps --only-binary=:all: --require-hashes -r test/interop/requirements.txt
 .cache/certbot/bin/python -m pip check
 ACME_CERTBOT="$PWD/.cache/certbot/bin/certbot" make test-interop
 ```
@@ -87,7 +87,8 @@ tools. lego runs in process and reads no host resolver because CNAME discovery i
 cert-manager manifest, which the script checks against its SHA-256. `make lint` and
 `make tidy-check` cover both modules.
 
-`go.mod` and `go.sum` pin the Go dependencies. `requirements.txt` pins every Certbot dependency.
+`go.mod` and `go.sum` pin the Go dependencies. `requirements.txt` pins every Certbot dependency by
+version and wheel hash.
 CI uses Python 3.14.7 and the Go version from the root `go.mod`. Refresh these pins together and
 rerun the required scenarios when updating a client.
 
