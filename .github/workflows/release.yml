@@ -1,0 +1,163 @@
+# Publishes the release artifacts of a library version.
+# The workflow is inert until a version tag is pushed or it is dispatched by hand for an existing tag.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Existing version tag to publish, for example v0.1.0"
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  publish:
+    name: Publish the release artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      # Creating the release and uploading its assets.
+      contents: write
+      # Signing the build provenance attestation with a short lived identity.
+      id-token: write
+      attestations: write
+    steps:
+      - name: Resolve the release version
+        id: release
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          version="${DISPATCH_VERSION:-$REF_NAME}"
+          if ! printf '%s\n' "$version" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
+            echo "Release version must be a stable SemVer tag such as v0.1.0, got ${version}" >&2
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Refuse to rebuild a release that is already published
+        id: existing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # This step runs before checkout, so there is no git remote for gh to infer the repository
+          # from. Naming it keeps that failure from being read as an absent release.
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ steps.release.outputs.version }}
+        # A release published by hand from the GitHub UI creates the tag and so starts this workflow.
+        # Failing here keeps a published release from being rebuilt with replaced assets.
+        run: |
+          # Only a release that is genuinely absent may be treated as absent. Any other gh failure,
+          # such as an authentication or an API error, stops the run rather than being taken for one.
+          if lookup="$(gh release view "$VERSION" --json isDraft --jq .isDraft 2>&1)"; then
+            case "$lookup" in
+              true) state=draft ;;
+              false) state=published ;;
+              *) echo "Unexpected release state for ${VERSION}: ${lookup}" >&2; exit 1 ;;
+            esac
+          elif printf '%s\n' "$lookup" | grep -q 'release not found'; then
+            state=missing
+          else
+            echo "Could not determine whether ${VERSION} is already released: ${lookup}" >&2
+            exit 1
+          fi
+          if [ "$state" = published ]; then
+            echo "Release ${VERSION} is already published and cannot be rebuilt." >&2
+            echo "Releases are built by pushing the tag, not by creating the release in the GitHub UI." >&2
+            echo "This workflow creates the release as a draft for you to review and publish." >&2
+            echo "To recover, delete the release and its tag, then push the tag again:" >&2
+            echo "  gh release delete ${VERSION} --cleanup-tag --yes" >&2
+            echo "  git push origin ${VERSION}" >&2
+            exit 1
+          fi
+          echo "state=${state}" >> "$GITHUB_OUTPUT"
+
+      - name: Clone the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ steps.release.outputs.version }}
+
+      - name: Verify the release tag belongs to the default branch
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          tag_commit="$(git rev-list -n 1 "$VERSION")"
+          if ! git merge-base --is-ancestor "$tag_commit" "origin/${DEFAULT_BRANCH}"; then
+            echo "Release tag ${VERSION} is not reachable from ${DEFAULT_BRANCH}" >&2
+            exit 1
+          fi
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      # The release description is the RELEASE_NOTES.md section for this version. Extracting it first
+      # fails the run on a missing section while retagging is still cheap.
+      - name: Build the release description from the release notes
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: make release-body VERSION="$VERSION"
+
+      # The export and consumer checks prove that the tagged tree builds, tests and imports on its own.
+      - name: Check the tagged module
+        env:
+          ACME_TEST_SCRATCH: ${{ runner.temp }}/acme-tests
+          VERSION: ${{ steps.release.outputs.version }}
+        run: make release-check VERSION="$VERSION"
+
+      - name: Generate the software bill of materials
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: make sbom VERSION="$VERSION"
+
+      - name: Build complete source archives and release checksums
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: make release-checksums VERSION="$VERSION"
+
+      # Lets consumers verify that every archive came from this run.
+      - name: Attest the release artifacts' build provenance
+        id: artifacts
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/go-acme-server-${{ steps.release.outputs.version }}-sbom.cdx.json
+            dist/go-acme-server-${{ steps.release.outputs.version }}-source.zip
+            dist/go-acme-server-${{ steps.release.outputs.version }}-source.tar.gz
+            dist/go-acme-server-${{ steps.release.outputs.version }}_SHA256SUMS.txt
+
+      # Publishing the bundle next to the artifacts lets an offline verifier check their provenance
+      # without calling the attestations API.
+      - name: Stage the signed artifact provenance for the release
+        env:
+          ARTIFACT_BUNDLE: ${{ steps.artifacts.outputs.bundle-path }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: cp "$ARTIFACT_BUNDLE" "dist/go-acme-server-${VERSION}.intoto.jsonl"
+
+      - name: Publish the draft release and its assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_STATE: ${{ steps.existing.outputs.state }}
+          VERSION: ${{ steps.release.outputs.version }}
+        # The state was settled before the build started. A release that appeared while the build was
+        # running is caught by --verify-tag and by the create call failing rather than being overwritten.
+        run: |
+          case "$RELEASE_STATE" in
+            draft)
+              gh release edit "$VERSION" --draft --notes-file dist/release-body.md --title "$VERSION" --verify-tag
+              ;;
+            *)
+              gh release create "$VERSION" --draft --notes-file dist/release-body.md --title "$VERSION" --verify-tag
+              ;;
+          esac
+          # Every asset is named after the release rather than matched by a glob, so a stale file left
+          # in dist by an earlier run cannot be attached to this one.
+          gh release upload "$VERSION" "dist/go-acme-server-${VERSION}-source.zip" "dist/go-acme-server-${VERSION}-source.tar.gz" "dist/go-acme-server-${VERSION}-sbom.cdx.json" "dist/go-acme-server-${VERSION}_SHA256SUMS.txt" "dist/go-acme-server-${VERSION}.intoto.jsonl" --clobber
