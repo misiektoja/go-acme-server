@@ -24,7 +24,7 @@ make fuzz FUZZ_TIME=2m
 ```
 
 Fuzzes the JWS, JWK, strict JSON, identifier, DNS response and TLS-ALPN proof parsers for
-`FUZZ_TIME` each. CI runs a shorter pass on every push. Go writes a failing input under the
+`FUZZ_TIME` each. CI runs 30 seconds per target on every push. Go writes a failing input under the
 package's `testdata/fuzz` directory. Commit that input with the fix so it stays a regression test.
 
 ## Interoperability
