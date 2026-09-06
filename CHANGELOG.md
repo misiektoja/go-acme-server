@@ -35,5 +35,8 @@ through a host CA.
   retried and concurrent registrations, challenge responses, finalizations, key changes and nonce
   use, two workers sharing one store and SQLite process recovery, all over trusted HTTPS. Test artifacts use a configurable output directory. The SQLite adapter is test
   infrastructure.
+* **`make test-cert-manager`** issues and renews a certificate through cert-manager 1.21.1 in a
+  throwaway kind cluster against a small server built from the library. CI runs it weekly and on
+  request.
 * **`make fuzz`** runs bounded fuzz targets for JWS, compact JWS, JWK, JSON, identifier, DNS response
   and TLS-ALPN proof parsing. `FUZZ_TIME` sets the budget per target. CI runs a short pass.
