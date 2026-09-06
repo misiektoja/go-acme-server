@@ -281,7 +281,7 @@ func TestGoJoseAccounts(t *testing.T) {
 			t.Fatal("a second account claimed the used binding")
 		}
 	})
-	t.Log("go-jose v4.1.4 signatures, thumbprints, key change and external account binding agree with the server")
+	t.Log("go-jose v4.1.5 signatures, thumbprints, key change and external account binding agree with the server")
 }
 
 // Sends go-jose signatures the server must refuse and checks the problem type of each refusal.
@@ -381,7 +381,7 @@ func TestGoJoseRejectedRequests(t *testing.T) {
 			t.Fatal("badNonce carried no fresh nonce")
 		}
 	})
-	t.Log("go-jose v4.1.4 refusals map to the expected ACME problem types")
+	t.Log("go-jose v4.1.5 refusals map to the expected ACME problem types")
 }
 
 // Generates a P-256 key for a second signer.

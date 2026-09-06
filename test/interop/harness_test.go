@@ -38,8 +38,8 @@ import (
 
 // Names the versions every required client run must use.
 const (
-	certbotVersion = "certbot 5.4.0"
-	clientVersions = "acmez=v3.1.6 Certbot=5.4.0 go-jose=v4.1.4 lego=v4.35.2 SQLite=v1.48.1"
+	certbotVersion = "certbot 5.8.0"
+	clientVersions = "acmez=v3.1.6 Certbot=5.8.0 go-jose=v4.1.5 lego=v4.35.2 SQLite=v1.58.0"
 )
 
 // The only host name the harness resolves and issues for.
