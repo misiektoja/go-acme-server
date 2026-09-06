@@ -173,6 +173,10 @@ func joseKeys(t *testing.T) []joseRequest {
 	if err != nil {
 		t.Fatal(err)
 	}
+	p521, err := ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
 	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatal(err)
@@ -181,7 +185,8 @@ func joseKeys(t *testing.T) []joseRequest {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return []joseRequest{{alg: jose.ES256, key: p256}, {alg: jose.ES384, key: p384}, {alg: jose.RS256, key: rsaKey}, {alg: jose.EdDSA, key: edKey}}
+	return []joseRequest{{alg: jose.ES256, key: p256}, {alg: jose.ES384, key: p384}, {alg: jose.RS256, key: rsaKey},
+		{alg: jose.EdDSA, key: edKey}, {alg: jose.ES512, key: p521}}
 }
 
 // Creates accounts, reads them, changes keys and binds external accounts with go-jose signatures.
@@ -289,10 +294,6 @@ func TestGoJoseRejectedRequests(t *testing.T) {
 	h := newHarness(t, harnessOptions{httpPort: availablePort(t)})
 	d := h.resources(t)
 	keys := joseKeys(t)
-	p521, err := ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
 	payload := []byte(`{"termsOfServiceAgreed":true}`)
 	cases := []struct {
 		name   string
@@ -303,9 +304,6 @@ func TestGoJoseRejectedRequests(t *testing.T) {
 	}{
 		{"PS256", func(t *testing.T) []byte {
 			return h.joseSign(t, joseRequest{alg: jose.PS256, key: keys[2].key, url: d.NewAccount}, payload)
-		}, d.NewAccount, http.StatusBadRequest, acmeserver.ErrorBadSignatureAlgorithm},
-		{"ES512", func(t *testing.T) []byte {
-			return h.joseSign(t, joseRequest{alg: jose.ES512, key: p521, url: d.NewAccount}, payload)
 		}, d.NewAccount, http.StatusBadRequest, acmeserver.ErrorBadSignatureAlgorithm},
 		{"HS256 account", func(t *testing.T) []byte {
 			return h.joseSign(t, joseRequest{alg: jose.HS256, key: make([]byte, 32), kid: d.NewAccount, url: d.NewAccount}, payload)
@@ -361,7 +359,7 @@ func TestGoJoseRejectedRequests(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			response, body := h.post(t, tc.url, tc.body(t))
 			p := requireProblem(t, response, body, tc.status, tc.typ)
-			if tc.typ == acmeserver.ErrorBadSignatureAlgorithm && strings.Join(p.Algorithms, ",") != "ES256,ES384,RS256,EdDSA" {
+			if tc.typ == acmeserver.ErrorBadSignatureAlgorithm && strings.Join(p.Algorithms, ",") != "ES256,ES384,ES512,RS256,EdDSA" {
 				t.Fatalf("algorithms = %v", p.Algorithms)
 			}
 			if response.Header.Get("Replay-Nonce") == "" {
