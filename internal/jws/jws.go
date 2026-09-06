@@ -39,7 +39,7 @@ type Error struct {
 func (e *Error) Error() string { return e.Detail }
 
 // Lists the JWS algorithms the server accepts in the order they are advertised.
-var Algorithms = []string{"ES256", "ES384", "RS256", "EdDSA"}
+var Algorithms = []string{"ES256", "ES384", "ES512", "RS256", "EdDSA"}
 
 // Lists the HMAC algorithms accepted for external account bindings.
 var MACAlgorithms = []string{"HS256", "HS384", "HS512"}
@@ -246,10 +246,13 @@ func verifySignature(alg string, key crypto.PublicKey, signingInput, signature [
 	switch alg {
 	case "ES256":
 		digest := sha256.Sum256(signingInput)
-		return verifyECDSA(key, elliptic.P256(), 32, digest[:], signature)
+		return verifyECDSA(alg, key, elliptic.P256(), 32, digest[:], signature)
 	case "ES384":
 		digest := sha512.Sum384(signingInput)
-		return verifyECDSA(key, elliptic.P384(), 48, digest[:], signature)
+		return verifyECDSA(alg, key, elliptic.P384(), 48, digest[:], signature)
+	case "ES512":
+		digest := sha512.Sum512(signingInput)
+		return verifyECDSA(alg, key, elliptic.P521(), 66, digest[:], signature)
 	case "RS256":
 		pub, ok := key.(*rsa.PublicKey)
 		if !ok {
@@ -274,11 +277,10 @@ func verifySignature(alg string, key crypto.PublicKey, signingInput, signature [
 }
 
 // Verifies a fixed-width R||S signature over a digest.
-func verifyECDSA(key crypto.PublicKey, curve elliptic.Curve, size int, digest, signature []byte) error {
+func verifyECDSA(alg string, key crypto.PublicKey, curve elliptic.Curve, size int, digest, signature []byte) error {
 	pub, ok := key.(*ecdsa.PublicKey)
 	if !ok || pub.Curve != curve {
-		crv, _, _ := curveName(curve)
-		return keyMismatch("ES" + crv[2:])
+		return keyMismatch(alg)
 	}
 	if len(signature) != 2*size {
 		return badSignature()
