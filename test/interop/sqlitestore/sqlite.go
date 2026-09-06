@@ -73,7 +73,7 @@ CREATE INDEX IF NOT EXISTS authorization_scope ON authorizations(account_id, sco
 CREATE TABLE IF NOT EXISTS challenges (id TEXT PRIMARY KEY, authorization_id TEXT NOT NULL REFERENCES
 authorizations(id), revision INTEGER NOT NULL, data BLOB NOT NULL);
 CREATE TABLE IF NOT EXISTS certificates (id TEXT PRIMARY KEY, order_id TEXT NOT NULL REFERENCES orders(id),
-revision INTEGER NOT NULL, data BLOB NOT NULL);
+renewal_id TEXT UNIQUE, revision INTEGER NOT NULL, data BLOB NOT NULL);
 CREATE TABLE IF NOT EXISTS tasks (sequence INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE NOT NULL, run_at
 INTEGER NOT NULL, lease_until INTEGER NOT NULL, fence INTEGER NOT NULL, attempts INTEGER NOT NULL, data BLOB
 NOT NULL);

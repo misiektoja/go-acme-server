@@ -11,6 +11,9 @@ var (
 	ErrNotFound         = errors.New("acmeserver: resource not found")
 	ErrConflict         = errors.New("acmeserver: resource already exists")
 	ErrRevisionMismatch = errors.New("acmeserver: resource revision mismatch")
+	// Returned by CreateOrder when order.Replaces names a certificate that another order, which
+	// is not invalid at order.CreatedAt, already replaced.
+	ErrAlreadyReplaced = errors.New("acmeserver: certificate already replaced")
 )
 
 // Persists accounts. Every method is atomic and returns copies the caller owns.
@@ -30,7 +33,10 @@ type AccountStore interface {
 // Persists orders with their authorizations and challenges.
 type OrderStore interface {
 	// Stores an order together with its authorizations and challenges, all at revision 1.
-	// It returns ErrConflict when any ID is already in use.
+	// It returns ErrConflict when any ID is already in use. When order.Replaces is set, the
+	// same operation marks the certificate with that RenewalID as replaced by the order,
+	// returning ErrNotFound when no such certificate exists and ErrAlreadyReplaced when an order
+	// that is not invalid at order.CreatedAt already replaced it, see RFC 9773 section 5.
 	CreateOrder(ctx context.Context, order *Order, authzs []*Authorization, challenges []*Challenge) error
 	// Returns the order with the given ID or ErrNotFound.
 	Order(ctx context.Context, id string) (*Order, error)
@@ -51,6 +57,8 @@ type OrderStore interface {
 type CertificateStore interface {
 	// Returns the certificate with the given ID or ErrNotFound.
 	Certificate(ctx context.Context, id string) (*Certificate, error)
+	// Returns the certificate with the given non-empty RenewalID or ErrNotFound.
+	CertificateByRenewalID(ctx context.Context, renewalID string) (*Certificate, error)
 	// Replaces the stored certificate when the revisions match and increments cert.Revision.
 	UpdateCertificate(ctx context.Context, cert *Certificate) error
 }
@@ -78,7 +86,7 @@ type WorkStore interface {
 	CompleteValidation(ctx context.Context, task *Task, challenge *Challenge, authz *Authorization, order *Order) error
 	// Stores the order when its revision matches, creates the certificate when it is not nil
 	// and removes the task, all in one operation. It returns ErrConflict when the certificate
-	// ID is in use.
+	// ID or a non-empty RenewalID is in use.
 	CompleteIssuance(ctx context.Context, task *Task, order *Order, cert *Certificate) error
 	// Counts tasks that were runnable at or before the given time and hold no lease past it.
 	PendingTasks(ctx context.Context, before time.Time) (int, error)

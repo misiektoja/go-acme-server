@@ -29,9 +29,11 @@ type Store struct {
 	authzIndex     map[authorizationKey][]string
 	challenges     map[string]*acmeserver.Challenge
 	certificates   map[string]*acmeserver.Certificate
-	tasks          map[string]*acmeserver.Task
-	taskSequence   uint64
-	taskInsertion  map[string]uint64
+	// Maps RFC 9773 renewal identifiers to certificate IDs.
+	certByRenewal map[string]string
+	tasks         map[string]*acmeserver.Task
+	taskSequence  uint64
+	taskInsertion map[string]uint64
 }
 
 // Indexes authorizations by account and complete identifier, including wildcard scope.
@@ -52,6 +54,7 @@ func New() *Store {
 		authzIndex:     make(map[authorizationKey][]string),
 		challenges:     make(map[string]*acmeserver.Challenge),
 		certificates:   make(map[string]*acmeserver.Certificate),
+		certByRenewal:  make(map[string]string),
 		tasks:          make(map[string]*acmeserver.Task),
 		taskInsertion:  make(map[string]uint64),
 	}
@@ -175,6 +178,11 @@ func (s *Store) CreateOrder(ctx context.Context, order *acmeserver.Order, authzs
 			return acmeserver.ErrConflict
 		}
 	}
+	if order.Replaces != "" {
+		if err := s.claimReplacement(order); err != nil {
+			return err
+		}
+	}
 	order.Revision = 1
 	s.orders[order.ID] = cloneOrder(order)
 	s.orderIDs[order.AccountID] = append(s.orderIDs[order.AccountID], order.ID)
@@ -188,6 +196,22 @@ func (s *Store) CreateOrder(ctx context.Context, order *acmeserver.Order, authzs
 		c.Revision = 1
 		s.challenges[c.ID] = cloneChallenge(c)
 	}
+	return nil
+}
+
+// Marks the certificate the order replaces unless a live order already replaced it.
+func (s *Store) claimReplacement(order *acmeserver.Order) error {
+	id, ok := s.certByRenewal[order.Replaces]
+	if !ok {
+		return acmeserver.ErrNotFound
+	}
+	cert := s.certificates[id]
+	previous, ok := s.orders[cert.ReplacedByOrderID]
+	if ok && previous.StatusAt(order.CreatedAt) != acmeserver.OrderInvalid {
+		return acmeserver.ErrAlreadyReplaced
+	}
+	cert.ReplacedByOrderID = order.ID
+	cert.Revision++
 	return nil
 }
 
@@ -364,6 +388,20 @@ func (s *Store) Certificate(ctx context.Context, id string) (*acmeserver.Certifi
 	return cloneCertificate(cert), nil
 }
 
+// Returns a copy of the certificate with the given renewal identifier.
+func (s *Store) CertificateByRenewalID(ctx context.Context, renewalID string) (*acmeserver.Certificate, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	id, ok := s.certByRenewal[renewalID]
+	if !ok || renewalID == "" {
+		return nil, acmeserver.ErrNotFound
+	}
+	return cloneCertificate(s.certificates[id]), nil
+}
+
 // Replaces the stored certificate when the revision matches.
 func (s *Store) UpdateCertificate(ctx context.Context, cert *acmeserver.Certificate) error {
 	if err := ctx.Err(); err != nil {
@@ -529,8 +567,14 @@ func (s *Store) CompleteIssuance(ctx context.Context, task *acmeserver.Task, ord
 		if _, exists := s.certificates[cert.ID]; exists {
 			return acmeserver.ErrConflict
 		}
+		if _, exists := s.certByRenewal[cert.RenewalID]; exists && cert.RenewalID != "" {
+			return acmeserver.ErrConflict
+		}
 		cert.Revision = 1
 		s.certificates[cert.ID] = cloneCertificate(cert)
+		if cert.RenewalID != "" {
+			s.certByRenewal[cert.RenewalID] = cert.ID
+		}
 	}
 	order.Revision++
 	s.orders[order.ID] = cloneOrder(order)

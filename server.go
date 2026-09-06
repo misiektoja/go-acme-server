@@ -26,6 +26,7 @@ const (
 	authzPathPrefix     = "authz/"
 	challengePathPrefix = "chall/"
 	certPathPrefix      = "cert/"
+	renewalPathPrefix   = "renewal-info/"
 )
 
 // Media types the protocol uses.
@@ -60,6 +61,7 @@ type Server struct {
 	ipIdentifiers  bool
 	tnAuthList     bool
 	tokenAuthority string
+	renewal        RenewalAdvisor
 	orderLifetime  time.Duration
 	authzLifetime  time.Duration
 	maxIdentifiers int
@@ -102,6 +104,7 @@ func New(cfg Config) (*Server, error) {
 		ipIdentifiers:  cfg.IPIdentifiers,
 		tnAuthList:     cfg.TNAuthListIdentifiers,
 		tokenAuthority: cfg.TokenAuthority,
+		renewal:        cfg.RenewalInfo,
 		orderLifetime:  cfg.OrderLifetime,
 		authzLifetime:  cfg.AuthorizationLifetime,
 		maxIdentifiers: cfg.MaxIdentifiers,
@@ -236,6 +239,10 @@ func (s *Server) serveResource(w http.ResponseWriter, r *http.Request, rel strin
 		s.writeProblem(r.Context(), w, notFound())
 		return
 	}
+	if kind+"/" == renewalPathPrefix {
+		s.serveRenewalInfo(w, r, rest)
+		return
+	}
 	id, suffix, _ := strings.Cut(rest, "/")
 	if !validID(id) {
 		s.writeProblem(r.Context(), w, notFound())
@@ -288,6 +295,9 @@ func (s *Server) serveDirectory(w http.ResponseWriter, r *http.Request) {
 		"newOrder":   s.resourceURL(resourceNewOrder),
 		"revokeCert": s.resourceURL(resourceRevokeCert),
 		"keyChange":  s.resourceURL(resourceKeyChange),
+	}
+	if s.renewal != nil {
+		directory["renewalInfo"] = s.resourceURL(strings.TrimSuffix(renewalPathPrefix, "/"))
 	}
 	if s.hasMeta {
 		directory["meta"] = s.metaObject()

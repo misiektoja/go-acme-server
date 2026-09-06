@@ -32,6 +32,7 @@ type orderJSON struct {
 	Authorizations []string     `json:"authorizations"`
 	Finalize       string       `json:"finalize"`
 	Certificate    string       `json:"certificate,omitempty"`
+	Replaces       string       `json:"replaces,omitempty"`
 }
 
 // The authorization object of RFC 8555 section 7.1.4.
@@ -78,6 +79,7 @@ func (s *Server) orderView(order *Order, now time.Time) orderJSON {
 		NotAfter:    formatTime(order.NotAfter),
 		Error:       order.Error,
 		Finalize:    s.resourceURL(orderPathPrefix + order.ID + "/finalize"),
+		Replaces:    order.Replaces,
 	}
 	view.Authorizations = make([]string, len(order.AuthorizationIDs))
 	for i, id := range order.AuthorizationIDs {
@@ -126,13 +128,8 @@ func (s *Server) challengeView(ch *Challenge) challengeJSON {
 	return view
 }
 
-// Returns the status clients see, treating an expired pending or ready order as invalid.
-func effectiveOrderStatus(order *Order, now time.Time) OrderStatus {
-	if (order.Status == OrderPending || order.Status == OrderReady) && !order.Expires.After(now) {
-		return OrderInvalid
-	}
-	return order.Status
-}
+// Returns the status clients see at now.
+func effectiveOrderStatus(order *Order, now time.Time) OrderStatus { return order.StatusAt(now) }
 
 // Returns the status clients see, treating an expired pending or valid authorization as expired.
 func effectiveAuthzStatus(authz *Authorization, now time.Time) AuthorizationStatus {

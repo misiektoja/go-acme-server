@@ -91,7 +91,10 @@ type Config struct {
 	AuthorizationLifetime time.Duration
 	// Bounds the identifiers of one order.
 	MaxIdentifiers int
-	Workers        WorkerConfig
+	// Serves RFC 9773 renewal information and accepts replaces on new orders when set.
+	// LifetimeRenewal is the built-in advisor. Nil leaves the extension off.
+	RenewalInfo RenewalAdvisor
+	Workers     WorkerConfig
 }
 
 // Validates the base URL and returns it with a trailing slash.

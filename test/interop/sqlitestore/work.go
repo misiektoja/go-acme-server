@@ -171,7 +171,8 @@ func (s *Store) CompleteIssuance(ctx context.Context, task *acmeserver.Task, ord
 		if cert != nil {
 			copyOf := *cert
 			copyOf.Revision = 1
-			if err := insert(ctx, c, insertCertificateSQL, &copyOf, cert.ID, cert.OrderID, 1); err != nil {
+			err := insert(ctx, c, insertCertificateSQL, &copyOf, cert.ID, cert.OrderID, renewalKey(cert.RenewalID), 1)
+			if err != nil {
 				return err
 			}
 		}

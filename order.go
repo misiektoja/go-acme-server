@@ -15,6 +15,8 @@ type newOrderJSON struct {
 	Identifiers []Identifier `json:"identifiers"`
 	NotBefore   string       `json:"notBefore"`
 	NotAfter    string       `json:"notAfter"`
+	// The RFC 9773 predecessor, used only when Config.RenewalInfo is set.
+	Replaces string `json:"replaces"`
 }
 
 // The authorization update payload of RFC 8555 section 7.5.2.
@@ -56,6 +58,10 @@ func (s *Server) serveNewOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.store.CreateOrder(ctx, order, authzs, challenges); err != nil {
+		if p := replacementProblem(err); order.Replaces != "" && p != nil {
+			s.writeProblem(ctx, w, p)
+			return
+		}
 		s.logError(ctx, "order creation failed", err)
 		s.writeProblem(ctx, w, NewProblem(ErrorServerInternal, "order creation failed"))
 		return
@@ -108,6 +114,10 @@ func (s *Server) buildOrder(ctx context.Context, account *Account, payload *newO
 	if !notBefore.IsZero() && !notAfter.IsZero() && !notAfter.After(notBefore) {
 		return nil, NewProblem(ErrorMalformed, "notAfter must be later than notBefore")
 	}
+	replaces, p := s.checkReplaces(ctx, account, identifiers, payload.Replaces)
+	if p != nil {
+		return nil, p
+	}
 	id, err := newID()
 	if err != nil {
 		s.logError(ctx, "identifier generation failed", err)
@@ -121,6 +131,7 @@ func (s *Server) buildOrder(ctx context.Context, account *Account, payload *newO
 		Identifiers: identifiers,
 		NotBefore:   notBefore,
 		NotAfter:    notAfter,
+		Replaces:    replaces,
 		CreatedAt:   now,
 	}
 	if p := s.policyProblem(ctx, s.policy.NewOrder(ctx, account, order), "order policy"); p != nil {

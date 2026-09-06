@@ -205,7 +205,7 @@ func (s *Server) recordIssuedResult(ctx context.Context, task *Task, order *Orde
 	cert := &Certificate{
 		ID: certificateID(result.Chain[0]), AccountID: order.AccountID, OrderID: order.ID,
 		CAReference: result.CAReference, Chain: result.Chain, NotBefore: leaf.NotBefore, NotAfter: leaf.NotAfter,
-		Validations: order.Issuance.Validations, CreatedAt: now,
+		RenewalID: renewalID(leaf), Validations: order.Issuance.Validations, CreatedAt: now,
 	}
 	order.Status, order.CertificateID, order.Error = OrderValid, cert.ID, nil
 	err = s.store.CompleteIssuance(ctx, task, order, cert)

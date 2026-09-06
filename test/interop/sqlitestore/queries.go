@@ -17,10 +17,11 @@ WHERE account_id = ? AND scope = ? AND status = ? AND expires > ? LIMIT 1`
 	updateAuthorizationIndexSQL = `UPDATE authorizations SET scope = ?, status = ?, expires = ? WHERE id = ?`
 	claimTaskSQL                = `SELECT data, fence, attempts FROM tasks
 WHERE run_at <= ? AND lease_until <= ? ORDER BY run_at, sequence LIMIT 1`
-	updateClaimSQL       = `UPDATE tasks SET fence = ?, attempts = ?, lease_until = ?, data = ? WHERE id = ?`
-	rescheduleTaskSQL    = `UPDATE tasks SET run_at = ?, lease_until = 0, data = ? WHERE id = ?`
-	insertCertificateSQL = `INSERT INTO certificates(id, order_id, revision, data) VALUES (?, ?, ?, ?)`
-	pendingTasksSQL      = `SELECT count(*) FROM tasks WHERE run_at <= ? AND lease_until <= ?`
-	insertTaskSQL        = `INSERT INTO tasks(id, run_at, lease_until, fence, attempts, data) VALUES (?, ?, 0, 0, 0, ?)`
-	taskFenceSQL         = `SELECT fence FROM tasks WHERE id = ?`
+	updateClaimSQL          = `UPDATE tasks SET fence = ?, attempts = ?, lease_until = ?, data = ? WHERE id = ?`
+	rescheduleTaskSQL       = `UPDATE tasks SET run_at = ?, lease_until = 0, data = ? WHERE id = ?`
+	insertCertificateSQL    = `INSERT INTO certificates(id, order_id, renewal_id, revision, data) VALUES (?, ?, ?, ?, ?)`
+	certificateByRenewalSQL = `SELECT id, revision, data FROM certificates WHERE renewal_id = ?`
+	pendingTasksSQL         = `SELECT count(*) FROM tasks WHERE run_at <= ? AND lease_until <= ?`
+	insertTaskSQL           = `INSERT INTO tasks(id, run_at, lease_until, fence, attempts, data) VALUES (?, ?, 0, 0, 0, ?)`
+	taskFenceSQL            = `SELECT fence FROM tasks WHERE id = ?`
 )

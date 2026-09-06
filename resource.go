@@ -59,12 +59,20 @@ type Order struct {
 	Issuance *IssuanceState
 	// A CA result withheld from clients and retained for host reconciliation.
 	UnpublishedResult *IssueResult
-	// The selected certificate profile when the host enables that extension.
-	Profile string
-	// The RFC 9773 identifier of the certificate this order renews.
+	// The RFC 9773 identifier of the certificate this order replaces, set when the client sent
+	// replaces and Config.RenewalInfo is enabled. Stores mark that certificate replaced by this
+	// order when the order is created.
 	Replaces  string
 	CreatedAt time.Time
 	Revision  uint64
+}
+
+// Returns the status clients see at now, treating an expired pending or ready order as invalid.
+func (o *Order) StatusAt(now time.Time) OrderStatus {
+	if (o.Status == OrderPending || o.Status == OrderReady) && !o.Expires.After(now) {
+		return OrderInvalid
+	}
+	return o.Status
 }
 
 // A stored authorization resource. Each authorization belongs to exactly one order.
@@ -124,6 +132,12 @@ type Certificate struct {
 	// first CA call and reused by every retry, so the CA can deduplicate.
 	RevocationOperationID string
 	RevocationRequestedAt time.Time
+	// The RFC 9773 identifier built from the leaf's authority key identifier and serial number.
+	// It is empty when the leaf has no authority key identifier. Stores keep non-empty values
+	// unique among certificates.
+	RenewalID string
+	// The order that claimed this certificate as its predecessor through replaces.
+	ReplacedByOrderID string
 	// The validation evidence the issuer received, kept for host audit needs.
 	Validations []Validation
 	CreatedAt   time.Time

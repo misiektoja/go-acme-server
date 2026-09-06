@@ -75,6 +75,11 @@ func (s *Store) CreateOrder(ctx context.Context, order *acmeserver.Order, authzs
 		if err := insert(ctx, c, insertOrderSQL, &copyOf, order.ID, order.AccountID, 1); err != nil {
 			return err
 		}
+		if order.Replaces != "" {
+			if err := claimReplacement(ctx, c, order); err != nil {
+				return err
+			}
+		}
 		for _, a := range authzs {
 			copyOf := *a
 			copyOf.Revision = 1
@@ -103,6 +108,33 @@ func (s *Store) CreateOrder(ctx context.Context, order *acmeserver.Order, authzs
 		}
 	}
 	return err
+}
+
+// Marks the certificate the order replaces unless an order that is still live replaced it.
+func claimReplacement(ctx context.Context, c *sql.Conn, order *acmeserver.Order) error {
+	var cert acmeserver.Certificate
+	var revision uint64
+	var data []byte
+	err := c.QueryRowContext(ctx, certificateByRenewalSQL, order.Replaces).Scan(&cert.ID, &revision, &data)
+	if err != nil {
+		return storageError(err)
+	}
+	if err := decode(data, &cert); err != nil {
+		return err
+	}
+	if cert.ReplacedByOrderID != "" {
+		var previous acmeserver.Order
+		err := read(ctx, c, "orders", cert.ReplacedByOrderID, &previous)
+		if err != nil && !errors.Is(err, acmeserver.ErrNotFound) {
+			return err
+		}
+		if err == nil && previous.StatusAt(order.CreatedAt) != acmeserver.OrderInvalid {
+			return acmeserver.ErrAlreadyReplaced
+		}
+	}
+	cert.ReplacedByOrderID = order.ID
+	cert.Revision = revision + 1
+	return update(ctx, c, "certificates", cert.ID, revision, &cert)
 }
 
 // Loads an owned order including its durable issuance decision and unpublished result.
@@ -218,6 +250,29 @@ func (s *Store) Certificate(ctx context.Context, id string) (*acmeserver.Certifi
 	var certificate acmeserver.Certificate
 	err := read(ctx, s.db, "certificates", id, &certificate)
 	return &certificate, err
+}
+
+// Loads the certificate carrying the RFC 9773 renewal identifier.
+func (s *Store) CertificateByRenewalID(ctx context.Context, renewalID string) (*acmeserver.Certificate, error) {
+	if renewalID == "" {
+		return nil, acmeserver.ErrNotFound
+	}
+	var certificate acmeserver.Certificate
+	var revision uint64
+	var data []byte
+	err := s.db.QueryRowContext(ctx, certificateByRenewalSQL, renewalID).Scan(&certificate.ID, &revision, &data)
+	if err != nil {
+		return nil, storageError(err)
+	}
+	return &certificate, decode(data, &certificate)
+}
+
+// Returns the unique index value of a renewal identifier, NULL when the leaf has none.
+func renewalKey(renewalID string) any {
+	if renewalID == "" {
+		return nil
+	}
+	return renewalID
 }
 
 // Replaces certificate metadata at the expected revision.
