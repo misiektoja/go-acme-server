@@ -48,6 +48,13 @@ func TestChainChecksCompleteIdentityAndValidity(t *testing.T) {
 		{"requested notBefore", func(_ *x509.Certificate, o *Order) { o.NotBefore = now.Add(-time.Hour) }, false},
 		{"requested notAfter", func(_ *x509.Certificate, o *Order) { o.NotAfter = now.Add(time.Hour) }, false},
 		{"accepted future", func(c *x509.Certificate, o *Order) { c.NotBefore = now.Add(time.Hour); o.NotBefore = c.NotBefore }, true},
+		{"outlives the grant", func(_ *x509.Certificate, o *Order) {
+			o.Issuance = &IssuanceState{Validations: []Validation{{GrantExpires: now.Add(time.Hour)}}}
+		}, false},
+		{"within the grant", func(c *x509.Certificate, o *Order) {
+			c.NotAfter = now.Add(30 * time.Minute)
+			o.Issuance = &IssuanceState{Validations: []Validation{{}, {GrantExpires: now.Add(time.Hour)}}}
+		}, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			leaf := &x509.Certificate{SerialNumber: big.NewInt(2), DNSNames: []string{"a.test"},

@@ -156,6 +156,9 @@ func TestTKAuth01Accepts(t *testing.T) {
 		"ca grant": {mutate: func(claims map[string]any) {
 			claims["atc"].(map[string]any)["ca"] = true
 		}, ca: true},
+		"RFC 9447 example spelling": {mutate: func(claims map[string]any) {
+			claims["atc"].(map[string]any)["tktype"] = "TnAuthList"
+		}},
 		"not before in the past": {mutate: func(claims map[string]any) {
 			claims["nbf"] = now.Add(-time.Minute).Unix()
 		}},
@@ -170,6 +173,9 @@ func TestTKAuth01Accepts(t *testing.T) {
 			}
 			if grant.CACertificate != tc.ca {
 				t.Fatalf("CACertificate = %v, want %v", grant.CACertificate, tc.ca)
+			}
+			if exp, _ := claims["exp"].(int64); !grant.Expires.Equal(time.Unix(exp, 0)) {
+				t.Fatalf("Expires = %v, want the exp claim %d", grant.Expires, exp)
 			}
 		})
 	}

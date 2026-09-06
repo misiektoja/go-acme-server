@@ -74,6 +74,7 @@ func TestCheckTNAuthList(t *testing.T) {
 		{name: "empty number", der: authorityList(numberEntry(""))},
 		{name: "count below two", der: authorityList(rangeEntry("1212555", []byte{0x01}))},
 		{name: "count extends the number", der: authorityList(rangeEntry("10", []byte{0x5b}))},
+		{name: "range with a prefix character", der: authorityList(rangeEntry("*67", []byte{0x02}))},
 		{name: "negative count", der: authorityList(rangeEntry("1212555", []byte{0xff}))},
 		{name: "non-minimal count", der: authorityList(rangeEntry("1212555", []byte{0x00, 0x64}))},
 		{name: "range without count", der: tlv(0x30, tlv(0xa1, tlv(0x30, tlv(0x16, []byte("1212555")))))},

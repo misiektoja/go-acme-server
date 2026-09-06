@@ -369,6 +369,7 @@ func testCompleteValidation(t *testing.T, store acmeserver.Store) {
 	authz := authzs[0]
 	authz.Status = acmeserver.AuthorizationValid
 	authz.CACertificate = true
+	authz.GrantExpires = testNow.Add(time.Hour)
 	if err := store.CompleteValidation(ctx, task, challenge, authz, order); err != nil {
 		t.Fatalf("CompleteValidation: %v", err)
 	}
@@ -380,7 +381,8 @@ func testCompleteValidation(t *testing.T, store acmeserver.Store) {
 		t.Fatalf("Order after completion = %+v, %v", gotOrder, err)
 	}
 	gotAuthz, err := store.Authorization(ctx, authz.ID)
-	if err != nil || gotAuthz.Status != acmeserver.AuthorizationValid || !gotAuthz.CACertificate {
+	if err != nil || gotAuthz.Status != acmeserver.AuthorizationValid || !gotAuthz.CACertificate ||
+		!gotAuthz.GrantExpires.Equal(authz.GrantExpires) {
 		t.Fatalf("Authorization after completion = %+v, %v", gotAuthz, err)
 	}
 	_, err = store.ClaimTask(ctx, testNow.Add(time.Hour), testNow.Add(2*time.Hour))

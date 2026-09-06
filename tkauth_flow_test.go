@@ -64,6 +64,12 @@ func newTokenAuthority(t *testing.T) *tokenAuthority {
 // Returns a compact Authority Token that attests the list for the account key thumbprint.
 func (a *tokenAuthority) token(t *testing.T, thumbprint string, list []byte, ca bool) string {
 	t.Helper()
+	return a.tokenUntil(t, thumbprint, list, ca, time.Now().Add(time.Hour))
+}
+
+// Returns a compact Authority Token with the given expiry.
+func (a *tokenAuthority) tokenUntil(t *testing.T, thumbprint string, list []byte, ca bool, exp time.Time) string {
+	t.Helper()
 	atc := map[string]any{"tktype": "TNAuthList", "tkvalue": base64.RawURLEncoding.EncodeToString(list),
 		"fingerprint": thumbprint}
 	if ca {
@@ -73,7 +79,7 @@ func (a *tokenAuthority) token(t *testing.T, thumbprint string, list []byte, ca 
 	if err != nil {
 		t.Fatal(err)
 	}
-	claims, err := json.Marshal(map[string]any{"iss": tokenAuthorityURL, "exp": time.Now().Add(time.Hour).Unix(),
+	claims, err := json.Marshal(map[string]any{"iss": tokenAuthorityURL, "exp": exp.Unix(),
 		"jti": "flow-token", "atc": atc})
 	if err != nil {
 		t.Fatal(err)
@@ -114,11 +120,15 @@ func newTKAuthFlow(t *testing.T) (*flow, *tokenAuthority) {
 	return f, a
 }
 
-// Creates an order for one TNAuthList identifier.
-func (c *client) newAuthorityListOrder(list []byte) (string, orderBody) {
+// Creates an order for one TNAuthList identifier and any DNS names.
+func (c *client) newAuthorityListOrder(list []byte, names ...string) (string, orderBody) {
 	c.f.t.Helper()
-	rec := c.post(baseURL+"new-order", map[string]any{"identifiers": []map[string]string{
-		{"type": "TNAuthList", "value": base64.RawURLEncoding.EncodeToString(list)}}})
+	identifiers := make([]map[string]string, 0, 1+len(names))
+	identifiers = append(identifiers, map[string]string{"type": "TNAuthList", "value": base64.RawURLEncoding.EncodeToString(list)})
+	for _, name := range names {
+		identifiers = append(identifiers, map[string]string{"type": "dns", "value": name})
+	}
+	rec := c.post(baseURL+"new-order", map[string]any{"identifiers": identifiers})
 	if rec.Code != http.StatusCreated {
 		c.f.t.Fatalf("new-order = %d %s", rec.Code, rec.Body.String())
 	}
@@ -138,10 +148,34 @@ func (c *client) onlyChallenge(order orderBody) challengeBody {
 	return authz.Challenges[0]
 }
 
-// Returns a CSR that requests the authority list and optionally a CA certificate.
-func makeTNAuthListCSR(t *testing.T, key crypto.Signer, list []byte, ca bool) []byte {
+// Answers every challenge of the order, tkauth-01 with a token from the authority and http-01 with
+// an empty object.
+func (c *client) answerAll(order orderBody, authority *tokenAuthority, list []byte, ca bool) {
+	c.f.t.Helper()
+	for _, authzURL := range order.Authorizations {
+		var authz authzBody
+		c.get(authzURL, &authz)
+		for _, ch := range authz.Challenges {
+			payload := map[string]any{}
+			switch ch.Type {
+			case typeTKAuth01:
+				payload["tkauth"] = authority.token(c.f.t, thumbprint(c.f.t, &c.key.PublicKey), list, ca)
+			case typeHTTP01:
+			default:
+				continue
+			}
+			if rec := c.post(ch.URL, payload); rec.Code != http.StatusOK {
+				c.f.t.Fatalf("%s response = %d %s", ch.Type, rec.Code, rec.Body.String())
+			}
+		}
+	}
+}
+
+// Returns a CSR that requests the authority list, any DNS names and optionally a CA certificate.
+func makeTNAuthListCSR(t *testing.T, key crypto.Signer, list []byte, ca bool, names ...string) []byte {
 	t.Helper()
 	template := &x509.CertificateRequest{
+		DNSNames:        names,
 		ExtraExtensions: []pkix.Extension{{Id: tnAuthListOID, Value: list}},
 	}
 	if ca {
@@ -252,6 +286,71 @@ func TestTKAuth01CAGrant(t *testing.T) {
 	}
 }
 
+// Requires every authorization of a mixed order to agree with the requested basic constraint, so a
+// CA grant on the authority list cannot be dropped by adding a DNS name.
+func TestTKAuth01MixedOrderGrants(t *testing.T) {
+	t.Run("end-entity", func(t *testing.T) {
+		f, authority := newTKAuthFlow(t)
+		f.runWorker()
+		c := f.newClient()
+		c.register()
+		orderURL, order := c.newAuthorityListOrder(flowAuthorityList, "mixed.test")
+		c.answerAll(order, authority, flowAuthorityList, false)
+		order = c.waitOrder(orderURL, statusReady)
+		certKey := newKey(t)
+		if rec := c.finalizeCSR(order, makeTNAuthListCSR(t, certKey, flowAuthorityList, false, "mixed.test")); rec.Code != http.StatusOK {
+			t.Fatalf("finalize = %d %s", rec.Code, rec.Body.String())
+		}
+		order = c.waitOrder(orderURL, statusValid)
+		if leaf := c.downloadLeaf(order); leaf.IsCA || len(leaf.DNSNames) != 1 {
+			t.Fatalf("leaf IsCA = %v, DNS names = %v", leaf.IsCA, leaf.DNSNames)
+		}
+	})
+	t.Run("ca grant", func(t *testing.T) {
+		f, authority := newTKAuthFlow(t)
+		f.runWorker()
+		c := f.newClient()
+		c.register()
+		orderURL, order := c.newAuthorityListOrder(flowAuthorityList, "mixed.test")
+		c.answerAll(order, authority, flowAuthorityList, true)
+		order = c.waitOrder(orderURL, statusReady)
+		certKey := newKey(t)
+		for _, ca := range []bool{false, true} {
+			rec := c.finalizeCSR(order, makeTNAuthListCSR(t, certKey, flowAuthorityList, ca, "mixed.test"))
+			assertProblem(t, rec, http.StatusBadRequest, acmeserver.ErrorBadCSR)
+		}
+		if f.ca.callCount() != 0 {
+			t.Fatal("the CA was called for a mixed order with a CA grant")
+		}
+	})
+}
+
+// Bounds the issued certificate by the Authority Token expiry.
+func TestTKAuth01TokenExpiryBoundsCertificate(t *testing.T) {
+	f, authority := newTKAuthFlow(t)
+	f.runWorker()
+	c := f.newClient()
+	c.register()
+	orderURL, order := c.newAuthorityListOrder(flowAuthorityList)
+	ch := c.onlyChallenge(order)
+	exp := time.Now().Add(30 * time.Minute).Truncate(time.Second)
+	token := authority.tokenUntil(t, thumbprint(t, &c.key.PublicKey), flowAuthorityList, false, exp)
+	if rec := c.post(ch.URL, map[string]any{"tkauth": token}); rec.Code != http.StatusOK {
+		t.Fatalf("challenge response = %d %s", rec.Code, rec.Body.String())
+	}
+	order = c.waitOrder(orderURL, statusReady)
+	if rec := c.finalizeCSR(order, makeTNAuthListCSR(t, newKey(t), flowAuthorityList, false)); rec.Code != http.StatusOK {
+		t.Fatalf("finalize = %d %s", rec.Code, rec.Body.String())
+	}
+	order = c.waitOrder(orderURL, statusValid)
+	if leaf := c.downloadLeaf(order); leaf.NotAfter.After(exp) {
+		t.Fatalf("leaf NotAfter = %v outlives the token expiry %v", leaf.NotAfter, exp)
+	}
+	if got := f.ca.calls[0].NotAfter; !got.Equal(exp) {
+		t.Fatalf("issue request NotAfter = %v, want %v", got, exp)
+	}
+}
+
 // Refuses responses and orders that do not follow the tkauth-01 rules.
 func TestTKAuth01Refusals(t *testing.T) {
 	f, authority := newTKAuthFlow(t)
@@ -262,6 +361,13 @@ func TestTKAuth01Refusals(t *testing.T) {
 		rec := c.post(baseURL+"new-order", map[string]any{"identifiers": []map[string]string{
 			{"type": "TNAuthList", "value": base64.RawURLEncoding.EncodeToString([]byte("hello"))}}})
 		assertProblem(t, rec, http.StatusBadRequest, acmeserver.ErrorRejectedIdentifier)
+	})
+	t.Run("second authority list", func(t *testing.T) {
+		other := []byte{0x30, 0x08, 0xa0, 0x06, 0x16, 0x04, '9', '9', '9', '9'}
+		rec := c.post(baseURL+"new-order", map[string]any{"identifiers": []map[string]string{
+			{"type": "TNAuthList", "value": base64.RawURLEncoding.EncodeToString(flowAuthorityList)},
+			{"type": "TNAuthList", "value": base64.RawURLEncoding.EncodeToString(other)}}})
+		assertProblem(t, rec, http.StatusBadRequest, acmeserver.ErrorMalformed)
 	})
 	t.Run("unknown identifier case", func(t *testing.T) {
 		rec := c.post(baseURL+"new-order", map[string]any{"identifiers": []map[string]string{
@@ -280,6 +386,26 @@ func TestTKAuth01Refusals(t *testing.T) {
 		}
 		assertProblem(t, c.post(ch.URL, map[string]any{"tkauth": string(big)}), http.StatusBadRequest,
 			acmeserver.ErrorMalformed)
+	})
+	t.Run("repeated responses after the answer", func(t *testing.T) {
+		orderURL, order := c.newAuthorityListOrder(flowAuthorityList)
+		ch := c.onlyChallenge(order)
+		token := authority.token(t, thumbprint(t, &c.key.PublicKey), flowAuthorityList, false)
+		if rec := c.post(ch.URL, map[string]any{"tkauth": token}); rec.Code != http.StatusOK {
+			t.Fatalf("challenge response = %d %s", rec.Code, rec.Body.String())
+		}
+		c.waitOrder(orderURL, statusReady)
+		for _, payload := range []map[string]any{{}, {"tkauth": "not.a.token"}} {
+			var current challengeBody
+			rec := c.post(ch.URL, payload)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("repeated response = %d %s", rec.Code, rec.Body.String())
+			}
+			decode(t, rec, &current)
+			if current.Status != statusValid {
+				t.Fatalf("challenge status = %s after a repeated response", current.Status)
+			}
+		}
 	})
 	t.Run("token for another account", func(t *testing.T) {
 		other := f.newClient()
