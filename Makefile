@@ -67,6 +67,10 @@ test-cert-manager: test-scratch ## Issue and renew through cert-manager in a thr
 
 # FUZZ_TIME bounds each target. go test fuzzes one target per invocation, so the targets run in turn.
 FUZZ_TIME ?= 20s
+# Minimization of newly interesting inputs stalls the workers for seconds at a time. A worker still
+# busy when FUZZ_TIME expires makes Go report the run as failed with "context deadline exceeded"
+# (golang/go#75804), so the bounded runs disable it. Set a duration to minimize crashers locally.
+FUZZ_MINIMIZE_TIME ?= 0
 FUZZ_TARGETS := ./internal/jws:FuzzParse ./internal/jws:FuzzParseProfiles ./internal/jws:FuzzParseCompact \
 	./internal/jws:FuzzParseJWK ./internal/jws:FuzzUnmarshalStrict \
 	.:FuzzIdentifierNormalize ./challenge:FuzzDNSResponse ./challenge:FuzzALPNProof
@@ -77,7 +81,7 @@ fuzz: ## Fuzz every parsing target for FUZZ_TIME each. Failing inputs are saved 
 		pkg="$${target%%:*}"; name="$${target##*:}"; \
 		go test -list "^$$name$$" "$$pkg" | grep -x "$$name" >/dev/null || { echo "fuzz target $$name is missing from $$pkg"; exit 1; }; \
 		echo "fuzzing $$name in $$pkg for $(FUZZ_TIME)"; \
-		go test -run "^$$" -fuzz "^$$name$$" -fuzztime "$(FUZZ_TIME)" "$$pkg"; \
+		go test -run "^$$" -fuzz "^$$name$$" -fuzztime "$(FUZZ_TIME)" -fuzzminimizetime "$(FUZZ_MINIMIZE_TIME)" "$$pkg"; \
 	done
 
 ##@ Documentation
