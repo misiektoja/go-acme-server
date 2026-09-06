@@ -80,6 +80,9 @@ func TestRecoverAfterAccountDeactivationAndExpiry(t *testing.T) {
 	}
 	id := strings.TrimPrefix(location, baseURL+"order/")
 	waitFor(t, "recovered publication", func() bool {
+		// The failed commit releases the task with a backoff measured on the controlled clock,
+		// so the clock has to reach it for the recovery attempt to run.
+		clock.advance(10 * time.Millisecond)
 		stored, err := f.store.Order(t.Context(), id)
 		return err == nil && stored.Status == acmeserver.OrderValid
 	})
