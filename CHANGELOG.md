@@ -1,9 +1,10 @@
 # Changelog
 
-## Unreleased (TBD)
+## 0.1.0 (2026-09-06)
 
-Embed an ACME server with network and Authority Token challenge validation and recoverable issuance
-through a host CA.
+First release. Embed an ACME server in a Go CA or PKI application. The library implements
+RFC 8555 with TLS-ALPN-01, IP identifiers, Authority Token challenges and renewal information.
+The host supplies storage, the CA and the challenge validators.
 
 ### Features
 
@@ -31,16 +32,14 @@ through a host CA.
 * **Issuance recovery** preserves a durable dispatch decision and retains unpublished CA results for
   host reconciliation. Host issuers must deduplicate operations and enforce authorization deadlines.
   Revocations carry a durable operation ID that retries repeat, so revokers deduplicate the same way.
-* **`make test-interop`** requires acmez issuance through HTTP-01, DNS-01 with a wildcard and its
-  base domain, TLS-ALPN-01 and an IP identifier, Certbot HTTP-01 and manual-hook DNS-01 wildcard issuance with
-  revocation, lego HTTP-01 issuance with revocation, DNS-01 wildcard and TLS-ALPN-01 issuance,
-  renewal information and certificate replacement through acmez and lego, delayed issuance
-  through Certbot and lego, Go crypto/acme account changes, issuance, key-signed revocation and
-  deactivation, tkauth-01 issuance with a local Token Authority, incorrect-proof rejection for
-  every challenge type, go-jose signed account, key change and external account binding requests,
-  retried and concurrent registrations, challenge responses, finalizations, key changes and nonce
-  use, two workers sharing one store and SQLite process recovery, all over trusted HTTPS. Test artifacts use a configurable output directory. The SQLite adapter is test
-  infrastructure.
+* **`make test-interop`** runs independent clients against the server over trusted HTTPS.
+  acmez, Certbot, lego and the Go crypto/acme client issue through HTTP-01, DNS-01 with a wildcard
+  and its base domain, TLS-ALPN-01 and an IP identifier, revoke, replace certificates through
+  renewal information and wait out delayed issuance. An incorrect proof of every challenge type is
+  rejected. go-jose signs raw requests to check tkauth-01 with a local Token Authority, external
+  account binding, key changes and retried or concurrent requests. Two workers share one SQLite
+  store and a killed worker is recovered. Test artifacts use a configurable output directory. The
+  SQLite adapter is test infrastructure.
 * **`make test-cert-manager`** issues and renews a certificate through cert-manager 1.21.1 in a
   throwaway kind cluster against a small server built from the library. CI runs it weekly and on
   request.
