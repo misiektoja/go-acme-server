@@ -40,23 +40,24 @@ Every change must comply with the Developer Certificate of Origin 1.1. Use `git 
 
 The module uses semantic versioning. The public API is every exported identifier of the root package and of `challenge`, `memstore`, `nonce` and `storetest`. The `internal` packages and the `test/interop` module are not part of it.
 
-Before v1.0.0 a minor release may change the public API. The changelog names every such change and the reason. Patch releases keep the API. These rules apply to every release:
+Before v1.0.0 a minor release may change the public API. The release notes name every such change and the reason. Patch releases keep the API. These rules apply to every release:
 
 * Structs may gain fields. Construct them with field names and, when a host stores resources as JSON, tolerate fields it does not know.
 * Statuses, error types, challenge types, identifier types and task kinds may gain values. Switch statements over them need a default case.
 * Interfaces the host implements, such as `Store`, `Issuer`, `Revoker`, `Validator`, `Policy`, `RenewalAdvisor` and `challenge.TokenAuthorities`, may gain methods before v1.0.0. A store change comes with a `storetest` update, so run that suite when upgrading. After v1.0.0 new server capabilities go through optional interfaces that the server detects.
-* Wire behavior that clients can observe changes only with a changelog entry and an RFC citation.
+* Wire behavior that clients can observe changes only with a release notes entry and an RFC citation.
 
 ## Releasing
 
-Releases are tags on `main`. To publish a version:
+A release is started by pushing a version tag that is reachable from `main` and by nothing else. `RELEASE_NOTES.md` carries one section per version and its section becomes the release description.
 
-1. Replace the `Unreleased (TBD)` heading in `CHANGELOG.md` with the version and date and give the entries a final read as a user of the library.
-2. Run `make lint`, `make test`, `make test-interop` and `RELEASE_VERSION=vX.Y.Z make release-check`. The release check exports `HEAD` with `git archive`, verifies, builds and tests the export and imports it from a separate module, so it catches files that are ignored, untracked or only present locally.
-3. Merge `dev` into `main`, create a signed annotated tag such as `git tag -s v0.1.0 -m 'v0.1.0'` and push the branch and the tag.
-4. Create the GitHub release from the tag with the changelog section as its notes.
+1. On `dev`, add or complete the `## [X.Y.Z] - D Mon YYYY` section in `RELEASE_NOTES.md` and read it as a user of the library.
+2. Run `make lint`, `make test`, `make test-interop` and `VERSION=vX.Y.Z make release-check`. The release check exports `HEAD` with `git archive`, verifies, builds and tests the export and imports it from a separate module, so it catches files that are ignored, untracked or only present locally.
+3. Merge `dev` into `main`, create a signed annotated tag such as `git tag -s v0.1.0 -m 'v0.1.0'` and push `main` and the tag.
+4. `release.yml` repeats the release check on the tag, builds the source archives, the SBOM and the checksums, attests their provenance and creates a **draft** release with the release notes section as its description. Review the draft and publish it. Never draft a release in the GitHub UI, because that creates the tag and starts the workflow against a release that is already published. The workflow refuses to rebuild a published release.
 5. Confirm the module proxy serves the version with `GOPROXY=https://proxy.golang.org GOFLAGS=-mod=mod go list -m github.com/misiektoja/go-acme-server@vX.Y.Z` from a directory outside the repository and check that pkg.go.dev shows the package documentation.
-6. Start the next `Unreleased (TBD)` section in `CHANGELOG.md` on `dev`.
+
+Each release carries the complete source as `go-acme-server-<version>-source.zip` and `.tar.gz`, a CycloneDX SBOM, a SHA-256 checksum manifest and a signed provenance bundle `go-acme-server-<version>.intoto.jsonl`. Verify a file with `gh attestation verify <file> --repo misiektoja/go-acme-server` or offline with `--bundle`.
 
 ## Code style
 
