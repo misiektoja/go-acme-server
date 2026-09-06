@@ -99,7 +99,7 @@ func (s *Server) taskPhase(base context.Context) (context.Context, context.Cance
 
 // Validates a challenge and records the result on the challenge, its authorization and its order.
 func (s *Server) runValidation(base context.Context, task *Task) {
-	ch, authz, ok := s.validationTargets(base, task)
+	ch, authz, account, ok := s.validationTargets(base, task)
 	if !ok {
 		return
 	}
@@ -107,6 +107,15 @@ func (s *Server) runValidation(base context.Context, task *Task) {
 	if status := effectiveAuthzStatus(authz, now); status != AuthorizationPending {
 		ch.Status = ChallengeInvalid
 		ch.Error = Problemf(ErrorMalformed, "authorization was %s before validation", string(status))
+		s.completeValidation(base, task, ch, authz)
+		return
+	}
+	// RFC 8555 section 7.3.6 leaves no pending work behind a closed account, so a deactivated
+	// subscriber never has a proof fetched from its infrastructure.
+	if account.Status != AccountValid {
+		ch.Status = ChallengeInvalid
+		ch.Error = NewProblem(ErrorUnauthorized, "account is no longer valid")
+		authz.Status = AuthorizationInvalid
 		s.completeValidation(base, task, ch, authz)
 		return
 	}
@@ -159,25 +168,31 @@ func (s *Server) runValidation(base context.Context, task *Task) {
 	s.completeValidation(base, task, ch, authz)
 }
 
-// Loads the challenge and authorization of a validation task and reports whether a proof is still needed.
-func (s *Server) validationTargets(base context.Context, task *Task) (*Challenge, *Authorization, bool) {
+// Loads the challenge, authorization and account of a validation task and reports whether a proof
+// is still needed.
+func (s *Server) validationTargets(base context.Context, task *Task) (*Challenge, *Authorization, *Account, bool) {
 	ctx, cancel := s.taskPhase(base)
 	defer cancel()
 	ch, err := s.store.Challenge(ctx, task.TargetID)
 	if err != nil {
 		s.dropOnNotFound(base, task, err, "challenge")
-		return nil, nil, false
+		return nil, nil, nil, false
 	}
 	if ch.Status != ChallengeProcessing {
 		s.finishTask(base, task)
-		return nil, nil, false
+		return nil, nil, nil, false
 	}
 	authz, err := s.store.Authorization(ctx, ch.AuthorizationID)
 	if err != nil {
 		s.dropOnNotFound(base, task, err, "authorization")
-		return nil, nil, false
+		return nil, nil, nil, false
 	}
-	return ch, authz, true
+	account, err := s.store.Account(ctx, ch.AccountID)
+	if err != nil {
+		s.dropOnNotFound(base, task, err, "account")
+		return nil, nil, nil, false
+	}
+	return ch, authz, account, true
 }
 
 // Runs a validator under its own task timeout and reports what the response authorizes.
