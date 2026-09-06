@@ -13,8 +13,9 @@ from a local TLS listener. Certbot uses its standalone HTTP-01 solver on an unpr
 and its manual plugin for a DNS-01 wildcard with its base domain. The manual hooks are shell
 scripts written into the test directory that append and remove TXT values in files the local
 responder reads. Certbot then revokes the certificate through its account. lego issues through
-its own HTTP-01 server and through DNS-01 for the same wildcard pair with a provider that writes
-to the responder directly. It revokes with a reason code and receives `alreadyRevoked` on the
+its own HTTP-01 server, through DNS-01 for the same wildcard pair with a provider that writes
+to the responder directly and through its TLS-ALPN-01 listener, which the test confirms is closed
+after issuance. It revokes with a reason code and receives `alreadyRevoked` on the
 second attempt. The test CA records revocations by operation ID so each test confirms one CA call.
 Certbot and lego also issue while the test CA answers Pending for two seconds, so both wait out a
 processing order without ordering again.
