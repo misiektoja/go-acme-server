@@ -62,8 +62,8 @@ jobs:
         with:
           go-version-file: go.mod
 
-      # A short budget keeps the job mandatory. Longer runs remain a local task. The budget must
-      # comfortably exceed the time a loaded runner needs to gather baseline coverage, because Go
-      # reports a deadline that expires during that phase as a failure.
+      # A short budget keeps the job mandatory. Longer runs remain a local task. The Makefile
+      # disables input minimization because a worker still minimizing when the budget expires makes
+      # Go fail the run with "context deadline exceeded" (golang/go#75804).
       - name: Fuzz parsing paths
         run: make fuzz FUZZ_TIME=30s
