@@ -31,7 +31,8 @@ func checkSANExtensions(extensions []pkix.Extension) error {
 	return nil
 }
 
-// Returns the complete supported SAN set and checks the common name against it.
+// Returns the complete supported SAN set and checks the common name against it, unless an
+// authority list is the certificate's only identity.
 func certificateIdentifiers(leaf *x509.Certificate) ([]Identifier, error) {
 	if err := checkSANExtensions(leaf.Extensions); err != nil {
 		return nil, err

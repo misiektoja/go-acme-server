@@ -95,7 +95,8 @@ func checkCSRKey(key any) *Problem {
 	return nil
 }
 
-// Returns the normalized identifiers a CSR requests through its SANs and common name.
+// Returns the normalized identifiers a CSR requests through its SANs and, unless an authority
+// list is the only one, its common name.
 func csrIdentifiers(csr *x509.CertificateRequest) ([]Identifier, *Problem) {
 	tnAuthList, present, err := tnAuthListExtension(csr.Extensions)
 	if err != nil {
