@@ -25,7 +25,8 @@ type WorkerConfig struct {
 	PollInterval time.Duration
 	// How long a claimed task stays leased. Defaults to two minutes.
 	Lease time.Duration
-	// The time limit of one validator or issuer call. Defaults to 30 seconds.
+	// Bounds each phase of a task separately: one validator or issuer call, and the store
+	// operations that record its outcome. Defaults to 30 seconds.
 	TaskTimeout time.Duration
 	// Limits validation and pre-dispatch policy retries to five by default without limiting issuance recovery.
 	MaxAttempts int
