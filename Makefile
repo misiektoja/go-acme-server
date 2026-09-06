@@ -124,10 +124,10 @@ GITLEAKS ?= $(LOCALBIN)/gitleaks
 ACTIONLINT ?= $(LOCALBIN)/actionlint
 
 ## Tool Versions
-GOLANGCI_LINT_VERSION ?= v2.11.4
-GOVULNCHECK_VERSION ?= v1.1.4
+GOLANGCI_LINT_VERSION ?= v2.13.2
+GOVULNCHECK_VERSION ?= v1.7.0
 GITLEAKS_VERSION ?= v8.30.1
-ACTIONLINT_VERSION ?= v1.7.11
+ACTIONLINT_VERSION ?= v1.7.12
 
 .PHONY: golangci-lint
 golangci-lint: | $(LOCALBIN) ## Download golangci-lint locally if necessary.

@@ -39,15 +39,20 @@ linters:
       - linters:
           - lll
         source: '^func '
-      # Test code closes bodies, ignores errors and repeats setup on purpose.
+      # Test code closes bodies, ignores errors, repeats setup and repeats literals on purpose.
       - linters:
           - bodyclose
           - dupl
           - errcheck
+          - goconst
           - gosec
           - lll
           - noctx
         path: _test\.go$
+      # The shared store contracts are test code in a regular package.
+      - linters:
+          - goconst
+        path: ^storetest/
 formatters:
   enable:
     - gofmt
