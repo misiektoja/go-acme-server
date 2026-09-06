@@ -41,6 +41,9 @@ func Run(t *testing.T, open func(t *testing.T) acmeserver.Store) {
 	t.Run("IssuanceFailureAndDuplicate", func(t *testing.T) { testIssuanceFailureAndDuplicate(t, open(t)) })
 	t.Run("DispatchSnapshot", func(t *testing.T) { testDispatchSnapshot(t, open(t)) })
 	t.Run("AuthorizationScope", func(t *testing.T) { testAuthorizationScope(t, open(t)) })
+	t.Run("RenewalLookup", func(t *testing.T) { testRenewalLookup(t, open(t)) })
+	t.Run("ReplacementClaim", func(t *testing.T) { testReplacementClaim(t, open(t)) })
+	t.Run("ConcurrentReplacement", func(t *testing.T) { testConcurrentReplacement(t, open(t)) })
 }
 
 // Returns a valid account with a fresh P-256 key.
