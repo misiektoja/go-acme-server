@@ -15,12 +15,13 @@ through a host CA.
   public-destination egress by default. Private networks require explicit exceptions. HTTP and TLS
   destination port overrides are for tests only.
 * **tkauth-01 and TNAuthList identifiers** implement RFC 9447 and RFC 9448. `TNAuthListIdentifiers`
-  accepts orders for a base64url DER TN authorization list, which is offered the Authority Token
+  accepts orders for one base64url DER TN authorization list, which is offered the Authority Token
   challenge alone. The validator checks the token against the challenge identifier and the account
-  key, and asks a host `TokenAuthorities` implementation for the signing certificate instead of
-  fetching `x5u`. `Config.TokenAuthority` advertises where clients may obtain a token. A token that
-  grants a CA certificate requires the matching basic constraint in the certificate request, and a
-  request for a CA certificate is now refused unless a challenge granted one.
+  key, accepts the `tktype` spelling of either RFC, and asks a host `TokenAuthorities`
+  implementation for the signing certificate instead of fetching `x5u`. `Config.TokenAuthority`
+  advertises where clients may obtain a token. Every authorization of an order must have granted
+  the CA basic constraint the certificate request asks for, so a request for a CA certificate is
+  refused unless every challenge granted one. Issued certificates may not outlive the token.
 * **Issuance recovery** preserves a durable dispatch decision and retains unpublished CA results for
   host reconciliation. Host issuers must deduplicate operations and enforce authorization deadlines.
   Revocations carry a durable operation ID that retries repeat, so revokers deduplicate the same way.
