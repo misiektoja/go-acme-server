@@ -23,6 +23,7 @@ need them.
 | `nonce/` | The single-process nonce manager |
 | `storetest/` | The store contract suite |
 | `internal/jws/` | JWS, JWK and strict JSON parsing, not part of the public API |
+| `examples/` | Runnable host programs, built with the root module |
 | `test/interop/` | A separate module with the independent client tests, the SQLite adapter and the cert-manager harness |
 | `docs/` | This site |
 
@@ -60,7 +61,8 @@ publishes the site from the default branch.
 Package documentation on [pkg.go.dev](https://pkg.go.dev/github.com/misiektoja/go-acme-server)
 comes from the Go doc comments. Every exported identifier and every configuration field has one.
 User-facing behavior changes belong in both places: the doc comment for the API and the relevant
-page here for the walkthrough.
+page here for the walkthrough. Code listings that a page shows in full come from `examples/`
+through snippet includes, so change the program and the page follows.
 
 ## Test artifacts
 

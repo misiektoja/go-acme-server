@@ -35,7 +35,7 @@ in `nonce` and the store contract suite in `storetest`.
 ## Start here
 
 **[Getting started](getting-started.md)** builds a complete local ACME server in one Go file and
-issues a certificate with lego. Read it first, then replace each placeholder piece with your own
+issues a certificate with lego. The program is in the repository under `examples/quickstart`. Read it first, then replace each placeholder piece with your own
 implementation by following the integration guide.
 
 ## Where to go next

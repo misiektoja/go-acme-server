@@ -35,6 +35,10 @@ validation:
 
 markdown_extensions:
   - admonition
+  # Code listings are included from the repository so the pages and the examples cannot drift.
+  - pymdownx.snippets:
+      base_path: [.]
+      check_paths: true
   - toc:
       permalink: true
   - pymdownx.superfences:

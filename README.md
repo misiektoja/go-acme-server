@@ -111,7 +111,9 @@ must match it exactly, so run the handler behind the public origin it advertises
 
 The [getting started guide](https://misiektoja.github.io/go-acme-server/getting-started/) builds a
 complete local server in one file, issues a certificate with lego and names what to replace before
-production. The package example in `example_test.go` shows the same wiring in Go documentation form.
+production. That program is in [examples/quickstart](examples/quickstart/) and runs with
+`go run ./examples/quickstart`. The package example in `example_test.go` shows the same wiring in
+Go documentation form.
 
 ## Documentation
 
