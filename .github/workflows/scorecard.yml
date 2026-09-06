@@ -1,0 +1,67 @@
+# Scores the repository against the OpenSSF Scorecard supply chain checks.
+#
+# Scorecard inspects how the repository is run rather than the code it holds: pinned actions, branch
+# protection, a security policy, release provenance and so on. Findings are reported under Security,
+# Code scanning, next to the CodeQL results. Uploading them needs code scanning, which is available for
+# a public repository, so the job skips without starting a runner while the repository is private.
+#
+# Scorecard follows a successful CodeQL run so its SAST check sees the completed analysis instead of
+# racing it. Repository configuration changes trigger it directly because they create no CodeQL run.
+name: Scorecard
+
+on:
+  branch_protection_rule:
+  workflow_run:
+    workflows: [CodeQL]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    if: >-
+      github.event.repository.private == false &&
+      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+    name: Supply chain score
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # Uploading the results to the code scanning dashboard.
+      security-events: write
+      # Reading the branch protection and rulesets that the Branch-Protection check scores.
+      id-token: write
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run the Scorecard checks
+        uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          # Publishing lets a badge read the score and lets others see how it was reached. It sends
+          # the result of a public repository to the OpenSSF, and nothing else.
+          publish_results: true
+
+      # The code scanning dashboard retains findings for a limited time, so the raw result stays
+      # available for as long as the run does.
+      - name: Keep the raw result with the run
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: scorecard-results
+          path: results.sarif
+          retention-days: 5
+
+      - name: Report the findings to code scanning
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          sarif_file: results.sarif
