@@ -80,6 +80,29 @@ fuzz: ## Fuzz every parsing target for FUZZ_TIME each. Failing inputs are saved 
 		go test -run "^$$" -fuzz "^$$name$$" -fuzztime "$(FUZZ_TIME)" "$$pkg"; \
 	done
 
+##@ Release
+
+# RELEASE_VERSION names the tag a release check verifies, for example v0.1.0.
+RELEASE_VERSION ?=
+
+.PHONY: release-check
+release-check: test-scratch ## Build, vet and test an export of HEAD and import it from a separate module. Set RELEASE_VERSION to check the changelog heading.
+	@if grep -q '^replace ' go.mod; then echo "error: go.mod has a replace directive"; exit 1; fi
+	@if [ -n "$(RELEASE_VERSION)" ]; then \
+		version="$(RELEASE_VERSION)"; version="$${version#v}"; \
+		grep -q "^## $$version (" CHANGELOG.md || { echo "error: CHANGELOG.md has no heading for $$version"; exit 1; }; \
+		if grep -q '^## Unreleased' CHANGELOG.md; then echo "error: CHANGELOG.md still has an Unreleased section"; exit 1; fi; \
+	fi
+	@export="$(ACME_TEST_SCRATCH)/release-check"; \
+	if [ -e "$$export" ]; then echo "error: $$export exists, move it aside first"; exit 1; fi; \
+	mkdir -p "$$export/export" "$$export/consumer"; \
+	git archive --format=tar HEAD | tar -x -C "$$export/export"; \
+	cd "$$export/export" && go mod verify && go build ./... && go vet ./... && go test -count=1 ./...; \
+	cd "$$export/consumer" && printf 'module example.com/consumer\n\ngo %s\n\nrequire github.com/misiektoja/go-acme-server v0.0.0\n\nreplace github.com/misiektoja/go-acme-server => ../export\n' "$(GO_VERSION)" > go.mod; \
+	printf 'package main\n\nimport (\n\t"log"\n\n\tacmeserver "github.com/misiektoja/go-acme-server"\n\t"github.com/misiektoja/go-acme-server/memstore"\n\t"github.com/misiektoja/go-acme-server/nonce"\n)\n\nfunc main() {\n\t_, err := acmeserver.New(acmeserver.Config{Store: memstore.New(), Nonces: nonce.New(nonce.Options{})})\n\tlog.Println(err)\n}\n' > main.go; \
+	go mod tidy && go build ./... && go run .; \
+	echo "release check passed for $$(git -C "$(CURDIR)" rev-parse --short HEAD)"
+
 ##@ Checks
 
 .PHONY: lint
