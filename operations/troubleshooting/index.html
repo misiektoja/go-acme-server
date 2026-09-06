@@ -1084,10 +1084,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#unauthorized-jws-url-does-not-match-the-request-url" class="md-nav__link">
+  <a href="#the-signed-url-does-not-match" class="md-nav__link">
     <span class="md-ellipsis">
       
-        unauthorized: JWS url does not match the request URL
+        The signed URL does not match
       
     </span>
   </a>
@@ -1095,10 +1095,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#badnonce-on-many-requests" class="md-nav__link">
+  <a href="#repeated-badnonce-errors" class="md-nav__link">
     <span class="md-ellipsis">
       
-        badNonce on many requests
+        Repeated badNonce errors
       
     </span>
   </a>
@@ -1106,10 +1106,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#accountdoesnotexist-after-a-restart" class="md-nav__link">
+  <a href="#the-account-is-gone-after-a-restart" class="md-nav__link">
     <span class="md-ellipsis">
       
-        accountDoesNotExist after a restart
+        The account is gone after a restart
       
     </span>
   </a>
@@ -1128,10 +1128,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#badcsr-at-finalization" class="md-nav__link">
+  <a href="#finalization-fails-with-badcsr" class="md-nav__link">
     <span class="md-ellipsis">
       
-        badCSR at finalization
+        Finalization fails with badCSR
       
     </span>
   </a>
@@ -1150,10 +1150,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#alreadyreplaced-on-a-renewal" class="md-nav__link">
+  <a href="#a-renewal-is-refused-with-alreadyreplaced" class="md-nav__link">
     <span class="md-ellipsis">
       
-        alreadyReplaced on a renewal
+        A renewal is refused with alreadyReplaced
       
     </span>
   </a>
@@ -1526,10 +1526,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#unauthorized-jws-url-does-not-match-the-request-url" class="md-nav__link">
+  <a href="#the-signed-url-does-not-match" class="md-nav__link">
     <span class="md-ellipsis">
       
-        unauthorized: JWS url does not match the request URL
+        The signed URL does not match
       
     </span>
   </a>
@@ -1537,10 +1537,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#badnonce-on-many-requests" class="md-nav__link">
+  <a href="#repeated-badnonce-errors" class="md-nav__link">
     <span class="md-ellipsis">
       
-        badNonce on many requests
+        Repeated badNonce errors
       
     </span>
   </a>
@@ -1548,10 +1548,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#accountdoesnotexist-after-a-restart" class="md-nav__link">
+  <a href="#the-account-is-gone-after-a-restart" class="md-nav__link">
     <span class="md-ellipsis">
       
-        accountDoesNotExist after a restart
+        The account is gone after a restart
       
     </span>
   </a>
@@ -1570,10 +1570,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#badcsr-at-finalization" class="md-nav__link">
+  <a href="#finalization-fails-with-badcsr" class="md-nav__link">
     <span class="md-ellipsis">
       
-        badCSR at finalization
+        Finalization fails with badCSR
       
     </span>
   </a>
@@ -1592,10 +1592,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#alreadyreplaced-on-a-renewal" class="md-nav__link">
+  <a href="#a-renewal-is-refused-with-alreadyreplaced" class="md-nav__link">
     <span class="md-ellipsis">
       
-        alreadyReplaced on a renewal
+        A renewal is refused with alreadyReplaced
       
     </span>
   </a>
@@ -1679,8 +1679,9 @@ are on the host side of the contracts, so start with the integration rather than
 loopback, link-local or otherwise special-purpose address. Add the range to
 <code>NetworkOptions.AllowedNetworks</code> when the CA issues to that network on purpose. The resolver
 address itself does not need an exception.</p>
-<h2 id="unauthorized-jws-url-does-not-match-the-request-url">unauthorized: JWS url does not match the request URL<a class="headerlink" href="#unauthorized-jws-url-does-not-match-the-request-url" title="Permanent link">&para;</a></h2>
-<p>The URL the client signed differs from the one the server built from <code>Config.BaseURL</code>. Compare the
+<h2 id="the-signed-url-does-not-match">The signed URL does not match<a class="headerlink" href="#the-signed-url-does-not-match" title="Permanent link">&para;</a></h2>
+<p>The client receives <code>unauthorized</code> with the detail <code>JWS url does not match the request URL</code>. The
+URL the client signed differs from the one the server built from <code>Config.BaseURL</code>. Compare the
 directory URL the client uses with the base URL, character by character, including the scheme,
 port and trailing slash. Common causes:</p>
 <ul>
@@ -1688,14 +1689,14 @@ port and trailing slash. Common causes:</p>
 <li>a base URL with the internal listen address instead of the public origin</li>
 <li>TLS terminated at a proxy while the base URL says <code>http</code> or the reverse</li>
 </ul>
-<h2 id="badnonce-on-many-requests">badNonce on many requests<a class="headerlink" href="#badnonce-on-many-requests" title="Permanent link">&para;</a></h2>
+<h2 id="repeated-badnonce-errors">Repeated <code>badNonce</code> errors<a class="headerlink" href="#repeated-badnonce-errors" title="Permanent link">&para;</a></h2>
 <p>A single <code>badNonce</code> is normal after a restart or when a nonce expires. Clients retry with the nonce
 in the response. Persistent <code>badNonce</code>:</p>
 <ul>
 <li><strong>Several handler replicas</strong> with in-memory nonces. See <a href="../deployment/#replicas">Deployment</a>.</li>
 <li><strong>Nonce capacity exceeded.</strong> <code>nonce.Options.Capacity</code> bounds outstanding nonces and the oldest are dropped. Raise it or shorten the TTL.</li>
 </ul>
-<h2 id="accountdoesnotexist-after-a-restart">accountDoesNotExist after a restart<a class="headerlink" href="#accountdoesnotexist-after-a-restart" title="Permanent link">&para;</a></h2>
+<h2 id="the-account-is-gone-after-a-restart">The account is gone after a restart<a class="headerlink" href="#the-account-is-gone-after-a-restart" title="Permanent link">&para;</a></h2>
 <p>The store forgot the account. <code>memstore</code> keeps nothing across restarts. The client keeps its account
 URL and key, so it is refused until it registers again. Use a durable store or delete the client's
 account state in development.</p>
@@ -1735,7 +1736,7 @@ account state in development.</p>
 </tr>
 </tbody>
 </table>
-<h2 id="badcsr-at-finalization">badCSR at finalization<a class="headerlink" href="#badcsr-at-finalization" title="Permanent link">&para;</a></h2>
+<h2 id="finalization-fails-with-badcsr">Finalization fails with <code>badCSR</code><a class="headerlink" href="#finalization-fails-with-badcsr" title="Permanent link">&para;</a></h2>
 <ul>
 <li>The CSR key equals the account key, is an RSA key outside 2048 to 4096 bits, an unsupported curve or an unsupported type.</li>
 <li>The SANs plus the common name do not equal the order's identifiers. The common name counts unless a TNAuthList is the only identifier.</li>
@@ -1745,7 +1746,7 @@ account state in development.</p>
 <p>The directory advertises it only with <code>Config.RenewalInfo</code> set. A certificate without an authority
 key identifier has no renewal identifier and no renewal information. Check that your CA sets the
 extension.</p>
-<h2 id="alreadyreplaced-on-a-renewal">alreadyReplaced on a renewal<a class="headerlink" href="#alreadyreplaced-on-a-renewal" title="Permanent link">&para;</a></h2>
+<h2 id="a-renewal-is-refused-with-alreadyreplaced">A renewal is refused with <code>alreadyReplaced</code><a class="headerlink" href="#a-renewal-is-refused-with-alreadyreplaced" title="Permanent link">&para;</a></h2>
 <p>Another order already named this certificate in <code>replaces</code> and is not invalid yet. Clients such as
 lego and acmez retry without <code>replaces</code>. If the earlier order belongs to a crashed client, it frees
 the claim when it expires after <code>Config.OrderLifetime</code>.</p>
