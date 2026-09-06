@@ -193,7 +193,8 @@ A certificate can be revoked by its issuing account, its private key or another 
 authorized for every identifier, including wildcard scope. The server stores a revocation
 operation ID and reason before calling the `Revoker` and repeats the same request after an
 uncertain answer, so the revoker must deduplicate by `OperationID`. A retry keeps the first
-recorded reason.
+recorded reason. The result is stored even when the client disconnects after the revoker
+answered.
 
 External account bindings are verified with the keys from `ExternalAccounts`. With
 `SingleUseExternalAccounts`, each key identifier binds at most one account. A retry with the same
