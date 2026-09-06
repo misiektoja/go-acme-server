@@ -181,7 +181,9 @@ before dispatch. `IssuancePolicy` can refuse that first dispatch. The issuer mus
 `Deadline` and must never start signing when `RecoveryOnly` is true. It may shorten the requested
 validity to its own lifetime policy, but a leaf that starts earlier or ends later than the order
 asked for fails the publication check. Recovery continues after account deactivation, expiry or
-exhausted ordinary retries because an external CA may already have issued a certificate.
+exhausted ordinary retries because an external CA may already have issued a certificate. An
+accepted challenge that the worker has not validated yet does not survive deactivation. It
+becomes invalid with its authorization and no proof is fetched from the subscriber.
 
 Chains that fail publication checks remain in `Order.UnpublishedResult` with the CA reference and
 are never returned to clients. The host reconciles or revokes them.
