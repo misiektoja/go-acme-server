@@ -1,6 +1,6 @@
 # Contributing
 
-go-acme-server is a Go library for embedding an ACME server into CA and PKI applications. Bug reports, interoperability results and code contributions are welcome.
+go-acme-server is a Go library for embedding an ACME server into CA and PKI applications. Bug reports, interoperability results and code contributions are welcome. Usage questions belong in Discussions, as [SUPPORT.md](SUPPORT.md) describes.
 
 ## Before contributing
 

@@ -1,5 +1,13 @@
 # go-acme-server
 
+[![GitHub Release](https://img.shields.io/github/v/release/misiektoja/go-acme-server?style=flat-square&color=blue)](https://github.com/misiektoja/go-acme-server/releases)
+[![Go Reference](https://pkg.go.dev/badge/github.com/misiektoja/go-acme-server.svg)](https://pkg.go.dev/github.com/misiektoja/go-acme-server)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)
+[![Tests](https://github.com/misiektoja/go-acme-server/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/misiektoja/go-acme-server/actions/workflows/test.yml)
+[![Interoperability](https://github.com/misiektoja/go-acme-server/actions/workflows/interop.yml/badge.svg?branch=main)](https://github.com/misiektoja/go-acme-server/actions/workflows/interop.yml)
+[![Supply chain](https://github.com/misiektoja/go-acme-server/actions/workflows/supply-chain.yml/badge.svg?branch=main)](https://github.com/misiektoja/go-acme-server/actions/workflows/supply-chain.yml)
+[![OpenSSF Scorecard](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.scorecard.dev%2Fprojects%2Fgithub.com%2Fmisiektoja%2Fgo-acme-server&query=%24.score&label=openssf%20scorecard&style=flat-square)](https://scorecard.dev/viewer/?uri=github.com/misiektoja/go-acme-server)
+
 go-acme-server is a Go library for embedding an ACME server into CA and PKI applications.
 
 The library owns the protocol: accounts, orders, authorizations, challenges, finalization,
@@ -187,6 +195,7 @@ account key returns that account and a different key is refused as unauthorized.
 ## More
 
 * [Interoperability tests](test/interop/README.md) name the clients, versions and scenarios.
+* [SUPPORT.md](SUPPORT.md) explains where to ask and what to include.
 * [CONTRIBUTING.md](CONTRIBUTING.md) lists the development checks.
 * [SECURITY.md](SECURITY.md) explains how to report a vulnerability.
 * [DEPENDENCIES.md](DEPENDENCIES.md) lists third-party code and licenses.
