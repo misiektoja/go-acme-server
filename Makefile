@@ -82,16 +82,26 @@ fuzz: ## Fuzz every parsing target for FUZZ_TIME each. Failing inputs are saved 
 
 ##@ Release
 
-# RELEASE_VERSION names the tag a release check verifies, for example v0.1.0.
-RELEASE_VERSION ?=
+# VERSION names the release tag, for example v0.1.0. Every artifact is named after it.
+VERSION ?=
+# Artifacts without a release, such as the routine SBOM run, are named after the commit instead.
+SBOM_VERSION := $(if $(VERSION),$(VERSION),$(shell git rev-parse --short HEAD))
+SOURCE_ZIP = dist/go-acme-server-$(VERSION)-source.zip
+SOURCE_TAR_GZ = dist/go-acme-server-$(VERSION)-source.tar.gz
+SBOM_FILE = dist/go-acme-server-$(SBOM_VERSION)-sbom.cdx.json
+RELEASE_CHECKSUMS = dist/go-acme-server-$(VERSION)_SHA256SUMS.txt
+
+.PHONY: require-version
+require-version:
+	@test -n "$(VERSION)" || { echo "Set VERSION, for example VERSION=v0.1.0" >&2; exit 1; }
 
 .PHONY: release-check
-release-check: test-scratch ## Build, vet and test an export of HEAD and import it from a separate module. Set RELEASE_VERSION to check the changelog heading.
+release-check: test-scratch ## Build, vet and test an export of HEAD and import it from a separate module. Set VERSION to check the release notes heading.
 	@if grep -q '^replace ' go.mod; then echo "error: go.mod has a replace directive"; exit 1; fi
-	@if [ -n "$(RELEASE_VERSION)" ]; then \
-		version="$(RELEASE_VERSION)"; version="$${version#v}"; \
-		grep -q "^## $$version (" CHANGELOG.md || { echo "error: CHANGELOG.md has no heading for $$version"; exit 1; }; \
-		if grep -q '^## Unreleased' CHANGELOG.md; then echo "error: CHANGELOG.md still has an Unreleased section"; exit 1; fi; \
+	@if [ -n "$(VERSION)" ]; then \
+		version="$(VERSION)"; version="$${version#v}"; \
+		grep -q "^## \[$$version\] - " RELEASE_NOTES.md || { echo "error: RELEASE_NOTES.md has no heading for $$version"; exit 1; }; \
+		if grep -qi '^## \[Unreleased' RELEASE_NOTES.md; then echo "error: RELEASE_NOTES.md still has an Unreleased section"; exit 1; fi; \
 	fi
 	@export="$(ACME_TEST_SCRATCH)/release-check"; \
 	if [ -e "$$export" ]; then echo "error: $$export exists, move it aside first"; exit 1; fi; \
@@ -102,6 +112,30 @@ release-check: test-scratch ## Build, vet and test an export of HEAD and import 
 	printf 'package main\n\nimport (\n\t"log"\n\n\tacmeserver "github.com/misiektoja/go-acme-server"\n\t"github.com/misiektoja/go-acme-server/memstore"\n\t"github.com/misiektoja/go-acme-server/nonce"\n)\n\nfunc main() {\n\t_, err := acmeserver.New(acmeserver.Config{Store: memstore.New(), Nonces: nonce.New(nonce.Options{})})\n\tlog.Println(err)\n}\n' > main.go; \
 	go mod tidy && go build ./... && go run .; \
 	echo "release check passed for $$(git -C "$(CURDIR)" rev-parse --short HEAD)"
+
+.PHONY: release-body
+release-body: require-version ## Extract the RELEASE_NOTES.md section of VERSION into dist/release-body.md.
+	@mkdir -p dist
+	@version="$(VERSION)"; awk -v want="## [$${version#v}]" 'index($$0, want) == 1 { found = 1; next } found && /^## \[/ { exit } found { print }' RELEASE_NOTES.md | sed '/./,$$!d' > dist/release-body.md
+	@grep -q '[^[:space:]]' dist/release-body.md || { echo "error: RELEASE_NOTES.md has no section for $(VERSION)" >&2; exit 1; }
+	@echo "Wrote dist/release-body.md"
+
+.PHONY: sbom
+sbom: cyclonedx-gomod ## Generate a CycloneDX software bill of materials for the module. Set VERSION for a release.
+	mkdir -p dist
+	"$(CYCLONEDX_GOMOD)" mod -licenses -json -output "$(SBOM_FILE)" .
+	@echo "Wrote $(SBOM_FILE)"
+
+.PHONY: release-source-archives
+release-source-archives: require-version ## Archive the complete tagged source tree as ZIP and tar. Set VERSION.
+	mkdir -p dist
+	git archive --format=zip --output "$(SOURCE_ZIP)" "$(VERSION)"
+	git archive --format=tar.gz --output "$(SOURCE_TAR_GZ)" "$(VERSION)"
+
+.PHONY: release-checksums
+release-checksums: release-source-archives ## Write SHA-256 checksums for the source archives and the SBOM. Set VERSION.
+	@test -f "$(SBOM_FILE)" || { echo "Run sbom with the same VERSION first, $(SBOM_FILE) is missing" >&2; exit 1; }
+	cd dist && shasum -a 256 "$(notdir $(SBOM_FILE))" "$(notdir $(SOURCE_ZIP))" "$(notdir $(SOURCE_TAR_GZ))" | tee "$(notdir $(RELEASE_CHECKSUMS))"
 
 ##@ Checks
 
@@ -149,12 +183,14 @@ GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
 GOVULNCHECK ?= $(LOCALBIN)/govulncheck
 GITLEAKS ?= $(LOCALBIN)/gitleaks
 ACTIONLINT ?= $(LOCALBIN)/actionlint
+CYCLONEDX_GOMOD ?= $(LOCALBIN)/cyclonedx-gomod
 
 ## Tool Versions
 GOLANGCI_LINT_VERSION ?= v2.13.2
 GOVULNCHECK_VERSION ?= v1.7.0
 GITLEAKS_VERSION ?= v8.30.1
 ACTIONLINT_VERSION ?= v1.7.12
+CYCLONEDX_GOMOD_VERSION ?= v1.11.0
 
 .PHONY: golangci-lint
 golangci-lint: | $(LOCALBIN) ## Download golangci-lint locally if necessary.
@@ -171,6 +207,10 @@ gitleaks-tool: | $(LOCALBIN) ## Download gitleaks locally if necessary.
 .PHONY: actionlint-tool
 actionlint-tool: | $(LOCALBIN) ## Download actionlint locally if necessary.
 	$(call go-install-tool,$(ACTIONLINT),github.com/rhysd/actionlint/cmd/actionlint,$(ACTIONLINT_VERSION))
+
+.PHONY: cyclonedx-gomod
+cyclonedx-gomod: | $(LOCALBIN) ## Download cyclonedx-gomod locally if necessary.
+	$(call go-install-tool,$(CYCLONEDX_GOMOD),github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod,$(CYCLONEDX_GOMOD_VERSION))
 
 # go-install-tool installs a package at a pinned version under a versioned directory and points the
 # unversioned tool path at it, so a version bump installs the new tool instead of keeping the old one.
