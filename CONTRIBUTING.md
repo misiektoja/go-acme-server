@@ -36,6 +36,17 @@ Protocol changes need negative tests and an RFC citation. Interoperability claim
 
 Every change must comply with the Developer Certificate of Origin 1.1. Use `git commit -s` only when you intend to provide that certification.
 
+## Compatibility
+
+The module uses semantic versioning. The public API is every exported identifier of the root package and of `challenge`, `memstore`, `nonce` and `storetest`. The `internal` packages and the `test/interop` module are not part of it.
+
+Before v1.0.0 a minor release may change the public API. The changelog names every such change and the reason. Patch releases keep the API. These rules apply to every release:
+
+* Structs may gain fields. Construct them with field names and, when a host stores resources as JSON, tolerate fields it does not know.
+* Statuses, error types, challenge types, identifier types and task kinds may gain values. Switch statements over them need a default case.
+* Interfaces the host implements, such as `Store`, `Issuer`, `Revoker`, `Validator`, `Policy`, `RenewalAdvisor` and `challenge.TokenAuthorities`, may gain methods before v1.0.0. A store change comes with a `storetest` update, so run that suite when upgrading. After v1.0.0 new server capabilities go through optional interfaces that the server detects.
+* Wire behavior that clients can observe changes only with a changelog entry and an RFC citation.
+
 ## Code style
 
 [.editorconfig](.editorconfig) records the whitespace rules: UTF-8, LF line endings, a final newline, no trailing whitespace, tabs for Go and Make recipes plus two-space indentation for YAML and TOML. Markdown keeps meaningful trailing spaces and `LICENSE` remains verbatim. Most editors apply these settings automatically, while a few need a plugin.
