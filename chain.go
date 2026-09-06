@@ -59,13 +59,19 @@ func certificateIdentifiers(leaf *x509.Certificate) ([]Identifier, error) {
 		return nil, errors.New("invalid certificate identifiers")
 	}
 	// A STIR certificate names a service provider in the common name, not one of its identifiers.
-	if leaf.Subject.CommonName != "" && !hasTNAuthList {
+	if leaf.Subject.CommonName != "" && !authorityListOnly(ids) {
 		cn, err := commonNameIdentifier(leaf.Subject.CommonName).Normalize()
 		if err != nil || !slices.Contains(ids, cn) {
 			return nil, errors.New("common name is outside the SAN set")
 		}
 	}
 	return ids, nil
+}
+
+// Reports whether an authority list is the only identity, the STIR case where the common name
+// names a service provider instead of one of the identifiers.
+func authorityListOnly(ids []Identifier) bool {
+	return len(ids) == 1 && ids[0].Type == IdentifierTNAuthList
 }
 
 // Interprets an IP common name as an IP identifier and every other value as DNS.

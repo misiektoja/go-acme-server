@@ -97,9 +97,13 @@ func checkCSRKey(key any) *Problem {
 
 // Returns the normalized identifiers a CSR requests through its SANs and common name.
 func csrIdentifiers(csr *x509.CertificateRequest) ([]Identifier, *Problem) {
+	tnAuthList, present, err := tnAuthListExtension(csr.Extensions)
+	if err != nil {
+		return nil, NewProblem(ErrorBadCSR, "CSR TN authorization list is not acceptable")
+	}
 	var raw []Identifier
-	if csr.Subject.CommonName != "" {
-		raw = append(raw, commonNameIdentifier(csr.Subject.CommonName))
+	if present {
+		raw = append(raw, tnAuthList)
 	}
 	for _, name := range csr.DNSNames {
 		raw = append(raw, Identifier{Type: IdentifierDNS, Value: name})
@@ -107,12 +111,9 @@ func csrIdentifiers(csr *x509.CertificateRequest) ([]Identifier, *Problem) {
 	for _, ip := range csr.IPAddresses {
 		raw = append(raw, Identifier{Type: IdentifierIP, Value: ip.String()})
 	}
-	tnAuthList, present, err := tnAuthListExtension(csr.Extensions)
-	if err != nil {
-		return nil, NewProblem(ErrorBadCSR, "CSR TN authorization list is not acceptable")
-	}
-	if present {
-		raw = append(raw, tnAuthList)
+	// A STIR request names a service provider in the common name, not one of its identifiers.
+	if csr.Subject.CommonName != "" && !authorityListOnly(raw) {
+		raw = append(raw, commonNameIdentifier(csr.Subject.CommonName))
 	}
 	if len(raw) == 0 {
 		return nil, NewProblem(ErrorBadCSR, "CSR requests no identifiers")
