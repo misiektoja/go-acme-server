@@ -1,6 +1,6 @@
 module github.com/misiektoja/go-acme-server/test/interop
 
-go 1.27.1
+go 1.26.8
 
 require (
 	github.com/go-acme/lego/v4 v4.35.2
