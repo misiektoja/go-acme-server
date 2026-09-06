@@ -21,6 +21,7 @@ const ALPNProtocol = "acme-tls/1"
 
 // Configures TLS-ALPN-01 validation without ordinary website certificate trust.
 type TLSALPNOptions struct {
+	// The resolver and egress policy. Its Resolver is required.
 	Network NetworkOptions
 	// Overrides destination port 443 for local tests only.
 	TestPort int

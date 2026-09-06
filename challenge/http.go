@@ -17,6 +17,7 @@ import (
 
 // Configures bounded HTTP-01 validation as specified by RFC 8555 section 8.3.
 type HTTPOptions struct {
+	// The resolver and egress policy. Its Resolver is required.
 	Network NetworkOptions
 	// Overrides destination port 80 for local tests only.
 	TestPort int

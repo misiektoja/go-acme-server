@@ -21,14 +21,19 @@ import (
 // Configures explicit recursive DNS endpoints with bounded messages and alias traversal.
 type ResolverOptions struct {
 	// Numeric TCP resolver endpoints, including ports, with at most three entries.
-	Servers          []netip.AddrPort
-	Timeout          time.Duration
-	MaxCNAMEs        int
+	Servers []netip.AddrPort
+	// Bounds one lookup including every alias hop and defaults to ten seconds.
+	Timeout time.Duration
+	// Bounds the CNAME chain followed for one name and defaults to eight.
+	MaxCNAMEs int
+	// Bounds one DNS message and defaults to 16 KiB.
 	MaxResponseBytes int
-	MaxRecords       int
+	// Bounds the records accepted from one response and defaults to 64.
+	MaxRecords int
 }
 
-// Queries only configured resolvers over TCP and validates response ownership before using records.
+// Queries only configured resolvers over TCP and accepts a response only when its ID and question
+// match the query.
 type Resolver struct {
 	servers    []netip.AddrPort
 	timeout    time.Duration

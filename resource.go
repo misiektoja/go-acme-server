@@ -115,6 +115,7 @@ type Challenge struct {
 
 // A stored issued certificate together with its chain.
 type Certificate struct {
+	// The base64url SHA-256 digest of the DER leaf, which names the certificate resource.
 	ID        string
 	AccountID string
 	OrderID   string
@@ -131,6 +132,7 @@ type Certificate struct {
 	// Identifies the revocation the host CA receives. It is committed with the reason before the
 	// first CA call and reused by every retry, so the CA can deduplicate.
 	RevocationOperationID string
+	// When the revocation was recorded, before the CA call. RevokedAt is set after the CA succeeded.
 	RevocationRequestedAt time.Time
 	// The RFC 9773 identifier built from the leaf's authority key identifier and serial number.
 	// It is empty when the leaf has no authority key identifier. Stores keep non-empty values

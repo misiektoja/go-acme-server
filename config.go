@@ -41,9 +41,13 @@ type WorkerConfig struct {
 
 // The optional metadata object of the directory, see RFC 8555 section 7.1.1.
 type DirectoryMeta struct {
-	TermsOfService          string
-	Website                 string
-	CAAIdentities           []string
+	// The URL of the current terms of service.
+	TermsOfService string
+	// The URL of the CA's website.
+	Website string
+	// The hostnames the CA recognizes in CAA issue and issuewild records.
+	CAAIdentities []string
+	// Tells clients that newAccount needs an external account binding.
 	ExternalAccountRequired bool
 }
 
@@ -54,17 +58,22 @@ type Config struct {
 	BaseURL string
 	// Accepts an http BaseURL for tests and local examples.
 	AllowInsecureBaseURL bool
-	Store                Store
-	Nonces               NonceManager
+	// Persists resources and background work.
+	Store Store
+	// Issues and consumes the single-use request nonces.
+	Nonces NonceManager
 	// Defaults to the system clock.
 	Clock Clock
 	// Receives operational events. It defaults to a logger that discards everything.
 	Logger *slog.Logger
-	Meta   DirectoryMeta
+	// Optional directory metadata. Nothing is advertised when it is empty.
+	Meta DirectoryMeta
 	// Bounds the size of a request body in bytes. Zero selects DefaultMaxRequestBody.
 	MaxRequestBody int64
-	Issuer         Issuer
-	Revoker        Revoker
+	// Signs certificates for finalized orders.
+	Issuer Issuer
+	// Revokes issued certificates.
+	Revoker Revoker
 	// The challenge types offered to clients. Only configured types appear in authorizations.
 	Validators map[ChallengeType]Validator
 	// Verifies external account bindings. Required when Meta.ExternalAccountRequired is set.
@@ -94,7 +103,8 @@ type Config struct {
 	// Serves RFC 9773 renewal information and accepts replaces on new orders when set.
 	// LifetimeRenewal is the built-in advisor. Nil leaves the extension off.
 	RenewalInfo RenewalAdvisor
-	Workers     WorkerConfig
+	// Tunes Run and Ready.
+	Workers WorkerConfig
 }
 
 // Validates the base URL and returns it with a trailing slash.

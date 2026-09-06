@@ -21,6 +21,7 @@ type IPResolver interface {
 
 // Configures validation egress independently from access to the DNS resolver itself.
 type NetworkOptions struct {
+	// Resolves destination names. It is required.
 	Resolver IPResolver
 	// Adds explicitly permitted networks to the default public-address policy.
 	AllowedNetworks []netip.Prefix

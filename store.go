@@ -45,9 +45,12 @@ type OrderStore interface {
 	OrderIDs(ctx context.Context, accountID, after string, limit int) ([]string, error)
 	// Returns the authorization with the given ID or ErrNotFound.
 	Authorization(ctx context.Context, id string) (*Authorization, error)
-	// Replaces the authorization and invalidates its order if authorization ends before issuance dispatch.
+	// Replaces the stored authorization when the revisions match and increments authz.Revision.
+	// When the authorization reaches a terminal status, the same operation marks its order invalid
+	// unless issuance was already dispatched.
 	UpdateAuthorization(ctx context.Context, authz *Authorization) error
-	// Checks a valid account's unexpired authorizations for every identifier in one consistent read.
+	// Reports whether the account holds a valid unexpired authorization for every identifier,
+	// read in one consistent snapshot. Revocation by another account relies on it.
 	AuthorizedFor(ctx context.Context, accountID string, identifiers []Identifier, now time.Time) (bool, error)
 	// Returns the challenge with the given ID or ErrNotFound.
 	Challenge(ctx context.Context, id string) (*Challenge, error)
@@ -72,7 +75,8 @@ type WorkStore interface {
 	AcceptChallenge(ctx context.Context, challenge *Challenge, task *Task) error
 	// Stores the order when its revision matches and enqueues the task in the same operation.
 	FinalizeOrder(ctx context.Context, order *Order, task *Task) error
-	// Records the first dispatch after checking the task fence and every supplied resource revision and status.
+	// Stores order.Issuance as the durable dispatch decision after checking the task fence and the
+	// revision and status of the order, the account and every authorization.
 	BeginIssuance(ctx context.Context, task *Task, order *Order, account *Account, authzs []*Authorization) error
 	// Leases the runnable task with the earliest RunAt, increments its fence and attempts
 	// and returns a copy. It returns ErrNotFound when no task is runnable at now.

@@ -18,8 +18,10 @@ type TXTResolver interface {
 
 // Configures the TXT resolver and complete DNS-01 attempt timeout.
 type DNSOptions struct {
+	// Looks up TXT records. It is required.
 	Resolver TXTResolver
-	Timeout  time.Duration
+	// Bounds the complete validation attempt and defaults to ten seconds.
+	Timeout time.Duration
 }
 
 // Validates a DNS-01 digest while allowing concurrent TXT proofs at the same owner name.
