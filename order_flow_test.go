@@ -652,3 +652,30 @@ func (denyPolicy) NewOrder(_ context.Context, _ *acmeserver.Account, order *acme
 
 // A non-problem error for retry paths.
 var errTransient = errors.New("temporary failure")
+
+// Publishes a certificate that the CA shortened to its own lifetime policy.
+func TestIssuanceAcceptsAShortenedValidity(t *testing.T) {
+	f := newFlow(t, nil)
+	f.ca.maxLifetime = time.Hour
+	f.runWorker()
+	c := f.newClient()
+	c.register()
+	requested := time.Now().Add(24 * time.Hour).Truncate(time.Second)
+	rec := c.post(baseURL+"new-order", map[string]any{
+		"identifiers": []map[string]string{{"type": "dns", "value": "short.test"}},
+		"notAfter":    requested.Format(time.RFC3339)})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("new-order = %d %s", rec.Code, rec.Body.String())
+	}
+	var order orderBody
+	decode(t, rec, &order)
+	location := rec.Header().Get("Location")
+	c.respondHTTP01(order)
+	order = c.waitOrder(location, statusReady)
+	c.finalize(order, newKey(t))
+	order = c.waitOrder(location, statusValid)
+	leaf := c.downloadLeaf(order)
+	if !leaf.NotAfter.Before(requested) {
+		t.Fatalf("leaf NotAfter = %v, want earlier than the requested %v", leaf.NotAfter, requested)
+	}
+}

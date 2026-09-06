@@ -45,8 +45,16 @@ func TestChainChecksCompleteIdentityAndValidity(t *testing.T) {
 		}, false},
 		{"future", func(c *x509.Certificate, _ *Order) { c.NotBefore = now.Add(time.Hour) }, false},
 		{"expired", func(c *x509.Certificate, _ *Order) { c.NotAfter = now.Add(-time.Second) }, false},
-		{"requested notBefore", func(_ *x509.Certificate, o *Order) { o.NotBefore = now.Add(-time.Hour) }, false},
-		{"requested notAfter", func(_ *x509.Certificate, o *Order) { o.NotAfter = now.Add(time.Hour) }, false},
+		{"notBefore earlier than requested", func(c *x509.Certificate, o *Order) {
+			c.NotBefore = now.Add(-time.Hour)
+			o.NotBefore = now.Add(-time.Minute)
+		}, false},
+		{"notBefore later than requested", func(_ *x509.Certificate, o *Order) { o.NotBefore = now.Add(-time.Hour) }, true},
+		{"notAfter later than requested", func(_ *x509.Certificate, o *Order) { o.NotAfter = now.Add(time.Hour) }, false},
+		{"notAfter earlier than requested", func(c *x509.Certificate, o *Order) {
+			c.NotAfter = now.Add(time.Hour)
+			o.NotAfter = now.Add(2 * time.Hour)
+		}, true},
 		{"accepted future", func(c *x509.Certificate, o *Order) { c.NotBefore = now.Add(time.Hour); o.NotBefore = c.NotBefore }, true},
 		{"outlives the grant", func(_ *x509.Certificate, o *Order) {
 			o.Issuance = &IssuanceState{Validations: []Validation{{GrantExpires: now.Add(time.Hour)}}}

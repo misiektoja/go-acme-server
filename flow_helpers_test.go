@@ -469,6 +469,8 @@ type testCA struct {
 	issued map[string][][]byte
 	// When set, every issuance returns this chain.
 	fixedChain [][]byte
+	// When set, the CA shortens every certificate to this lifetime.
+	maxLifetime time.Duration
 }
 
 // Returns a CA with a fresh root.
@@ -517,7 +519,11 @@ func (ca *testCA) Issue(_ context.Context, req acmeserver.IssueRequest) (acmeser
 	if chain, ok := ca.issued[req.OperationID]; ok {
 		return acmeserver.IssueResult{Chain: chain}, nil
 	}
-	chain, err := ca.sign(req.CSR.PublicKey, req.Identifiers, req.NotAfter, grantedCACertificate(req.Validations))
+	notAfter := req.NotAfter
+	if capped := time.Now().Add(ca.maxLifetime); ca.maxLifetime > 0 && (notAfter.IsZero() || capped.Before(notAfter)) {
+		notAfter = capped.Truncate(time.Second)
+	}
+	chain, err := ca.sign(req.CSR.PublicKey, req.Identifiers, notAfter, grantedCACertificate(req.Validations))
 	if err != nil {
 		return acmeserver.IssueResult{}, err
 	}
