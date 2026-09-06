@@ -41,6 +41,7 @@ var required = map[string]string{
 	"github.com/misiektoja/go-acme-server/test/interop/TestLegoHTTP01Revocation":                "",
 	"github.com/misiektoja/go-acme-server/test/interop/TestLegoDNS01Wildcard":                   "",
 	"github.com/misiektoja/go-acme-server/test/interop/TestLegoDelayedIssuance":                 "",
+	"github.com/misiektoja/go-acme-server/test/interop/TestLegoTLSALPN01":                       "",
 	"github.com/misiektoja/go-acme-server/test/interop/TestCertbotDelayedIssuance":              "",
 	"github.com/misiektoja/go-acme-server/test/interop/TestCryptoACMEAccountAndKeyRevocation":   "",
 	"github.com/misiektoja/go-acme-server/test/interop/TestTKAuth01Issuance":                    "",
