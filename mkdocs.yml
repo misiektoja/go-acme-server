@@ -1,0 +1,76 @@
+site_name: go-acme-server
+site_description: A Go library for embedding an ACME server into CA and PKI applications
+site_url: https://misiektoja.github.io/go-acme-server/
+repo_url: https://github.com/misiektoja/go-acme-server
+repo_name: misiektoja/go-acme-server
+copyright: Copyright the go-acme-server Authors, licensed under Apache-2.0
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+# The pip requirements file lives next to the pages for Dependabot but is not a page.
+exclude_docs: requirements.txt
+
+# The documentation build runs with --strict so every one of these findings fails the build.
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+nav:
+  - Overview: index.md
+  - Getting started: getting-started.md
+  - Support matrix: support-matrix.md
+  - Architecture: architecture.md
+  - Integration guide:
+      - Embedding the server: guide/embedding.md
+      - Storage: guide/storage.md
+      - Issuing certificates: guide/issuance.md
+      - Revocation: guide/revocation.md
+      - Challenge validators: guide/validators.md
+      - Accounts and policy: guide/accounts-and-policy.md
+      - Authority Token challenges: guide/authority-tokens.md
+      - Renewal information: guide/renewal-information.md
+  - Reference:
+      - Configuration: reference/configuration.md
+      - Endpoints: reference/endpoints.md
+      - Errors: reference/errors.md
+      - Compatibility policy: reference/compatibility.md
+  - Interoperability:
+      - Tested clients: interoperability/tested-clients.md
+  - Operations:
+      - Deployment: operations/deployment.md
+      - Troubleshooting: operations/troubleshooting.md
+  - Security:
+      - Security model: security/security-model.md
+  - Development:
+      - Development: development/development.md
+      - Testing: development/testing.md
+      - Release process: development/release-process.md
+  - Known limitations: known-limitations.md
