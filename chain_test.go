@@ -56,6 +56,9 @@ func TestChainChecksCompleteIdentityAndValidity(t *testing.T) {
 			o.NotAfter = now.Add(2 * time.Hour)
 		}, true},
 		{"accepted future", func(c *x509.Certificate, o *Order) { c.NotBefore = now.Add(time.Hour); o.NotBefore = c.NotBefore }, true},
+		{"CA certificate for a DNS order", func(c *x509.Certificate, _ *Order) {
+			c.IsCA, c.BasicConstraintsValid = true, true
+		}, false},
 		{"outlives the grant", func(_ *x509.Certificate, o *Order) {
 			o.Issuance = &IssuanceState{Validations: []Validation{{GrantExpires: now.Add(time.Hour)}}}
 		}, false},
