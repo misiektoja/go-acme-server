@@ -39,7 +39,7 @@ import (
 // Names the versions every required client run must use.
 const (
 	certbotVersion = "certbot 5.8.0"
-	clientVersions = "acmez=v3.1.6 Certbot=5.8.0 go-jose=v4.1.5 lego=v4.35.2 SQLite=v1.58.0"
+	clientVersions = "acmez=v3.1.6 Certbot=5.8.0 crypto/acme=v0.56.0 go-jose=v4.1.5 lego=v4.35.2 SQLite=v1.58.0"
 )
 
 // The only host name the harness resolves and issues for.
@@ -65,6 +65,10 @@ type harnessOptions struct {
 	external bool
 	// External account MAC keys by key identifier.
 	eab map[string][]byte
+	// How long the test CA answers Pending before it signs.
+	delay time.Duration
+	// Offers tkauth-01 for TNAuthList identifiers with this Token Authority trusted.
+	authority *tokenAuthority
 }
 
 // Returns the MAC key for a configured external account identifier.
@@ -97,6 +101,7 @@ func newHarness(t *testing.T, options harnessOptions) *harness {
 	directory := testutil.Scratch(t)
 	createCA(t, directory)
 	ca := openCA(t, directory)
+	ca.delay = options.delay
 	store, err := sqlitestore.Open(t.Context(), filepath.Join(directory, "acme.sqlite"))
 	if err != nil {
 		t.Fatal(err)
@@ -167,6 +172,14 @@ func configuredServer(t *testing.T, baseURL string, options harnessOptions, stor
 		}
 		validators[acmeserver.ChallengeDNS01] = validator
 	}
+	if options.authority != nil {
+		validator, err := challenge.NewTKAuth01(challenge.TKAuthOptions{Authorities: challenge.StaticTokenAuthorities{
+			ByURL: map[string]*x509.Certificate{authorityCertURL: options.authority.certificate}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		validators[acmeserver.ChallengeTKAuth01] = validator
+	}
 	config := acmeserver.Config{BaseURL: baseURL, Store: store, Nonces: nonce.New(nonce.Options{}),
 		Issuer: ca, Revoker: ca, Validators: validators,
 		Workers: acmeserver.WorkerConfig{External: options.external, PollInterval: 10 * time.Millisecond, RetryDelay: 10 * time.Millisecond,
@@ -174,6 +187,10 @@ func configuredServer(t *testing.T, baseURL string, options harnessOptions, stor
 	if options.eab != nil {
 		config.ExternalAccounts = eabKeys(options.eab)
 		config.SingleUseExternalAccounts = true
+	}
+	if options.authority != nil {
+		config.TNAuthListIdentifiers = true
+		config.TokenAuthority = tokenAuthorityURL
 	}
 	server, err := acmeserver.New(config)
 	if err != nil {
@@ -403,8 +420,22 @@ func (h *harness) verifyRejected(t *testing.T, account acme.Account, typ acmeser
 	t.Logf("incorrect %s proof rejected, orders invalid, no CA issuance", typ)
 }
 
+// Checks that a delayed issuance went through Pending answers, one signing and one order.
+func (h *harness) verifyDelayed(t *testing.T, order *acmeserver.Order) {
+	t.Helper()
+	rows, calls := h.issuances(t)
+	if pending := h.ca.pendingAnswers(); pending < 1 || rows != 1 || calls != 1 {
+		t.Fatalf("pending answers=%d issuance rows=%d calls=%d", pending, rows, calls)
+	}
+	ids, err := h.store.OrderIDs(t.Context(), order.AccountID, "", 10)
+	if err != nil || len(ids) != 1 {
+		t.Fatalf("orders of the account = %v, %v", ids, err)
+	}
+}
+
 // Checks that the order's certificate is stored as revoked with the reason and no CA re-issuance.
-func (h *harness) verifyRevoked(t *testing.T, order *acmeserver.Order, reason int) {
+// It returns the account the CA saw as requester, empty for a certificate-key revocation.
+func (h *harness) verifyRevoked(t *testing.T, order *acmeserver.Order, reason int) string {
 	t.Helper()
 	cert, err := h.store.Certificate(t.Context(), order.CertificateID)
 	if err != nil {
@@ -418,10 +449,13 @@ func (h *harness) verifyRevoked(t *testing.T, order *acmeserver.Order, reason in
 		t.Fatal(err)
 	}
 	var issued, caReason, calls int
-	err = h.ca.db.QueryRowContext(t.Context(), "SELECT (SELECT count(*) FROM issuance), reason, calls FROM revocation WHERE serial = ?", leaf.SerialNumber.String()).Scan(&issued, &caReason, &calls)
+	var requester string
+	err = h.ca.db.QueryRowContext(t.Context(), "SELECT (SELECT count(*) FROM issuance), reason, account, calls FROM revocation WHERE serial = ?",
+		leaf.SerialNumber.String()).Scan(&issued, &caReason, &requester, &calls)
 	if err != nil || issued != 1 || caReason != reason || calls != 1 {
 		t.Fatalf("issuance rows=%d CA revocation reason=%d calls=%d, %v", issued, caReason, calls, err)
 	}
+	return requester
 }
 
 // Parses the accepted CSR for independent comparison with the issued key.

@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -29,6 +30,13 @@ type durableCA struct {
 	key  *ecdsa.PrivateKey
 	root *x509.Certificate
 	db   *sql.DB
+	// Answers Pending for this long after the first call of an operation. Zero signs at once.
+	delay time.Duration
+	mu    sync.Mutex
+	// First call time per operation while it is pending.
+	pending map[string]time.Time
+	// Number of Pending answers given.
+	pendingCalls int
 }
 
 // Generates an ephemeral P-256 key for a test identity.
@@ -104,11 +112,37 @@ func openCA(t *testing.T, directory string) *durableCA {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = db.ExecContext(t.Context(), `CREATE TABLE IF NOT EXISTS revocation (operation TEXT PRIMARY KEY, serial TEXT UNIQUE NOT NULL, reason INTEGER NOT NULL, calls INTEGER NOT NULL)`)
+	_, err = db.ExecContext(t.Context(), `CREATE TABLE IF NOT EXISTS revocation (operation TEXT PRIMARY KEY, serial TEXT UNIQUE NOT NULL, reason INTEGER NOT NULL, account TEXT NOT NULL, calls INTEGER NOT NULL)`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &durableCA{key: key, root: root, db: db}
+	return &durableCA{key: key, root: root, db: db, pending: make(map[string]time.Time)}
+}
+
+// Reports whether a new operation must still wait, counting each Pending answer.
+func (ca *durableCA) stillPending(operation string) bool {
+	if ca.delay == 0 {
+		return false
+	}
+	ca.mu.Lock()
+	defer ca.mu.Unlock()
+	first, seen := ca.pending[operation]
+	if !seen {
+		first = time.Now()
+		ca.pending[operation] = first
+	}
+	if time.Since(first) < ca.delay {
+		ca.pendingCalls++
+		return true
+	}
+	return false
+}
+
+// Returns how many times the CA answered Pending.
+func (ca *durableCA) pendingAnswers() int {
+	ca.mu.Lock()
+	defer ca.mu.Unlock()
+	return ca.pendingCalls
 }
 
 // Signs once per operation and returns the same DER after a process restart.
@@ -129,6 +163,9 @@ func (ca *durableCA) Issue(ctx context.Context, req acmeserver.IssueRequest) (ac
 	} else if errors.Is(err, sql.ErrNoRows) {
 		if req.RecoveryOnly || !req.Deadline.After(time.Now()) {
 			return acmeserver.IssueResult{Rejected: acmeserver.NewProblem(acmeserver.ErrorUnauthorized, "signing deadline elapsed")}, nil
+		}
+		if ca.stillPending(req.OperationID) {
+			return acmeserver.IssueResult{Pending: true, RetryAfter: 50 * time.Millisecond}, nil
 		}
 		der, err = ca.sign(req)
 		if err == nil {
@@ -185,7 +222,7 @@ func (ca *durableCA) Revoke(ctx context.Context, req acmeserver.RevokeRequest) e
 	if req.OperationID == "" {
 		return errors.New("revocation without an operation ID")
 	}
-	_, err := ca.db.ExecContext(ctx, `INSERT INTO revocation VALUES (?, ?, ?, 1) ON CONFLICT(operation) DO UPDATE SET calls = calls + 1`,
-		req.OperationID, req.Certificate.SerialNumber.String(), req.Reason)
+	_, err := ca.db.ExecContext(ctx, `INSERT INTO revocation VALUES (?, ?, ?, ?, 1) ON CONFLICT(operation) DO UPDATE SET calls = calls + 1`,
+		req.OperationID, req.Certificate.SerialNumber.String(), req.Reason, req.AccountID)
 	return err
 }

@@ -125,6 +125,20 @@ func TestLegoHTTP01Revocation(t *testing.T) {
 	t.Log("lego v4.35.2 HTTP-01 issuance, revocation with reason superseded and alreadyRevoked refusal passed")
 }
 
+// Issues through lego while the CA answers Pending for two seconds.
+func TestLegoDelayedIssuance(t *testing.T) {
+	port := availablePort(t)
+	h := newHarness(t, harnessOptions{httpPort: port, delay: 2 * time.Second})
+	client := h.lego(t)
+	if err := client.Challenge.SetHTTP01Provider(http01.NewProviderServer("127.0.0.1", strconv.Itoa(port))); err != nil {
+		t.Fatal(err)
+	}
+	key, resource := legoObtain(t, client, testHost)
+	order := h.verify(t, resource.Certificate, &key.PublicKey, []string{testHost}, acmeserver.ChallengeHTTP01)
+	h.verifyDelayed(t, order)
+	t.Log("lego v4.35.2 waited for a delayed issuance and received the certificate")
+}
+
 // Issues a wildcard with its base domain through lego's DNS-01 solver against the local responder.
 func TestLegoDNS01Wildcard(t *testing.T) {
 	// Keeps lego's CNAME discovery off the host resolver.

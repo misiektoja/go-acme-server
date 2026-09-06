@@ -138,6 +138,30 @@ mv "$f.next" "$f"
 `
 )
 
+// Issues through Certbot while the CA answers Pending for two seconds and checks that Certbot
+// waits out the processing order instead of failing or ordering again.
+func TestCertbotDelayedIssuance(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+	defer cancel()
+	executable := certbotExecutable(ctx, t)
+	h := newHarness(t, harnessOptions{httpPort: availablePort(t), delay: 2 * time.Second})
+	key := newKey(t)
+	csr, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{DNSNames: []string{testHost}}, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	csrPath := filepath.Join(h.directory, "client.csr")
+	writePrivate(t, csrPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csr}))
+	fullchain := filepath.Join(h.directory, "fullchain.pem")
+	h.certbot(ctx, t, executable, "certbot-delayed-output.txt", "certonly", "--standalone", "--preferred-challenges", "http",
+		"--http-01-address", "127.0.0.1", "--http-01-port", strconv.Itoa(h.options.httpPort), "--csr", csrPath,
+		"--cert-path", filepath.Join(h.directory, "cert.pem"), "--chain-path", filepath.Join(h.directory, "chain.pem"),
+		"--fullchain-path", fullchain, "--agree-tos", "--register-unsafely-without-email", "--no-directory-hooks")
+	order := h.verify(t, readFile(t, fullchain), &key.PublicKey, []string{testHost}, acmeserver.ChallengeHTTP01)
+	h.verifyDelayed(t, order)
+	t.Log(certbotVersion + " waited for a delayed issuance and received the certificate")
+}
+
 // Issues a wildcard through Certbot's manual DNS hooks, then revokes it through Certbot.
 func TestCertbotDNS01Wildcard(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)

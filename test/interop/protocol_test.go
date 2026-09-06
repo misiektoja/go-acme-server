@@ -29,10 +29,12 @@ type orderJSON struct {
 }
 
 type challengeJSON struct {
-	Type   string `json:"type"`
-	URL    string `json:"url"`
-	Status string `json:"status"`
-	Token  string `json:"token"`
+	Type           string `json:"type"`
+	URL            string `json:"url"`
+	Status         string `json:"status"`
+	Token          string `json:"token"`
+	TKAuthType     string `json:"tkauth-type"`
+	TokenAuthority string `json:"token-authority"`
 }
 
 type authorizationJSON struct {
@@ -115,6 +117,12 @@ func (c *protocolClient) newOrder(names ...string) (string, orderJSON) {
 	for _, name := range names {
 		identifiers = append(identifiers, acmeserver.Identifier{Type: acmeserver.IdentifierDNS, Value: name})
 	}
+	return c.newOrderFor(identifiers)
+}
+
+// Creates an order for any identifiers and returns its URL and view.
+func (c *protocolClient) newOrderFor(identifiers []acmeserver.Identifier) (string, orderJSON) {
+	c.t.Helper()
 	payload, err := json.Marshal(map[string]any{"identifiers": identifiers})
 	if err != nil {
 		c.t.Fatal(err)
