@@ -1,12 +1,16 @@
 package acmeserver_test
 
 import (
+	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 
 	acmeserver "github.com/misiektoja/go-acme-server"
@@ -70,6 +74,51 @@ func TestRevocationByP521CertificateKey(t *testing.T) {
 	header := map[string]any{"nonce": owner.nonce(), "url": url, "jwk": publicJWK(t, &certKey.PublicKey)}
 	if rec := owner.send(url, signECDSA(t, certKey, header, payload)); rec.Code != http.StatusOK {
 		t.Fatalf("revocation with the certificate key = %d %s", rec.Code, rec.Body.String())
+	}
+	stored, err := f.store.Certificate(t.Context(), valid.Certificate[len(baseURL+"cert/"):])
+	if err != nil || !stored.Revoked {
+		t.Fatalf("revocation not persisted: %+v, %v", stored, err)
+	}
+}
+
+// A revoker that drops the client connection as soon as the CA has acted.
+type disconnectingRevoker struct {
+	cancel context.CancelFunc
+	calls  atomic.Int64
+}
+
+// Records the call and cancels the request context the way a client disconnect would.
+func (v *disconnectingRevoker) Revoke(_ context.Context, _ acmeserver.RevokeRequest) error {
+	v.calls.Add(1)
+	v.cancel()
+	return nil
+}
+
+// Records the revocation even when the client disconnects before the CA answer is stored.
+func TestRevocationSurvivesAClientDisconnect(t *testing.T) {
+	revoker := &disconnectingRevoker{}
+	f := newFlow(t, func(cfg *acmeserver.Config) { cfg.Revoker = revoker })
+	f.runWorker()
+	owner := f.newClient()
+	owner.register()
+	location, order := owner.newOrder("gone.test")
+	owner.respondHTTP01(order)
+	owner.waitOrder(location, statusReady)
+	owner.finalize(order, newKey(t))
+	valid := owner.waitOrder(location, statusValid)
+	chain := parsePEMChain(t, owner.get(valid.Certificate, nil).Body.Bytes())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	revoker.cancel = cancel
+	url := baseURL + "revoke-cert"
+	body := owner.signed(url, map[string]any{"certificate": base64.RawURLEncoding.EncodeToString(chain[0].Raw)})
+	r := httptest.NewRequest(http.MethodPost, url, bytes.NewReader(body)).WithContext(ctx)
+	r.Header.Set("Content-Type", "application/jose+json")
+	if rec := f.do(r); rec.Code != http.StatusOK {
+		t.Fatalf("revocation = %d %s", rec.Code, rec.Body.String())
+	}
+	if n := revoker.calls.Load(); n != 1 {
+		t.Fatalf("revoker called %d times", n)
 	}
 	stored, err := f.store.Certificate(t.Context(), valid.Certificate[len(baseURL+"cert/"):])
 	if err != nil || !stored.Revoked {
