@@ -65,6 +65,7 @@ type Server struct {
 	orderLifetime  time.Duration
 	authzLifetime  time.Duration
 	maxIdentifiers int
+	detachedWrite  time.Duration
 	workers        WorkerConfig
 	// Signals Run that new work was accepted in this process.
 	wake    chan struct{}
@@ -108,6 +109,7 @@ func New(cfg Config) (*Server, error) {
 		orderLifetime:  cfg.OrderLifetime,
 		authzLifetime:  cfg.AuthorizationLifetime,
 		maxIdentifiers: cfg.MaxIdentifiers,
+		detachedWrite:  cfg.DetachedWriteTimeout,
 		workers:        workers,
 		wake:           make(chan struct{}, 1),
 	}
@@ -136,6 +138,9 @@ func New(cfg Config) (*Server, error) {
 	if s.maxIdentifiers == 0 {
 		s.maxIdentifiers = DefaultMaxIdentifiers
 	}
+	if s.detachedWrite == 0 {
+		s.detachedWrite = DefaultDetachedWriteTimeout
+	}
 	return s, nil
 }
 
@@ -162,7 +167,8 @@ func (cfg Config) validate() error {
 		return errorf("Config.TNAuthListIdentifiers needs a " + string(ChallengeTKAuth01) + " validator")
 	case cfg.TokenAuthority != "" && !isHTTPSURL(cfg.TokenAuthority):
 		return errorf("Config.TokenAuthority must be an absolute https URL")
-	case cfg.MaxRequestBody < 0 || cfg.OrderLifetime < 0 || cfg.AuthorizationLifetime < 0 || cfg.MaxIdentifiers < 0:
+	case cfg.MaxRequestBody < 0 || cfg.OrderLifetime < 0 || cfg.AuthorizationLifetime < 0 ||
+		cfg.MaxIdentifiers < 0 || cfg.DetachedWriteTimeout < 0:
 		return errorf("Config limits must not be negative")
 	}
 	for typ, v := range cfg.Validators {

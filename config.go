@@ -15,6 +15,7 @@ const (
 	DefaultOrderLifetime         = 7 * 24 * time.Hour
 	DefaultAuthorizationLifetime = 30 * 24 * time.Hour
 	DefaultMaxIdentifiers        = 100
+	DefaultDetachedWriteTimeout  = 30 * time.Second
 )
 
 // Configures Run. Zero values select the defaults.
@@ -102,6 +103,10 @@ type Config struct {
 	AuthorizationLifetime time.Duration
 	// Bounds the identifiers of one order.
 	MaxIdentifiers int
+	// Bounds a store write that has to finish after the client request it belongs to has ended,
+	// such as recording a revocation the Revoker already carried out. Zero selects
+	// DefaultDetachedWriteTimeout.
+	DetachedWriteTimeout time.Duration
 	// Serves RFC 9773 renewal information and accepts replaces on new orders when set.
 	// LifetimeRenewal is the built-in advisor. Nil leaves the extension off.
 	RenewalInfo RenewalAdvisor

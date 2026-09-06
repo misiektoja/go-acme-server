@@ -8,7 +8,6 @@ import (
 	"errors"
 	"net/http"
 	"slices"
-	"time"
 
 	"github.com/misiektoja/go-acme-server/internal/jws"
 )
@@ -16,10 +15,6 @@ import (
 // The CRL reason codes clients may request, see RFC 5280 section 5.3.1. Hold and CA reasons
 // are refused.
 var allowedRevocationReasons = []int{0, 1, 3, 4, 5}
-
-// How long the state write that follows a successful CA revocation may take. It runs detached from
-// the client request, so it needs its own bound.
-const revocationRecordTimeout = 30 * time.Second
 
 // The revokeCert payload of RFC 8555 section 7.6.
 type revokeJSON struct {
@@ -165,7 +160,7 @@ func (s *Server) beginRevocation(ctx context.Context, cert *Certificate, reason 
 // disconnect must not leave the certificate recorded as live. A concurrent revocation of the same
 // certificate is treated as success.
 func (s *Server) recordRevocation(parent context.Context, cert *Certificate) *Problem {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), revocationRecordTimeout)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), s.detachedWrite)
 	defer cancel()
 	cert.Revoked = true
 	cert.RevokedAt = s.clock.Now()
