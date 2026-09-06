@@ -237,6 +237,12 @@ func TestIssuanceFlow(t *testing.T) {
 	if finalized.Status == statusProcessing && rec.Header().Get("Retry-After") == "" {
 		t.Fatal("processing order without Retry-After")
 	}
+	if rec.Header().Get("Location") != location {
+		t.Fatalf("finalize Location = %q, want the order URL %q", rec.Header().Get("Location"), location)
+	}
+	if rec := c.get(location, nil); rec.Header().Get("Location") != location {
+		t.Fatalf("order Location = %q, want %q", rec.Header().Get("Location"), location)
+	}
 	valid := c.waitOrder(location, statusValid)
 	if !strings.HasPrefix(valid.Certificate, baseURL+"cert/") {
 		t.Fatalf("certificate URL = %q", valid.Certificate)
