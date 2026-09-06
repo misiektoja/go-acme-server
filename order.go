@@ -87,6 +87,11 @@ func (s *Server) buildOrder(ctx context.Context, account *Account, payload *newO
 		p, _ := AsProblem(err)
 		return nil, p
 	}
+	// A certificate carries one id-pe-TNAuthList extension, so a second list could never be
+	// matched by a certificate request.
+	if countIdentifiers(identifiers, IdentifierTNAuthList) > 1 {
+		return nil, NewProblem(ErrorMalformed, "an order may have at most one TNAuthList identifier")
+	}
 	for _, id := range identifiers {
 		if len(s.challengeTypesFor(id)) == 0 {
 			return nil, NewProblem(ErrorRejectedIdentifier, "no supported validation method for this identifier").
@@ -174,6 +179,17 @@ func (s *Server) buildAuthorizations(ctx context.Context, order *Order) ([]*Auth
 		order.AuthorizationIDs = append(order.AuthorizationIDs, authz.ID)
 	}
 	return authzs, challenges, nil
+}
+
+// Counts the identifiers of one type.
+func countIdentifiers(ids []Identifier, typ IdentifierType) int {
+	n := 0
+	for _, id := range ids {
+		if id.Type == typ {
+			n++
+		}
+	}
+	return n
 }
 
 // Returns the configured challenge types that may validate the identifier. Wildcard names need
