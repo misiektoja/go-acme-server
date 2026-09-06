@@ -126,7 +126,9 @@ func (v *TKAuth01) ValidateGrant(ctx context.Context,
 func (v *TKAuth01) checkClaims(claims *authorityTokenJSON, id acmeserver.Identifier,
 	thumbprint string, now time.Time) error {
 	switch {
-	case claims.ATC.TokenType != string(acmeserver.IdentifierTNAuthList):
+	// RFC 9448 section 5.4 spells the type TNAuthList while the RFC 9447 example writes TnAuthList.
+	// Token Authorities built from either text must interoperate, so the comparison ignores case.
+	case !strings.EqualFold(claims.ATC.TokenType, string(acmeserver.IdentifierTNAuthList)):
 		return incorrect("the authority token attests another identifier type")
 	case !sameAuthorityList(claims.ATC.TokenValue, id.Value):
 		return incorrect("the authority token attests another authority list")
