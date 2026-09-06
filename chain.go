@@ -137,7 +137,7 @@ func checkChain(chain [][]byte, csr *x509.CertificateRequest, order *Order, now 
 }
 
 // Checks the leaf CA basic constraint, which must match the accepted request on an authority list
-// order, see RFC 9448 section 6, and must be absent on every other order.
+// order (RFC 9448 section 6) and must be absent on every other order.
 func checkLeafCACertificate(leaf *x509.Certificate, csr *x509.CertificateRequest, order *Order) error {
 	if !slices.ContainsFunc(order.Identifiers, func(id Identifier) bool {
 		return id.Type == IdentifierTNAuthList

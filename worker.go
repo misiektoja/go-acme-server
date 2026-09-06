@@ -10,7 +10,11 @@ import (
 )
 
 // Processes persisted validation and issuance work until ctx is canceled. Without a worker in this
-// process or another process on the same store, challenges and orders never progress.
+// process or another process on the same store, challenges and orders never progress. Canceling ctx
+// stops new claims but does not interrupt a task already in flight, so Run can take several
+// WorkerConfig.TaskTimeout budgets to return when a validator, issuer or store stops responding.
+// Waiting for it is optional: a claimed task is leased and its commit is fenced, so another worker
+// picks it up once the lease lapses.
 func (s *Server) Run(ctx context.Context) error {
 	if !s.running.CompareAndSwap(false, true) {
 		return errors.New("acmeserver: Run is already active")
@@ -206,7 +210,7 @@ func (s *Server) validate(base context.Context, v Validator, req ValidationReque
 }
 
 // Commits a validation result, deriving the order status from every authorization. A concurrent
-// change to the order or authorization is reloaded and retried, and a commit that does not settle
+// change to the order or authorization is reloaded and retried. A commit that does not settle
 // releases the task for a later attempt instead of holding its lease.
 func (s *Server) completeValidation(base context.Context, task *Task, ch *Challenge, authz *Authorization) {
 	ctx, cancel := s.taskPhase(base)

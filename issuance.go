@@ -193,9 +193,9 @@ func (s *Server) issueRequest(order *Order) (IssueRequest, error) {
 }
 
 // Returns the notAfter an issuance asks the CA for: the accepted order value narrowed by an
-// authority token expiry, or that expiry alone when the order left the validity to the CA. A zero
-// time means nothing bounds the certificate. Publication checks the issued leaf against the same
-// value, so a certificate clamped to the token is accepted.
+// authority token expiry. It is that expiry alone when the order left the validity to the CA. A
+// zero time means nothing bounds the certificate. Publication checks the issued leaf against the
+// same value, so a certificate clamped to the token is accepted.
 func issuedNotAfter(order *Order) time.Time {
 	notAfter := order.NotAfter
 	var bound time.Time
