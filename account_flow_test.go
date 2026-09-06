@@ -355,3 +355,25 @@ func mustJSON(t *testing.T, v any) []byte {
 	}
 	return raw
 }
+
+// Refuses an accepted challenge whose account was deactivated before the worker validated it, so
+// no proof is fetched from a closed subscriber.
+func TestValidationStopsAfterAccountDeactivation(t *testing.T) {
+	f := newFlow(t, nil)
+	c := f.newClient()
+	location := c.register()
+	_, order := c.newOrder("gone.test")
+	c.respondHTTP01(order)
+	if rec := c.post(location, map[string]any{"status": "deactivated"}); rec.Code != http.StatusOK {
+		t.Fatalf("deactivate = %d %s", rec.Code, rec.Body.String())
+	}
+	f.runWorker()
+	authzID := order.Authorizations[0][len(baseURL+"authz/"):]
+	waitFor(t, "authorization invalid", func() bool {
+		authz, err := f.store.Authorization(t.Context(), authzID)
+		return err == nil && authz.Status == acmeserver.AuthorizationInvalid
+	})
+	if n := f.validator.callCount(); n != 0 {
+		t.Fatalf("the validator ran %d times for a deactivated account", n)
+	}
+}
