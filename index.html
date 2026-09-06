@@ -318,6 +318,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#install" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Install
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#start-here" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1401,6 +1412,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#install" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Install
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#start-here" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1495,6 +1517,12 @@ between deployments through Go interfaces:</p>
 </ul>
 <p>The result is an <code>http.Handler</code> you mount behind your HTTPS origin and a worker you run next to it.
 Standard ACME clients such as Certbot, lego, acmez and cert-manager then obtain certificates from your CA.</p>
+<h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>go<span class="w"> </span>get<span class="w"> </span>github.com/misiektoja/go-acme-server
+</code></pre></div>
+<p>The module needs Go 1.26.8 or newer. The root package is imported as <code>acmeserver</code>. The bundled
+validators are in <code>challenge</code>, the in-memory store in <code>memstore</code>, the single-process nonce manager
+in <code>nonce</code> and the store contract suite in <code>storetest</code>.</p>
 <h2 id="start-here">Start here<a class="headerlink" href="#start-here" title="Permanent link">&para;</a></h2>
 <p><strong><a href="getting-started/">Getting started</a></strong> builds a complete local ACME server in one Go file and
 issues a certificate with lego. Read it first, then replace each placeholder piece with your own
