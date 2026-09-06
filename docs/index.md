@@ -22,6 +22,16 @@ between deployments through Go interfaces:
 The result is an `http.Handler` you mount behind your HTTPS origin and a worker you run next to it.
 Standard ACME clients such as Certbot, lego, acmez and cert-manager then obtain certificates from your CA.
 
+## Install
+
+```bash
+go get github.com/misiektoja/go-acme-server
+```
+
+The module needs Go 1.26.8 or newer. The root package is imported as `acmeserver`. The bundled
+validators are in `challenge`, the in-memory store in `memstore`, the single-process nonce manager
+in `nonce` and the store contract suite in `storetest`.
+
 ## Start here
 
 **[Getting started](getting-started.md)** builds a complete local ACME server in one Go file and

@@ -26,11 +26,31 @@ from the host CA.
 
 ## Contents
 
+* [Install](#install)
 * [Scope](#scope)
 * [Getting started](#getting-started)
 * [Documentation](#documentation)
 * [Support](#support)
 * [License](#license)
+
+## Install
+
+```bash
+go get github.com/misiektoja/go-acme-server
+```
+
+The module needs Go 1.26.8 or newer. The root package is imported as `acmeserver`, the bundled
+validators live in `challenge`, the in-memory store in `memstore` and the single-process nonce
+manager in `nonce`:
+
+```go
+import (
+	acmeserver "github.com/misiektoja/go-acme-server"
+	"github.com/misiektoja/go-acme-server/challenge"
+	"github.com/misiektoja/go-acme-server/memstore"
+	"github.com/misiektoja/go-acme-server/nonce"
+)
+```
 
 ## Scope
 
