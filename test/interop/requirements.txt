@@ -4,8 +4,9 @@ certbot==5.8.0 \
     --hash=sha256:c06793e6a0169b07ee09e11e6a017c7d5a77310055d693fffd66c53363ab87ff
 acme==5.8.0 \
     --hash=sha256:637501767248156545d85c23b806381ac346c5eac759f8e35052af85b7bb3933
-ConfigArgParse==1.7.5 \
-    --hash=sha256:1e63fdffedf94da9cd435fc13a1cd24777e76879dd2343912c1f871d4ac8c592
+ConfigArgParse==1.7.7 \
+    --hash=sha256:607bea276a219912158afa1e5a716c3f8f88d542f9997dfd43bbd0b492a9f5a6 \
+    --hash=sha256:61107bb1de0b53c4eb7a475a12de6783b0dc6c51bc9859f5accbe97d66f8a4b7
 configobj==5.0.9 \
     --hash=sha256:1ba10c5b6ee16229c79a05047aeda2b55eb4e80d7c7d8ecf17ec1ca600c79882
 cryptography==50.0.1 \
