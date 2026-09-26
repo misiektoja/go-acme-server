@@ -1,9 +1,11 @@
 package acmeserver
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
+	"crypto/mldsa"
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -37,11 +39,15 @@ func checkCSR(der []byte, order *Order, account *Account) (*x509.CertificateRequ
 	if p := checkCSRKey(csr.PublicKey); p != nil {
 		return nil, p
 	}
-	thumbprint, err := jws.Thumbprint(csr.PublicKey)
+	accountKey, err := x509.MarshalPKIXPublicKey(account.Key)
 	if err != nil {
-		return nil, NewProblem(ErrorBadCSR, "CSR key is not supported")
+		return nil, NewProblem(ErrorServerInternal, "account key could not be read")
 	}
-	if thumbprint == account.KeyThumbprint {
+	csrKey, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
+	if err != nil {
+		return nil, NewProblem(ErrorBadCSR, "CSR key could not be read")
+	}
+	if bytes.Equal(csrKey, accountKey) {
 		return nil, NewProblem(ErrorBadCSR, "CSR key must not be the account key")
 	}
 	if err := checkSANExtensions(csr.Extensions); err != nil {
@@ -88,7 +94,7 @@ func checkCSRKey(key any) *Problem {
 		if k.Curve != elliptic.P256() && k.Curve != elliptic.P384() && k.Curve != elliptic.P521() {
 			return NewProblem(ErrorBadCSR, "CSR EC key uses an unsupported curve")
 		}
-	case ed25519.PublicKey:
+	case ed25519.PublicKey, *mldsa.PublicKey:
 	default:
 		return NewProblem(ErrorBadCSR, "CSR key type is not supported")
 	}
