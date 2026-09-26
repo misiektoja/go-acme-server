@@ -2,7 +2,9 @@ package interop
 
 import (
 	"context"
+	"crypto"
 	"crypto/ecdsa"
+	"crypto/mldsa"
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
@@ -71,9 +73,8 @@ func (h *harness) cryptoAccount(ctx context.Context, t *testing.T) (*acme.Client
 	return client, location
 }
 
-// Issues one HTTP-01 certificate through crypto/acme and returns the chain, its key and the
-// stored order.
-func (h *harness) cryptoIssue(ctx context.Context, t *testing.T, client *acme.Client, s *solver) ([][]byte, *ecdsa.PrivateKey, *acmeserver.Order) {
+// Issues an HTTP-01 certificate through crypto/acme and returns its chain, key and stored order.
+func (h *harness) cryptoIssue(ctx context.Context, t *testing.T, client *acme.Client, s *solver, subjectKeys ...crypto.Signer) ([][]byte, crypto.Signer, *acmeserver.Order) {
 	t.Helper()
 	order, err := client.AuthorizeOrder(ctx, acme.DomainIDs(testHost))
 	if err != nil {
@@ -109,7 +110,10 @@ func (h *harness) cryptoIssue(ctx context.Context, t *testing.T, client *acme.Cl
 	if order, err = client.WaitOrder(ctx, order.URI); err != nil || order.Status != acme.StatusReady {
 		t.Fatalf("order = %+v, %v", order, err)
 	}
-	certKey := newKey(t)
+	var certKey crypto.Signer = newKey(t)
+	if len(subjectKeys) == 1 {
+		certKey = subjectKeys[0]
+	}
 	csr, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{DNSNames: []string{testHost}}, certKey)
 	if err != nil {
 		t.Fatal(err)
@@ -122,7 +126,7 @@ func (h *harness) cryptoIssue(ctx context.Context, t *testing.T, client *acme.Cl
 	for _, der := range chain {
 		chainPEM = append(chainPEM, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})...)
 	}
-	stored := h.verify(t, chainPEM, &certKey.PublicKey, []string{testHost}, acmeserver.ChallengeHTTP01)
+	stored := h.verify(t, chainPEM, certKey.Public(), []string{testHost}, acmeserver.ChallengeHTTP01)
 	if certURL != h.https.URL+"/acme/cert/"+stored.CertificateID {
 		t.Fatalf("certificate URL %q does not name the stored certificate", certURL)
 	}
@@ -168,4 +172,22 @@ func TestCryptoACMEAccountAndKeyRevocation(t *testing.T) {
 	_, err = client.AuthorizeOrder(ctx, acme.DomainIDs(testHost))
 	requireACMEError(t, err, http.StatusForbidden, acmeserver.ErrorUnauthorized)
 	t.Log("crypto/acme v0.56.0 account update, key rollover, HTTP-01 issuance, key-signed revocation and deactivation passed")
+}
+
+// Issues ML-DSA leaf keys through classical account authentication and revokes with that account.
+func TestCryptoACMEMLDSA(t *testing.T) {
+	for _, params := range []mldsa.Parameters{mldsa.MLDSA44(), mldsa.MLDSA65(), mldsa.MLDSA87()} {
+		solver, port := newSolver(t, false)
+		h := newHarness(t, harnessOptions{httpPort: port})
+		client, _ := h.cryptoAccount(t.Context(), t)
+		key, err := mldsa.GenerateKey(params)
+		if err != nil {
+			t.Fatal(err)
+		}
+		chain, _, order := h.cryptoIssue(t.Context(), t, client, solver, key)
+		if err := client.RevokeCert(t.Context(), nil, chain[0], acme.CRLReasonUnspecified); err != nil {
+			t.Fatal(err)
+		}
+		h.verifyRevoked(t, order, int(acme.CRLReasonUnspecified))
+	}
 }
