@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.0] - 27 Sep 2026
+
+Hosts can issue certificates for ML-DSA public keys while retaining classical ACME account authentication.
+
+### Protocol
+
+* **ML-DSA certificate requests** support ML-DSA-44, ML-DSA-65 and ML-DSA-87. The host CA supplies compatible issuance. Account keys remain classical and ML-DSA certificates use account-authorized revocation.
+
+### Host integration
+
+* **Go 1.27.1 or newer** is required for standard-library ML-DSA certificate support.
+* **Runnable quickstart** in `examples/quickstart` accompanies the setup guide.
+
 ## [0.1.0] - 6 Sep 2026
 
 The first release of **go-acme-server**, a Go library for embedding an ACME server into a CA or PKI application.
