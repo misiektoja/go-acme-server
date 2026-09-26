@@ -1642,7 +1642,7 @@ identifier has no usable challenge type is refused.</p>
 <td>HS256, HS384, HS512</td>
 </tr>
 <tr>
-<td>Account and CSR keys</td>
+<td>Account keys</td>
 <td>RSA 2048 to 4096 bits, ECDSA P-256, P-384 and P-521, Ed25519</td>
 </tr>
 <tr>
@@ -1651,7 +1651,7 @@ identifier has no usable challenge type is refused.</p>
 </tr>
 </tbody>
 </table>
-<p>The CSR key must differ from the account key.</p>
+<p>CSR keys also accept ML-DSA-44, ML-DSA-65 and ML-DSA-87. The CSR key must differ from the account key. ML-DSA account signatures and certificate-key revocation signatures are not supported. Revoke these certificates through an authorized classical account.</p>
 <h2 id="host-interfaces">Host interfaces<a class="headerlink" href="#host-interfaces" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
