@@ -28,7 +28,7 @@ Standard ACME clients such as Certbot, lego, acmez and cert-manager then obtain 
 go get github.com/misiektoja/go-acme-server
 ```
 
-The module needs Go 1.26.8 or newer. The root package is imported as `acmeserver`. The bundled
+The module needs Go 1.27.1 or newer. The root package is imported as `acmeserver`. The bundled
 validators are in `challenge`, the in-memory store in `memstore`, the single-process nonce manager
 in `nonce` and the store contract suite in `storetest`.
 

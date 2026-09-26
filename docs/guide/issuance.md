@@ -21,6 +21,8 @@ earliest expiry among the order and its authorizations as the `Deadline`. An opt
 From this point every call for the order presents the same `OperationID`, whether it is the first
 attempt, a retry after a timeout or a recovery from another worker after a crash.
 
+ML-DSA-44, ML-DSA-65 and ML-DSA-87 certificate requests are accepted. Account keys remain classical. The host CA must support the requested key and apply the signature-only key usages required by [RFC 9881](https://www.rfc-editor.org/rfc/rfc9881.html). Use an authorized account to revoke an ML-DSA certificate. This does not add ML-DSA JWS signatures or change TLS configuration.
+
 ## The request
 
 | Field | Meaning |

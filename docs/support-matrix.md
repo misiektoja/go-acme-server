@@ -38,10 +38,10 @@ identifier has no usable challenge type is refused.
 | --- | --- |
 | Account key signatures | ES256, ES384, ES512, RS256, EdDSA |
 | External account binding MACs | HS256, HS384, HS512 |
-| Account and CSR keys | RSA 2048 to 4096 bits, ECDSA P-256, P-384 and P-521, Ed25519 |
+| Account keys | RSA 2048 to 4096 bits, ECDSA P-256, P-384 and P-521, Ed25519 |
 | Account contacts | `mailto` with one bare address, at most ten contacts |
 
-The CSR key must differ from the account key.
+CSR keys also accept ML-DSA-44, ML-DSA-65 and ML-DSA-87. The CSR key must differ from the account key. ML-DSA account signatures and certificate-key revocation signatures are not supported. Revoke these certificates through an authorized classical account.
 
 ## Host interfaces
 
