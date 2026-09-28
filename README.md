@@ -68,6 +68,11 @@ HS512. Independent clients verify the behavior, see
 The API may still change before v1.0.0 as described in the
 [Compatibility policy](https://misiektoja.github.io/go-acme-server/reference/compatibility/).
 
+Certificate requests may carry post-quantum ML-DSA-44, ML-DSA-65 or ML-DSA-87 keys. The host CA
+may also sign with a composite ML-DSA key from draft-ietf-lamps-pq-composite-sigs-19, which pairs
+ML-DSA with a classical algorithm. The server checks those composite signatures before it publishes
+a certificate. Account keys stay classical and certificate requests cannot use composite keys.
+
 ### Limitations
 
 * No pre-authorization. The directory omits `newAuthz` and every order receives fresh
