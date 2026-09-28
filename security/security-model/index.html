@@ -1514,7 +1514,8 @@ captured for one server cannot be replayed against another path or host. The non
 before the payload is read and a nonce is valid exactly once. <code>newAccount</code> requires an embedded
 key and every other resource requires a <code>kid</code>, as RFC 8555 section 6.2 demands.</p>
 <p><strong>Key policy.</strong> Account keys must be ES256, ES384, ES512, RS256 or EdDSA keys and CSR keys must be
-RSA 2048 to 4096 bits, P-256, P-384, P-521, Ed25519, ML-DSA-44, ML-DSA-65 or ML-DSA-87. The CSR key must differ from the account key.</p>
+RSA 2048 to 4096 bits, P-256, P-384, P-521, Ed25519, ML-DSA-44, ML-DSA-65 or ML-DSA-87. The CSR key must differ from the account key. Issuer signatures in the returned chain may be
+composite ML-DSA.</p>
 <p><strong>Authorization before issuance.</strong> A certificate is issued only for an order whose every
 authorization is valid, whose CSR requests exactly the order's identifiers and whose CA basic
 constraint matches what the authorizations granted. The decision is stored before the CA is
