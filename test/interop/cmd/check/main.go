@@ -23,6 +23,8 @@ type event struct {
 // Names the scenarios whose absence or skip must fail the pull-request gate.
 var required = map[string]string{
 	"github.com/misiektoja/go-acme-server/test/interop/TestCryptoACMEMLDSA":                     "",
+	"github.com/misiektoja/go-acme-server/test/interop/TestCryptoACMECompositeIssuer":           "",
+	"github.com/misiektoja/go-acme-server/test/interop/TestLegoCompositeIssuer":                 "",
 	"github.com/misiektoja/go-acme-server/test/interop/TestAcmezHTTP01":                         "",
 	"github.com/misiektoja/go-acme-server/test/interop/TestAcmezRejectsWrongProof":              "",
 	"github.com/misiektoja/go-acme-server/test/interop/TestAcmezIPIdentifier":                   "",

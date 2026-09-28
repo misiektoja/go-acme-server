@@ -3,6 +3,7 @@ package interop
 import (
 	"bytes"
 	"context"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -22,6 +23,9 @@ import (
 	"testing"
 	"time"
 
+	compositemldsa "github.com/misiektoja/go-composite-mldsa"
+	"github.com/misiektoja/go-composite-mldsa/compositex509"
+
 	acmeserver "github.com/misiektoja/go-acme-server"
 )
 
@@ -29,7 +33,10 @@ import (
 type durableCA struct {
 	key  *ecdsa.PrivateKey
 	root *x509.Certificate
-	db   *sql.DB
+	// Signs issued certificates. It is the root unless a composite issuer was created.
+	issuer    *x509.Certificate
+	issuerKey crypto.Signer
+	db        *sql.DB
 	// Answers Pending for this long after the first call of an operation. Zero signs at once.
 	delay time.Duration
 	mu    sync.Mutex
@@ -77,6 +84,58 @@ func createCA(t *testing.T, directory string) {
 	writePrivate(t, filepath.Join(directory, "ca-cert.der"), der)
 }
 
+// Generates a self-signed composite ML-DSA issuing CA next to the classical HTTPS root.
+func createCompositeIssuer(t *testing.T, directory string, alg compositemldsa.Algorithm) {
+	t.Helper()
+	key, err := compositemldsa.GenerateKey(alg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().Truncate(time.Second)
+	issuer := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "ACME interoperability composite issuer"},
+		NotBefore: now.Add(-time.Hour), NotAfter: now.Add(24 * time.Hour), IsCA: true, BasicConstraintsValid: true,
+		KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageCRLSign}
+	der, err := compositex509.CreateCertificate(rand.Reader, issuer, issuer, key.Public(), key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyDER, err := compositex509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writePrivate(t, filepath.Join(directory, "issuer-key.p8"), keyDER)
+	writePrivate(t, filepath.Join(directory, "issuer-cert.der"), der)
+}
+
+// Loads the composite issuing CA when one was created and otherwise issues from the root.
+func openIssuer(t *testing.T, directory string, ca *durableCA) {
+	t.Helper()
+	ca.issuer, ca.issuerKey = ca.root, ca.key
+	keyDER, err := os.ReadFile(filepath.Join(directory, "issuer-key.p8"))
+	if errors.Is(err, os.ErrNotExist) {
+		return
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := compositex509.ParsePKCS8PrivateKey(keyDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer, ok := key.(crypto.Signer)
+	if !ok {
+		t.Fatalf("issuer key %T cannot sign", key)
+	}
+	der, err := os.ReadFile(filepath.Join(directory, "issuer-cert.der"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ca.issuer, err = x509.ParseCertificate(der); err != nil {
+		t.Fatal(err)
+	}
+	ca.issuerKey = signer
+}
+
 // Opens the independent CA database with serializable deduplication by operation ID.
 func openCA(t *testing.T, directory string) *durableCA {
 	t.Helper()
@@ -116,7 +175,9 @@ func openCA(t *testing.T, directory string) *durableCA {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &durableCA{key: key, root: root, db: db, pending: make(map[string]time.Time)}
+	ca := &durableCA{key: key, root: root, db: db, pending: make(map[string]time.Time)}
+	openIssuer(t, directory, ca)
+	return ca
 }
 
 // Reports whether a new operation must still wait, counting each Pending answer.
@@ -178,7 +239,7 @@ func (ca *durableCA) Issue(ctx context.Context, req acmeserver.IssueRequest) (ac
 	if err := tx.Commit(); err != nil {
 		return acmeserver.IssueResult{}, err
 	}
-	return acmeserver.IssueResult{Chain: [][]byte{der, ca.root.Raw}, CAReference: req.OperationID}, nil
+	return acmeserver.IssueResult{Chain: [][]byte{der, ca.issuer.Raw}, CAReference: req.OperationID}, nil
 }
 
 // The id-pe-TNAuthList certificate extension of RFC 8226 section 9.
@@ -213,7 +274,7 @@ func (ca *durableCA) sign(req acmeserver.IssueRequest) ([]byte, error) {
 			leaf.ExtraExtensions = append(leaf.ExtraExtensions, pkix.Extension{Id: tnAuthListOID, Value: value})
 		}
 	}
-	return x509.CreateCertificate(rand.Reader, leaf, ca.root, req.CSR.PublicKey, ca.key)
+	return compositex509.CreateCertificate(rand.Reader, leaf, ca.issuer, req.CSR.PublicKey, ca.issuerKey)
 }
 
 // Records the revocation durably once per operation ID, counting repeated calls. A second
