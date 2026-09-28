@@ -72,7 +72,9 @@ The leaf must already be valid when it is returned unless the order asked for a 
 as SANs and no CA basic constraint unless an Authority Token granted one, see [Authority Token challenges](authority-tokens.md).
 
 **Return the full chain.** `Chain` holds the DER leaf followed by the DER issuer chain in signing
-order. Each element must be signed by the next one.
+order. Each element must be signed by the next one. Issuer certificates may be signed with
+[composite ML-DSA](https://datatracker.ietf.org/doc/draft-ietf-lamps-pq-composite-sigs/) keys, which pair ML-DSA with RSA-PSS, ECDSA or Ed25519.
+The server checks those signatures itself because `crypto/x509` cannot.
 
 A minimal implementation over a database looks like this:
 

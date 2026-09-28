@@ -43,6 +43,8 @@ identifier has no usable challenge type is refused.
 
 CSR keys also accept ML-DSA-44, ML-DSA-65 and ML-DSA-87. The CSR key must differ from the account key. ML-DSA account signatures and certificate-key revocation signatures are not supported. Revoke these certificates through an authorized classical account.
 
+Issuer chains may use composite ML-DSA signatures from draft-ietf-lamps-pq-composite-sigs-19. CSR keys cannot be composite.
+
 ## Host interfaces
 
 | Interface | Required | Included implementation |
