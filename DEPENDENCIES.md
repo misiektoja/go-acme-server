@@ -5,6 +5,7 @@ The implementation is original. Third-party code is consumed through versioned p
 | Dependency | Use | License |
 | --- | --- | --- |
 | golang.org/x/net | Bounded DNS wire parsing in `challenge` | BSD-3-Clause |
+| github.com/misiektoja/go-composite-mldsa | Composite ML-DSA signature checks in issued chains | Apache-2.0 |
 | modernc.org/sqlite | Durable storage in the separate interoperability module | BSD-3-Clause |
 | github.com/mholt/acmez/v3 | Independent Go client tests | Apache-2.0 |
 | github.com/go-jose/go-jose/v4 | Independent JWS signing in the interoperability tests | Apache-2.0 |

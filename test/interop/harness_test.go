@@ -28,6 +28,8 @@ import (
 
 	"github.com/mholt/acmez/v3"
 	"github.com/mholt/acmez/v3/acme"
+	compositemldsa "github.com/misiektoja/go-composite-mldsa"
+	"github.com/misiektoja/go-composite-mldsa/compositex509"
 
 	acmeserver "github.com/misiektoja/go-acme-server"
 	"github.com/misiektoja/go-acme-server/challenge"
@@ -74,6 +76,8 @@ type harnessOptions struct {
 	authority *tokenAuthority
 	// Accepts RFC 8738 IP identifiers.
 	ipIdentifiers bool
+	// Issues from a composite ML-DSA CA of this algorithm. HTTPS keeps the classical root.
+	compositeIssuer compositemldsa.Algorithm
 }
 
 // Returns the MAC key for a configured external account identifier.
@@ -105,6 +109,9 @@ func newHarness(t *testing.T, options harnessOptions) *harness {
 	t.Helper()
 	directory := testutil.Scratch(t)
 	createCA(t, directory)
+	if options.compositeIssuer != 0 {
+		createCompositeIssuer(t, directory, options.compositeIssuer)
+	}
 	ca := openCA(t, directory)
 	ca.delay = options.delay
 	store, err := sqlitestore.Open(t.Context(), filepath.Join(directory, "acme.sqlite"))
@@ -292,7 +299,7 @@ func (h *harness) verifyLeaf(t *testing.T, chainPEM []byte, key crypto.PublicKey
 		t.Fatal(err)
 	}
 	issuer, trailing := pem.Decode(rest)
-	if issuer == nil || len(bytes.TrimSpace(trailing)) != 0 || !bytes.Equal(issuer.Bytes, h.ca.root.Raw) {
+	if issuer == nil || len(bytes.TrimSpace(trailing)) != 0 || !bytes.Equal(issuer.Bytes, h.ca.issuer.Raw) {
 		t.Fatal("unexpected chain")
 	}
 	publicKey, err := x509.MarshalPKIXPublicKey(key)
@@ -318,9 +325,29 @@ func (h *harness) verifyLeaf(t *testing.T, chainPEM []byte, key crypto.PublicKey
 		t.Fatal("certificate key or identifiers differ from the client request")
 	}
 	roots := x509.NewCertPool()
-	roots.AddCert(h.ca.root)
+	roots.AddCert(h.ca.issuer)
+	// crypto/x509 cannot check a composite ML-DSA signature, so that link is checked directly and
+	// the names and validity separately.
+	_, composite, err := compositex509.SignatureAlgorithm(leaf.Raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if composite {
+		if err := compositex509.CheckSignatureFrom(leaf, h.ca.issuer); err != nil {
+			t.Fatal(err)
+		}
+		if now := time.Now(); now.Before(leaf.NotBefore) || now.After(leaf.NotAfter) {
+			t.Fatal("leaf certificate is outside its validity period")
+		}
+	}
 	for _, name := range names {
-		if _, err := leaf.Verify(x509.VerifyOptions{Roots: roots, DNSName: strings.Replace(name, "*.", "host.", 1)}); err != nil {
+		host := strings.Replace(name, "*.", "host.", 1)
+		if composite {
+			err = leaf.VerifyHostname(host)
+		} else {
+			_, err = leaf.Verify(x509.VerifyOptions{Roots: roots, DNSName: host})
+		}
+		if err != nil {
 			t.Fatal(err)
 		}
 	}

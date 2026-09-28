@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	compositemldsa "github.com/misiektoja/go-composite-mldsa"
 	"golang.org/x/crypto/acme"
 
 	acmeserver "github.com/misiektoja/go-acme-server"
@@ -189,5 +190,20 @@ func TestCryptoACMEMLDSA(t *testing.T) {
 			t.Fatal(err)
 		}
 		h.verifyRevoked(t, order, int(acme.CRLReasonUnspecified))
+	}
+}
+
+// Issues from composite ML-DSA CAs, which crypto/acme receives as ordinary chains, and revokes.
+func TestCryptoACMECompositeIssuer(t *testing.T) {
+	for _, alg := range []compositemldsa.Algorithm{compositemldsa.MLDSA44ECDSAP256SHA256, compositemldsa.MLDSA65Ed25519SHA512, compositemldsa.MLDSA87RSA4096PSSSHA512} {
+		solver, port := newSolver(t, false)
+		h := newHarness(t, harnessOptions{httpPort: port, compositeIssuer: alg})
+		client, _ := h.cryptoAccount(t.Context(), t)
+		chain, _, order := h.cryptoIssue(t.Context(), t, client, solver)
+		if err := client.RevokeCert(t.Context(), nil, chain[0], acme.CRLReasonUnspecified); err != nil {
+			t.Fatal(err)
+		}
+		h.verifyRevoked(t, order, int(acme.CRLReasonUnspecified))
+		t.Logf("%s issuer: crypto/acme issuance and account-authorized revocation passed", alg)
 	}
 }

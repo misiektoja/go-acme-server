@@ -1,2 +1,4 @@
-golang.org/x/net v0.58.0 h1:ynWG7rqYi4ccpTEuPZ2QGWHktVEM9DMCj9yzDE0Q7To=
-golang.org/x/net v0.58.0/go.mod h1:YwCddHnFlT7eLQqVprV19OnhLGtc5xOKgE0RyqgfWAU=
+github.com/misiektoja/go-composite-mldsa v0.1.0 h1:/INCDOWXsPqJNYCzMmygIgYmiFg3kU0B46goGjzENU8=
+github.com/misiektoja/go-composite-mldsa v0.1.0/go.mod h1:fhddLN7LftPksUqjJOmzoUXR/uFijX2tgmsLGN+PaMI=
+golang.org/x/net v0.59.0 h1:5zfYln+w5XCxwrnMMJPufRgNoXEaGxl0wo5GqPXyues=
+golang.org/x/net v0.59.0/go.mod h1:2DA/G1UfVbCpQPeWTmMPGY7Cs2PkBkwu743bVX5PIVg=

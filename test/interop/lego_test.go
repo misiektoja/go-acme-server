@@ -1,10 +1,12 @@
 package interop
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/x509"
+	"encoding/pem"
 	"net"
 	"strconv"
 	"strings"
@@ -18,6 +20,7 @@ import (
 	"github.com/go-acme/lego/v4/challenge/tlsalpn01"
 	"github.com/go-acme/lego/v4/lego"
 	"github.com/go-acme/lego/v4/registration"
+	compositemldsa "github.com/misiektoja/go-composite-mldsa"
 
 	acmeserver "github.com/misiektoja/go-acme-server"
 )
@@ -125,6 +128,27 @@ func TestLegoHTTP01Revocation(t *testing.T) {
 		t.Fatalf("second revocation = %v", err)
 	}
 	t.Log("lego v4.35.2 HTTP-01 issuance, revocation with reason superseded and alreadyRevoked refusal passed")
+}
+
+// Issues from a composite ML-DSA CA through lego, which parses the chain it receives, and revokes.
+func TestLegoCompositeIssuer(t *testing.T) {
+	port := availablePort(t)
+	h := newHarness(t, harnessOptions{httpPort: port, compositeIssuer: compositemldsa.MLDSA65ECDSAP384SHA512})
+	client := h.lego(t)
+	if err := client.Challenge.SetHTTP01Provider(http01.NewProviderServer("127.0.0.1", strconv.Itoa(port))); err != nil {
+		t.Fatal(err)
+	}
+	key, resource := legoObtain(t, client, testHost)
+	order := h.verify(t, resource.Certificate, &key.PublicKey, []string{testHost}, acmeserver.ChallengeHTTP01)
+	if !bytes.Contains(resource.IssuerCertificate, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: h.ca.issuer.Raw})) {
+		t.Fatal("lego did not keep the composite issuer certificate")
+	}
+	reason := uint(4)
+	if err := client.Certificate.RevokeWithReason(resource.Certificate, &reason); err != nil {
+		t.Fatalf("revocation: %v", err)
+	}
+	h.verifyRevoked(t, order, 4)
+	t.Log("lego v4.35.2 HTTP-01 issuance from a composite ML-DSA CA and revocation passed")
 }
 
 // Issues through lego while the CA answers Pending for two seconds.
