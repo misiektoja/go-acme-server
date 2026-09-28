@@ -7,6 +7,7 @@ require (
 	github.com/go-jose/go-jose/v4 v4.1.5
 	github.com/mholt/acmez/v3 v3.1.7
 	github.com/misiektoja/go-acme-server v0.0.0
+	github.com/misiektoja/go-composite-mldsa v0.1.0
 	golang.org/x/crypto v0.57.0
 	golang.org/x/net v0.59.0
 	modernc.org/sqlite v1.59.0
