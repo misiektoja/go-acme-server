@@ -2,13 +2,21 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.0] - TBD
+
+Hosts can issue from a **composite ML-DSA CA**, whose certificates carry an ML-DSA signature and a classical signature together.
+
+### Host integration
+
+* **Composite ML-DSA issuer chains** are accepted when the host CA signs with a composite ML-DSA key from draft-ietf-lamps-pq-composite-sigs-19. The server checks every composite signature in the returned chain before it publishes the certificate. Certificate requests with composite keys are not accepted. Tested with lego v4.35.2 and the Go crypto/acme client v0.56.0.
+
 ## [0.2.0] - 27 Sep 2026
 
-Hosts can issue certificates for ML-DSA public keys while retaining classical ACME account authentication.
+Hosts can issue certificates for **post-quantum ML-DSA public keys** while retaining classical ACME account authentication.
 
 ### Protocol
 
-* **ML-DSA certificate requests** support ML-DSA-44, ML-DSA-65 and ML-DSA-87. The host CA supplies compatible issuance. Account keys remain classical and ML-DSA certificates use account-authorized revocation.
+* **ML-DSA certificate requests** support **post-quantum** ML-DSA-44, ML-DSA-65 and ML-DSA-87. The host CA supplies compatible issuance. Account keys remain classical and ML-DSA certificates use account-authorized revocation.
 
 ### Host integration
 
