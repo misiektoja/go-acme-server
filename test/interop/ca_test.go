@@ -274,7 +274,12 @@ func (ca *durableCA) sign(req acmeserver.IssueRequest) ([]byte, error) {
 			leaf.ExtraExtensions = append(leaf.ExtraExtensions, pkix.Extension{Id: tnAuthListOID, Value: value})
 		}
 	}
-	return compositex509.CreateCertificate(rand.Reader, leaf, ca.issuer, req.CSR.PublicKey, ca.issuerKey)
+	// crypto/x509 leaves CSR.PublicKey nil for a composite ML-DSA key.
+	key, err := compositex509.ParsePKIXPublicKey(req.CSR.RawSubjectPublicKeyInfo)
+	if err != nil {
+		return nil, err
+	}
+	return compositex509.CreateCertificate(rand.Reader, leaf, ca.issuer, key, ca.issuerKey)
 }
 
 // Records the revocation durably once per operation ID, counting repeated calls. A second

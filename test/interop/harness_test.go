@@ -302,7 +302,7 @@ func (h *harness) verifyLeaf(t *testing.T, chainPEM []byte, key crypto.PublicKey
 	if issuer == nil || len(bytes.TrimSpace(trailing)) != 0 || !bytes.Equal(issuer.Bytes, h.ca.issuer.Raw) {
 		t.Fatal("unexpected chain")
 	}
-	publicKey, err := x509.MarshalPKIXPublicKey(key)
+	publicKey, err := compositex509.MarshalPKIXPublicKey(key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -516,7 +516,7 @@ func mustCSR(t *testing.T, der []byte) *x509.CertificateRequest {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := csr.CheckSignature(); err != nil {
+	if err := compositex509.CheckCertificateRequestSignature(csr); err != nil {
 		t.Fatal(err)
 	}
 	return csr

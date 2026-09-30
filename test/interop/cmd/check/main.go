@@ -25,6 +25,8 @@ var required = map[string]string{
 	"github.com/misiektoja/go-acme-server/test/interop/TestCryptoACMEMLDSA":                     "",
 	"github.com/misiektoja/go-acme-server/test/interop/TestCryptoACMECompositeIssuer":           "",
 	"github.com/misiektoja/go-acme-server/test/interop/TestLegoCompositeIssuer":                 "",
+	"github.com/misiektoja/go-acme-server/test/interop/TestCryptoACMECompositeSubjectKey":       "",
+	"github.com/misiektoja/go-acme-server/test/interop/TestCertbotCompositeCSR":                 "",
 	"github.com/misiektoja/go-acme-server/test/interop/TestAcmezHTTP01":                         "",
 	"github.com/misiektoja/go-acme-server/test/interop/TestAcmezRejectsWrongProof":              "",
 	"github.com/misiektoja/go-acme-server/test/interop/TestAcmezIPIdentifier":                   "",
@@ -71,9 +73,9 @@ func run() error {
 	if root == "" {
 		return fmt.Errorf("ACME_TEST_SCRATCH is required")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
 	defer cancel()
-	command := exec.CommandContext(ctx, "go", "test", "-race", "-count=1", "-timeout=2m", "-json", "./...")
+	command := exec.CommandContext(ctx, "go", "test", "-race", "-count=1", "-timeout=4m", "-json", "./...")
 	output, err := command.StdoutPipe()
 	if err != nil {
 		return err

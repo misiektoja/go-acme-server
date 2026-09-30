@@ -15,6 +15,7 @@ import (
 	"time"
 
 	compositemldsa "github.com/misiektoja/go-composite-mldsa"
+	"github.com/misiektoja/go-composite-mldsa/compositex509"
 	"golang.org/x/crypto/acme"
 
 	acmeserver "github.com/misiektoja/go-acme-server"
@@ -115,7 +116,7 @@ func (h *harness) cryptoIssue(ctx context.Context, t *testing.T, client *acme.Cl
 	if len(subjectKeys) == 1 {
 		certKey = subjectKeys[0]
 	}
-	csr, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{DNSNames: []string{testHost}}, certKey)
+	csr, err := compositex509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{DNSNames: []string{testHost}}, certKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,5 +206,36 @@ func TestCryptoACMECompositeIssuer(t *testing.T) {
 		}
 		h.verifyRevoked(t, order, int(acme.CRLReasonUnspecified))
 		t.Logf("%s issuer: crypto/acme issuance and account-authorized revocation passed", alg)
+	}
+}
+
+// Issues composite ML-DSA leaf keys under classical and composite issuers. A composite key cannot
+// sign a JWS, so revocation goes through the account, and a request signed by another key is refused.
+func TestCryptoACMECompositeSubjectKey(t *testing.T) {
+	for _, tc := range []struct{ subject, issuer compositemldsa.Algorithm }{
+		{subject: compositemldsa.MLDSA44RSA2048PSSSHA256},
+		{subject: compositemldsa.MLDSA65Ed25519SHA512, issuer: compositemldsa.MLDSA65ECDSAP384SHA512},
+		{subject: compositemldsa.MLDSA87ECDSAP521SHA512, issuer: compositemldsa.MLDSA87RSA4096PSSSHA512},
+	} {
+		solver, port := newSolver(t, false)
+		h := newHarness(t, harnessOptions{httpPort: port, compositeIssuer: tc.issuer})
+		client, _ := h.cryptoAccount(t.Context(), t)
+		key, err := compositemldsa.GenerateKey(tc.subject)
+		if err != nil {
+			t.Fatal(err)
+		}
+		chain, _, order := h.cryptoIssue(t.Context(), t, client, solver, key)
+		requireACMEError(t, client.RevokeCert(t.Context(), newKey(t), chain[0], acme.CRLReasonUnspecified), http.StatusForbidden, acmeserver.ErrorUnauthorized)
+		if err := client.RevokeCert(t.Context(), nil, chain[0], acme.CRLReasonSuperseded); err != nil {
+			t.Fatal(err)
+		}
+		if requester := h.verifyRevoked(t, order, int(acme.CRLReasonSuperseded)); requester == "" {
+			t.Fatal("CA saw no requesting account")
+		}
+		issuer := "classical"
+		if tc.issuer != 0 {
+			issuer = tc.issuer.String()
+		}
+		t.Logf("%s subject key under %s issuer: crypto/acme issuance and account revocation passed", tc.subject, issuer)
 	}
 }
