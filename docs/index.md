@@ -22,8 +22,8 @@ between deployments through Go interfaces:
 The result is an `http.Handler` you mount behind your HTTPS origin and a worker you run next to it.
 Standard ACME clients such as Certbot, lego, acmez and cert-manager then obtain certificates from your CA.
 
-Certificates can carry **post-quantum ML-DSA** keys. Your CA can also sign with **composite ML-DSA**
-keys, which pair ML-DSA with a classical algorithm. The [support matrix](support-matrix.md) lists
+Certificates can carry **post-quantum ML-DSA** keys or **composite ML-DSA** keys, which pair ML-DSA
+with a classical algorithm. Your CA can also sign with a composite ML-DSA key. The [support matrix](support-matrix.md) lists
 what is covered.
 
 ## Install
