@@ -127,7 +127,7 @@ func TestLegoHTTP01Revocation(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), string(acmeserver.ErrorAlreadyRevoked)) {
 		t.Fatalf("second revocation = %v", err)
 	}
-	t.Log("lego v4.35.2 HTTP-01 issuance, revocation with reason superseded and alreadyRevoked refusal passed")
+	t.Log(clientLabel("lego") + " HTTP-01 issuance, revocation with reason superseded and alreadyRevoked refusal passed")
 }
 
 // Issues from a composite ML-DSA CA through lego, which parses the chain it receives, and revokes.
@@ -148,7 +148,7 @@ func TestLegoCompositeIssuer(t *testing.T) {
 		t.Fatalf("revocation: %v", err)
 	}
 	h.verifyRevoked(t, order, 4)
-	t.Log("lego v4.35.2 HTTP-01 issuance from a composite ML-DSA CA and revocation passed")
+	t.Log(clientLabel("lego") + " HTTP-01 issuance from a composite ML-DSA CA and revocation passed")
 }
 
 // Issues through lego while the CA answers Pending for two seconds.
@@ -162,7 +162,7 @@ func TestLegoDelayedIssuance(t *testing.T) {
 	key, resource := legoObtain(t, client, testHost)
 	order := h.verify(t, resource.Certificate, &key.PublicKey, []string{testHost}, acmeserver.ChallengeHTTP01)
 	h.verifyDelayed(t, order)
-	t.Log("lego v4.35.2 waited for a delayed issuance and received the certificate")
+	t.Log(clientLabel("lego") + " waited for a delayed issuance and received the certificate")
 }
 
 // Issues through lego's TLS-ALPN-01 listener and confirms lego closed it afterwards.
@@ -179,7 +179,7 @@ func TestLegoTLSALPN01(t *testing.T) {
 		connection.Close()
 		t.Fatal("the lego challenge listener is still accepting connections")
 	}
-	t.Log("lego v4.35.2 TLS-ALPN-01 issuance passed and the challenge listener was closed")
+	t.Log(clientLabel("lego") + " TLS-ALPN-01 issuance passed and the challenge listener was closed")
 }
 
 // Issues a wildcard with its base domain through lego's DNS-01 solver against the local responder.
@@ -200,5 +200,5 @@ func TestLegoDNS01Wildcard(t *testing.T) {
 	if concurrent != 2 || remaining != 0 {
 		t.Fatalf("most TXT values in one answer = %d, owners left = %d", concurrent, remaining)
 	}
-	t.Log("lego v4.35.2 wildcard and base-domain DNS-01 proofs coexisted at one TXT owner and were cleaned up")
+	t.Log(clientLabel("lego") + " wildcard and base-domain DNS-01 proofs coexisted at one TXT owner and were cleaned up")
 }

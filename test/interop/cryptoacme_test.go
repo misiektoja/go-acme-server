@@ -173,7 +173,7 @@ func TestCryptoACMEAccountAndKeyRevocation(t *testing.T) {
 	}
 	_, err = client.AuthorizeOrder(ctx, acme.DomainIDs(testHost))
 	requireACMEError(t, err, http.StatusForbidden, acmeserver.ErrorUnauthorized)
-	t.Log("crypto/acme v0.56.0 account update, key rollover, HTTP-01 issuance, key-signed revocation and deactivation passed")
+	t.Log(clientLabel("crypto/acme") + " account update, key rollover, HTTP-01 issuance, key-signed revocation and deactivation passed")
 }
 
 // Issues ML-DSA leaf keys through classical account authentication and revokes with that account.

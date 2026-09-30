@@ -275,7 +275,7 @@ func TestAcmezIPIdentifier(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), string(acmeserver.ErrorUnsupportedIdentifier)) {
 		t.Fatalf("IP order without the option = %v, want unsupportedIdentifier", err)
 	}
-	t.Log("acmez v3.1.6 issued for 127.0.0.1 with issuance.test through HTTP-01 and the IP authorization offered no dns-01")
+	t.Log(clientLabel("acmez") + " issued for 127.0.0.1 with issuance.test through HTTP-01 and the IP authorization offered no dns-01")
 }
 
 // Registers the HTTP-01 responder as the only acmez solver.
