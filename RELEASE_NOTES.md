@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented in this file.
 
-## [0.4.0] - TBD
+## [0.4.0] - 30 Sep 2026
 
 Certificate requests can carry **composite ML-DSA keys**, which pair an ML-DSA key with a classical key in one certificate.
 
