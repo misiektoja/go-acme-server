@@ -1562,6 +1562,7 @@ earliest expiry among the order and its authorizations as the <code>Deadline</co
 <p>From this point every call for the order presents the same <code>OperationID</code>, whether it is the first
 attempt, a retry after a timeout or a recovery from another worker after a crash.</p>
 <p>ML-DSA-44, ML-DSA-65 and ML-DSA-87 certificate requests are accepted. Account keys remain classical. The host CA must support the requested key and apply the signature-only key usages required by <a href="https://www.rfc-editor.org/rfc/rfc9881.html">RFC 9881</a>. Use an authorized account to revoke an ML-DSA certificate. This does not add ML-DSA JWS signatures or change TLS configuration.</p>
+<p>Composite ML-DSA certificate requests are accepted too. The server checks both component signatures itself because <code>crypto/x509</code> cannot, and <code>CSR.PublicKey</code> is nil for these keys. Read the key with <code>compositex509.ParsePKIXPublicKey</code> from <code>CSR.RawSubjectPublicKeyInfo</code> and certify it with <code>compositex509.CreateCertificate</code>. Revoke these certificates through an authorized account as well.</p>
 <h2 id="the-request">The request<a class="headerlink" href="#the-request" title="Permanent link">&para;</a></h2>
 <table>
 <thead>

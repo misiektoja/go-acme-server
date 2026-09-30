@@ -1651,8 +1651,8 @@ identifier has no usable challenge type is refused.</p>
 </tr>
 </tbody>
 </table>
-<p>CSR keys also accept ML-DSA-44, ML-DSA-65 and ML-DSA-87. The CSR key must differ from the account key. ML-DSA account signatures and certificate-key revocation signatures are not supported. Revoke these certificates through an authorized classical account.</p>
-<p>Issuer chains may use composite ML-DSA signatures from draft-ietf-lamps-pq-composite-sigs-19. CSR keys cannot be composite.</p>
+<p>CSR keys also accept ML-DSA-44, ML-DSA-65 and ML-DSA-87 and every composite ML-DSA key from draft-ietf-lamps-pq-composite-sigs-19 that <a href="https://github.com/misiektoja/go-composite-mldsa">go-composite-mldsa</a> supports. The CSR key must differ from the account key. ML-DSA and composite account signatures and certificate-key revocation signatures are not supported. Revoke these certificates through an authorized classical account.</p>
+<p>Issuer chains may use composite ML-DSA signatures.</p>
 <h2 id="host-interfaces">Host interfaces<a class="headerlink" href="#host-interfaces" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
