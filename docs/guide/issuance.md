@@ -23,6 +23,8 @@ attempt, a retry after a timeout or a recovery from another worker after a crash
 
 ML-DSA-44, ML-DSA-65 and ML-DSA-87 certificate requests are accepted. Account keys remain classical. The host CA must support the requested key and apply the signature-only key usages required by [RFC 9881](https://www.rfc-editor.org/rfc/rfc9881.html). Use an authorized account to revoke an ML-DSA certificate. This does not add ML-DSA JWS signatures or change TLS configuration.
 
+Composite ML-DSA certificate requests are accepted too. The server checks both component signatures itself because `crypto/x509` cannot, and `CSR.PublicKey` is nil for these keys. Read the key with `compositex509.ParsePKIXPublicKey` from `CSR.RawSubjectPublicKeyInfo` and certify it with `compositex509.CreateCertificate`. Revoke these certificates through an authorized account as well.
+
 ## The request
 
 | Field | Meaning |

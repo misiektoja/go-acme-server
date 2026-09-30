@@ -2,6 +2,7 @@ package interop
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto"
 	"crypto/rand"
@@ -20,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"sync"
@@ -38,11 +40,51 @@ import (
 	"github.com/misiektoja/go-acme-server/test/interop/testutil"
 )
 
-// Names the versions every required client run must use.
-const (
-	certbotVersion = "certbot 5.8.0"
-	clientVersions = "acmez=v3.1.6 Certbot=5.8.0 crypto/acme=v0.56.0 go-jose=v4.1.5 lego=v4.35.2 SQLite=v1.58.0"
-)
+// Names the Certbot version every required Certbot run must use.
+const certbotVersion = "certbot 5.8.0"
+
+// Maps the Go clients the tests report to their modules, whose versions come from go.mod through the build.
+var clientModules = map[string]string{
+	"acmez":       "github.com/mholt/acmez/v3",
+	"crypto/acme": "golang.org/x/crypto",
+	"go-jose":     "github.com/go-jose/go-jose/v4",
+	"lego":        "github.com/go-acme/lego/v4",
+	"SQLite":      "modernc.org/sqlite",
+}
+
+// Reads the module versions linked into the test binary once.
+var linkedVersions = sync.OnceValue(func() map[string]string {
+	versions := map[string]string{}
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return versions
+	}
+	for _, dep := range info.Deps {
+		version := dep.Version
+		if dep.Replace != nil {
+			// A local directory replacement has no version, so its path identifies the code.
+			version = cmp.Or(dep.Replace.Version, dep.Replace.Path)
+		}
+		versions[dep.Path] = version
+	}
+	return versions
+})
+
+// Names a Go client with its linked module version, for example "lego v4.35.2".
+func clientLabel(name string) string {
+	return name + " " + cmp.Or(linkedVersions()[clientModules[name]], "(unknown version)")
+}
+
+// Lists the required Certbot version and every linked Go client version for the test log.
+func clientVersions() string {
+	parts := make([]string, 0, len(clientModules)+1)
+	parts = append(parts, "Certbot="+strings.TrimPrefix(certbotVersion, "certbot "))
+	for name, module := range clientModules {
+		parts = append(parts, name+"="+cmp.Or(linkedVersions()[module], "unknown"))
+	}
+	slices.SortFunc(parts, func(a, b string) int { return strings.Compare(strings.ToLower(a), strings.ToLower(b)) })
+	return strings.Join(parts, " ")
+}
 
 // The only host name the harness resolves and issues for, and the loopback IP identifier.
 const (
@@ -147,7 +189,7 @@ func newHarness(t *testing.T, options harnessOptions) *harness {
 	writePrivate(t, trustFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: ca.root.Raw}))
 	h := &harness{directory: directory, store: store, ca: ca, server: server, https: https, options: options,
 		trustFile: trustFile, client: &http.Client{Transport: transport, Timeout: 10 * time.Second}}
-	t.Logf("Go=%s OS=%s arch=%s %s", runtime.Version(), runtime.GOOS, runtime.GOARCH, clientVersions)
+	t.Logf("Go=%s OS=%s arch=%s %s", runtime.Version(), runtime.GOOS, runtime.GOARCH, clientVersions())
 	if !options.external {
 		runWorker(t, server)
 	}
@@ -302,7 +344,7 @@ func (h *harness) verifyLeaf(t *testing.T, chainPEM []byte, key crypto.PublicKey
 	if issuer == nil || len(bytes.TrimSpace(trailing)) != 0 || !bytes.Equal(issuer.Bytes, h.ca.issuer.Raw) {
 		t.Fatal("unexpected chain")
 	}
-	publicKey, err := x509.MarshalPKIXPublicKey(key)
+	publicKey, err := compositex509.MarshalPKIXPublicKey(key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -516,7 +558,7 @@ func mustCSR(t *testing.T, der []byte) *x509.CertificateRequest {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := csr.CheckSignature(); err != nil {
+	if err := compositex509.CheckCertificateRequestSignature(csr); err != nil {
 		t.Fatal(err)
 	}
 	return csr

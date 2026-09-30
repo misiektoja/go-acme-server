@@ -42,8 +42,8 @@ before the payload is read and a nonce is valid exactly once. `newAccount` requi
 key and every other resource requires a `kid`, as RFC 8555 section 6.2 demands.
 
 **Key policy.** Account keys must be ES256, ES384, ES512, RS256 or EdDSA keys and CSR keys must be
-RSA 2048 to 4096 bits, P-256, P-384, P-521, Ed25519, ML-DSA-44, ML-DSA-65 or ML-DSA-87. The CSR key must differ from the account key. Issuer signatures in the returned chain may be
-composite ML-DSA.
+RSA 2048 to 4096 bits, P-256, P-384, P-521, Ed25519, ML-DSA-44, ML-DSA-65, ML-DSA-87 or composite ML-DSA. The CSR key must differ from the account key. Issuer signatures in the returned chain may be
+composite ML-DSA. The server verifies both halves of a composite CSR signature.
 
 **Authorization before issuance.** A certificate is issued only for an order whose every
 authorization is valid, whose CSR requests exactly the order's identifiers and whose CA basic

@@ -14,7 +14,9 @@ type IssueRequest struct {
 	AccountURL  string
 	OrderID     string
 	// The parsed certificate request and its DER encoding. The signature and the identifier
-	// set were already checked against the order.
+	// set were already checked against the order. CSR.PublicKey is nil for a composite ML-DSA
+	// key. Read that key with compositex509.ParsePKIXPublicKey from CSR.RawSubjectPublicKeyInfo
+	// and certify it with compositex509.CreateCertificate.
 	CSR    *x509.CertificateRequest
 	CSRDER []byte
 	// The normalized identifiers the order covers.

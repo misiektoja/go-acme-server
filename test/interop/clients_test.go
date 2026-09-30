@@ -18,6 +18,8 @@ import (
 
 	"github.com/mholt/acmez/v3"
 	"github.com/mholt/acmez/v3/acme"
+	compositemldsa "github.com/misiektoja/go-composite-mldsa"
+	"github.com/misiektoja/go-composite-mldsa/compositex509"
 
 	acmeserver "github.com/misiektoja/go-acme-server"
 )
@@ -121,6 +123,37 @@ func TestCertbotHTTP01(t *testing.T) {
 		t.Fatal("Certbot changed the supplied CSR")
 	}
 	t.Log(certbotVersion + " standalone HTTP-01 passed with explicit HTTPS trust")
+}
+
+// Finalizes a composite ML-DSA CSR through Certbot and revokes the certificate with the account,
+// because Certbot handles the CSR without reading its key.
+func TestCertbotCompositeCSR(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+	defer cancel()
+	executable := certbotExecutable(ctx, t)
+	h := newHarness(t, harnessOptions{httpPort: availablePort(t), compositeIssuer: compositemldsa.MLDSA65ECDSAP256SHA512})
+	key, err := compositemldsa.GenerateKey(compositemldsa.MLDSA65ECDSAP256SHA512)
+	if err != nil {
+		t.Fatal(err)
+	}
+	csr, err := compositex509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{DNSNames: []string{testHost}}, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	csrPath := filepath.Join(h.directory, "client.csr")
+	writePrivate(t, csrPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csr}))
+	certPath, fullchain := filepath.Join(h.directory, "cert.pem"), filepath.Join(h.directory, "fullchain.pem")
+	h.certbot(ctx, t, executable, "certbot-composite-output.txt", "certonly", "--standalone", "--preferred-challenges", "http",
+		"--http-01-address", "127.0.0.1", "--http-01-port", strconv.Itoa(h.options.httpPort), "--csr", csrPath,
+		"--cert-path", certPath, "--chain-path", filepath.Join(h.directory, "chain.pem"),
+		"--fullchain-path", fullchain, "--agree-tos", "--register-unsafely-without-email", "--no-directory-hooks")
+	order := h.verify(t, readFile(t, fullchain), key.Public(), []string{testHost}, acmeserver.ChallengeHTTP01)
+	if !bytes.Equal(order.CSR, csr) {
+		t.Fatal("Certbot changed the supplied CSR")
+	}
+	h.certbot(ctx, t, executable, "certbot-composite-revoke-output.txt", "revoke", "--cert-path", certPath, "--no-delete-after-revoke")
+	h.verifyRevoked(t, order, 0)
+	t.Log(certbotVersion + " composite ML-DSA CSR issuance and account revocation passed")
 }
 
 // Certbot passes the wildcard identifier itself, so the hooks strip that label to reach the TXT
@@ -242,7 +275,7 @@ func TestAcmezIPIdentifier(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), string(acmeserver.ErrorUnsupportedIdentifier)) {
 		t.Fatalf("IP order without the option = %v, want unsupportedIdentifier", err)
 	}
-	t.Log("acmez v3.1.6 issued for 127.0.0.1 with issuance.test through HTTP-01 and the IP authorization offered no dns-01")
+	t.Log(clientLabel("acmez") + " issued for 127.0.0.1 with issuance.test through HTTP-01 and the IP authorization offered no dns-01")
 }
 
 // Registers the HTTP-01 responder as the only acmez solver.

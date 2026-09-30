@@ -90,7 +90,7 @@ func TestAcmezRenewalInfo(t *testing.T) {
 	if predecessor.ReplacedByOrderID != replacing.ID {
 		t.Fatalf("claim moved to %s", predecessor.ReplacedByOrderID)
 	}
-	t.Log("acmez v3.1.6 read renewal information, replaced the certificate once and retried without the claim")
+	t.Log(clientLabel("acmez") + " read renewal information, replaced the certificate once and retried without the claim")
 }
 
 // Fetches renewal information through lego and orders a replacement naming the leaf.
@@ -134,5 +134,5 @@ func TestLegoRenewalInfo(t *testing.T) {
 	if third.Replaces != "" {
 		t.Fatalf("third order replaces %q after the server answered alreadyReplaced", third.Replaces)
 	}
-	t.Log("lego v4.35.2 read renewal information, replaced the certificate once and retried without the claim")
+	t.Log(clientLabel("lego") + " read renewal information, replaced the certificate once and retried without the claim")
 }

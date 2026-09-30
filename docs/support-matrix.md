@@ -41,9 +41,9 @@ identifier has no usable challenge type is refused.
 | Account keys | RSA 2048 to 4096 bits, ECDSA P-256, P-384 and P-521, Ed25519 |
 | Account contacts | `mailto` with one bare address, at most ten contacts |
 
-CSR keys also accept ML-DSA-44, ML-DSA-65 and ML-DSA-87. The CSR key must differ from the account key. ML-DSA account signatures and certificate-key revocation signatures are not supported. Revoke these certificates through an authorized classical account.
+CSR keys also accept ML-DSA-44, ML-DSA-65 and ML-DSA-87 and every composite ML-DSA key from draft-ietf-lamps-pq-composite-sigs-19 that [go-composite-mldsa](https://github.com/misiektoja/go-composite-mldsa) supports. The CSR key must differ from the account key. ML-DSA and composite account signatures and certificate-key revocation signatures are not supported. Revoke these certificates through an authorized classical account.
 
-Issuer chains may use composite ML-DSA signatures from draft-ietf-lamps-pq-composite-sigs-19. CSR keys cannot be composite.
+Issuer chains may use composite ML-DSA signatures.
 
 ## Host interfaces
 
