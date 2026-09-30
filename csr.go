@@ -13,6 +13,9 @@ import (
 	"errors"
 	"slices"
 
+	compositemldsa "github.com/misiektoja/go-composite-mldsa"
+	"github.com/misiektoja/go-composite-mldsa/compositex509"
+
 	"github.com/misiektoja/go-acme-server/internal/jws"
 )
 
@@ -33,17 +36,22 @@ func checkCSR(der []byte, order *Order, account *Account) (*x509.CertificateRequ
 	if err != nil {
 		return nil, NewProblem(ErrorBadCSR, "CSR could not be parsed")
 	}
-	if err := csr.CheckSignature(); err != nil {
+	if err := compositex509.CheckCertificateRequestSignature(csr); err != nil {
 		return nil, NewProblem(ErrorBadCSR, "CSR signature is invalid")
 	}
-	if p := checkCSRKey(csr.PublicKey); p != nil {
+	// crypto/x509 leaves PublicKey nil for a composite ML-DSA key, so the key is parsed here.
+	key, err := compositex509.ParsePKIXPublicKey(csr.RawSubjectPublicKeyInfo)
+	if err != nil {
+		return nil, NewProblem(ErrorBadCSR, "CSR key could not be read")
+	}
+	if p := checkCSRKey(key); p != nil {
 		return nil, p
 	}
 	accountKey, err := x509.MarshalPKIXPublicKey(account.Key)
 	if err != nil {
 		return nil, NewProblem(ErrorServerInternal, "account key could not be read")
 	}
-	csrKey, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
+	csrKey, err := compositex509.MarshalPKIXPublicKey(key)
 	if err != nil {
 		return nil, NewProblem(ErrorBadCSR, "CSR key could not be read")
 	}
@@ -94,7 +102,7 @@ func checkCSRKey(key any) *Problem {
 		if k.Curve != elliptic.P256() && k.Curve != elliptic.P384() && k.Curve != elliptic.P521() {
 			return NewProblem(ErrorBadCSR, "CSR EC key uses an unsupported curve")
 		}
-	case ed25519.PublicKey, *mldsa.PublicKey:
+	case ed25519.PublicKey, *mldsa.PublicKey, *compositemldsa.PublicKey:
 	default:
 		return NewProblem(ErrorBadCSR, "CSR key type is not supported")
 	}
