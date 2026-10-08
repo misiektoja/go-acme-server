@@ -171,9 +171,37 @@ func TestAuthorizationDeactivation(t *testing.T) {
 	}
 }
 
+type workerStartStore struct {
+	acmeserver.Store
+	started chan struct{}
+	once    sync.Once
+}
+
+// Signals worker startup before delegating the task claim to the underlying store.
+func (s *workerStartStore) ClaimTask(ctx context.Context, now, leaseUntil time.Time) (*acmeserver.Task, error) {
+	s.once.Do(func() { close(s.started) })
+	return s.Store.ClaimTask(ctx, now, leaseUntil)
+}
+
+// Waits for the worker's first task claim or fails the test after five seconds.
+func (s *workerStartStore) wait(t *testing.T) {
+	t.Helper()
+	// The first task claim proves Run is active before work can produce a warning.
+	select {
+	case <-s.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("worker did not start")
+	}
+}
+
 func TestIssuanceFlow(t *testing.T) {
-	f := newFlow(t, nil)
+	store := &workerStartStore{started: make(chan struct{})}
+	f := newFlow(t, func(cfg *acmeserver.Config) {
+		store.Store = cfg.Store
+		cfg.Store = store
+	})
 	f.runWorker()
+	store.wait(t)
 	c := f.newClient()
 	c.register()
 	location, order := c.newOrder("a.test", "b.test")
