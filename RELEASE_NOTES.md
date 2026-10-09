@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.4.1] - 9 Oct 2026
+
+This version requires Go 1.27.2 and updates composite ML-DSA support to the published v0.2.0 library.
+
+### Host integration
+
+* **Go 1.27.2 or newer** is required. **go-composite-mldsa v0.2.0** validates composite key encodings more strictly. Valid keys retain the same encoding and algorithm support.
+
 ## [0.4.0] - 30 Sep 2026
 
 Certificate requests can carry **composite ML-DSA keys**, which pair an ML-DSA key with a classical key in one certificate.
