@@ -9,7 +9,7 @@ the loopback address. It runs over HTTPS because ACME clients such as lego refus
 
 ## What you need
 
-* Go 1.27.1 or newer, the minimum the module declares
+* Go 1.27.2 or newer, the minimum the module declares
 * [lego](https://go-acme.github.io/lego/) as the client, run below with `go run`
 * Ports 4000 and 5002 free on the local machine
 
