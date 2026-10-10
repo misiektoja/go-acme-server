@@ -210,8 +210,9 @@ func (s *Server) validate(base context.Context, v Validator, req ValidationReque
 }
 
 // Commits a validation result, deriving the order status from every authorization. A concurrent
-// change to the order or authorization is reloaded and retried. A commit that does not settle
-// releases the task for a later attempt instead of holding its lease.
+// change to the order or authorization is reloaded and retried. An authorization that left pending
+// meanwhile settles the challenge as invalid, as it would before validation. A commit that does not
+// settle releases the task for a later attempt instead of holding its lease.
 func (s *Server) completeValidation(base context.Context, task *Task, ch *Challenge, authz *Authorization) {
 	ctx, cancel := s.taskPhase(base)
 	defer cancel()
@@ -244,9 +245,12 @@ func (s *Server) completeValidation(base context.Context, task *Task, ch *Challe
 			s.dropOnNotFound(base, task, err, "authorization")
 			return
 		}
-		if current.Status != AuthorizationPending {
-			s.finishTask(base, task)
-			return
+		if status := effectiveAuthzStatus(current, s.clock.Now()); status != AuthorizationPending {
+			ch.Status = ChallengeInvalid
+			ch.Validated = time.Time{}
+			ch.Error = Problemf(ErrorMalformed, "authorization was %s before validation", string(status))
+			authz = current
+			continue
 		}
 		authz.Revision = current.Revision
 	}
