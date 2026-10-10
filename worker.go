@@ -11,10 +11,10 @@ import (
 
 // Processes persisted validation and issuance work until ctx is canceled. Without a worker in this
 // process or another process on the same store, challenges and orders never progress. Canceling ctx
-// stops new claims but does not interrupt a task already in flight, so Run can take several
-// WorkerConfig.TaskTimeout budgets to return when a validator, issuer or store stops responding.
-// Waiting for it is optional: a claimed task is leased and its commit is fenced, so another worker
-// picks it up once the lease lapses.
+// stops new claims but does not interrupt a task already in flight, so Run can take up to
+// WorkerConfig.Lease to return when a validator, issuer or store stops responding. Waiting for it
+// is optional: a claimed task is leased and its commit is fenced, so another worker picks it up
+// once the lease lapses.
 func (s *Server) Run(ctx context.Context) error {
 	if !s.running.CompareAndSwap(false, true) {
 		return errors.New("acmeserver: Run is already active")
@@ -29,12 +29,15 @@ func (s *Server) Run(ctx context.Context) error {
 			return nil
 		case slots <- struct{}{}:
 		}
+		// The run ends when the lease does. The wall clock is read before the claim so the run
+		// cannot outlast the lease the store records.
+		leaseEnd := time.Now().Add(s.workers.Lease)
 		now := s.clock.Now()
 		task, err := s.store.ClaimTask(ctx, now, now.Add(s.workers.Lease))
 		if err == nil {
 			wg.Go(func() {
 				defer func() { <-slots }()
-				s.process(ctx, task)
+				s.process(ctx, task, leaseEnd)
 			})
 			continue
 		}
@@ -80,9 +83,11 @@ func (s *Server) workAccepted(ctx context.Context) {
 }
 
 // Runs one claimed task, detached from the Run context so a shutdown does not interrupt work that
-// is already in flight. Every phase of the run takes its own deadline from taskPhase.
-func (s *Server) process(ctx context.Context, task *Task) {
-	base := context.WithoutCancel(ctx)
+// is already in flight. The run stops at leaseEnd, when another worker may claim the task, and
+// every phase takes its own deadline from taskPhase within that limit.
+func (s *Server) process(ctx context.Context, task *Task, leaseEnd time.Time) {
+	base, cancel := context.WithDeadline(context.WithoutCancel(ctx), leaseEnd)
+	defer cancel()
 	switch task.Kind {
 	case TaskValidate:
 		s.runValidation(base, task)
@@ -94,9 +99,10 @@ func (s *Server) process(ctx context.Context, task *Task) {
 	}
 }
 
-// Returns a context for one phase of a task run, bounded by WorkerConfig.TaskTimeout. A validator
-// or issuer call and the store operations that record its outcome never share a deadline, so a host
-// call that uses all of its budget still leaves the worker able to commit the result.
+// Returns a context for one phase of a task run, bounded by WorkerConfig.TaskTimeout and by the end
+// of the lease. A validator or issuer call and the store operations that record its outcome never
+// share a deadline, so a host call that uses all of its budget still leaves the worker able to
+// commit the result.
 func (s *Server) taskPhase(base context.Context) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(base, s.workers.TaskTimeout)
 }

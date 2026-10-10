@@ -24,11 +24,13 @@ type WorkerConfig struct {
 	Concurrency int
 	// How often an idle worker looks for work. Defaults to one second.
 	PollInterval time.Duration
-	// How long a claimed task stays leased. Defaults to two minutes.
+	// How long a claimed task stays leased. A task run never continues past its lease, so no other
+	// worker can take the task while it runs. It must be at least twice TaskTimeout and defaults to
+	// two minutes or twice TaskTimeout, whichever is longer.
 	Lease time.Duration
 	// Bounds each phase of a task separately: one validator or issuer call and the store
 	// operations that record its outcome. A task run uses several of these budgets in
-	// sequence. Defaults to 30 seconds.
+	// sequence within its lease. Defaults to 30 seconds or half the lease, whichever is shorter.
 	TaskTimeout time.Duration
 	// Limits validation and pre-dispatch policy retries to five by default without limiting issuance recovery.
 	MaxAttempts int
