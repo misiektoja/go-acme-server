@@ -83,7 +83,8 @@ func (p customerPolicy) NewOrder(ctx context.Context, account *acmeserver.Accoun
 `NewAccount` sees the key, the contacts, the terms of service flag and the external account
 identity before the account is stored. `NewOrder` sees the account and the order after identifier
 normalization and before any authorization is created. It may change `NotBefore` and `NotAfter`,
-for example to cap the requested validity, but must not change the identifiers.
+for example to cap the requested validity. Any other change, or a `NotAfter` that is not later than
+`NotBefore`, is logged and answered with `serverInternal`.
 
 A returned `*Problem` is sent to the client. Any other error is logged and answered with
 `serverInternal`. Rate limiting belongs here too. Return a `rateLimited` problem built with
