@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.4.2] - TBD
+
+This version fixes revocation after a refused attempt, challenge responses that were not stored and issuance after an authority token expired. All three defects date back to 0.1.0.
+
+### Protocol
+
+* **Challenge responses that the store did not record** are answered with `serverInternal` and logged as `challenge update failed`. Previously the client received the unchanged pending challenge with status 200 while no validation ran.
+
+### Host integration
+
+* **A `*Problem` returned by the `Revoker`** now discards the revocation attempt. The next request starts a new operation with a new `OperationID` and the reason the client sends. Previously every later request repeated the refused operation and reason, so the certificate could not be revoked through ACME.
+* **An expired authority token** now ends issuance before the CA is called. The order becomes invalid with `authority token expired before issuance dispatch`. `IssueRequest.Deadline` also ends at the token expiry. Previously the CA was asked to sign a certificate whose validity had already ended.
+* **The SQLite example store** in `test/interop/sqlitestore` reports a lock that stays busy past its timeout as a backend error instead of `ErrRevisionMismatch`. Apply the same change to stores derived from it.
+
 ## [0.4.1] - 9 Oct 2026
 
 This version requires Go 1.27.2 and updates composite ML-DSA support to the published v0.2.0 library.
