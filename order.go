@@ -446,11 +446,15 @@ func (s *Server) acceptChallenge(ctx context.Context, ch *Challenge, account *Ac
 		s.workAccepted(ctx)
 		return ch, nil
 	case errors.Is(err, ErrRevisionMismatch):
+		// Only a concurrent response moves the challenge on. One that is still pending was not
+		// stored, so answering with it would leave the client waiting for a validation that never runs.
 		current, lookupErr := s.store.Challenge(ctx, ch.ID)
-		if lookupErr == nil {
+		switch {
+		case lookupErr != nil:
+			err = lookupErr
+		case current.Status != ChallengePending:
 			return current, nil
 		}
-		err = lookupErr
 	}
 	s.logError(ctx, "challenge update failed", err)
 	return nil, NewProblem(ErrorServerInternal, "challenge update failed")
