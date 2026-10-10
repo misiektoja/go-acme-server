@@ -6,15 +6,21 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
+	"reflect"
+	"strings"
 )
 
 // Bounds the nesting of JSON documents accepted from clients.
 const MaxDepth = 32
 
-// Decodes data into v and rejects duplicate members, nesting beyond MaxDepth and
-// trailing content.
+// Decodes data into v and rejects duplicate members, nesting beyond MaxDepth, trailing content and
+// member names that match a struct field only when case is ignored.
 func UnmarshalStrict(data []byte, v any) error {
 	if err := checkJSON(data); err != nil {
+		return err
+	}
+	if err := checkMemberNames(data, reflect.TypeOf(v)); err != nil {
 		return err
 	}
 	if err := json.Unmarshal(data, v); err != nil {
@@ -100,4 +106,117 @@ func checkJSON(data []byte) error {
 		return &Error{Code: CodeMalformed, Detail: "invalid JSON: empty document"}
 	}
 	return nil
+}
+
+// The interface whose implementations decode their own members.
+var unmarshalerType = reflect.TypeFor[json.Unmarshaler]()
+
+// Rejects members that encoding/json would assign to a struct field only by its case-insensitive
+// match. RFC 8259 member names are exact, so "Status" must neither set "status" nor shadow it.
+func checkMemberNames(data []byte, t reflect.Type) error {
+	if t == nil {
+		return nil
+	}
+	var document any
+	if err := json.Unmarshal(data, &document); err != nil {
+		// The decoder reports the same error with its own context.
+		return nil
+	}
+	return checkMembers(document, t)
+}
+
+// Checks the member names of one decoded value against the type it decodes into.
+func checkMembers(value any, t reflect.Type) error {
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	if t.Implements(unmarshalerType) || reflect.PointerTo(t).Implements(unmarshalerType) {
+		return nil
+	}
+	switch t.Kind() { //nolint:exhaustive // Other kinds hold no member names.
+	case reflect.Struct:
+		object, ok := value.(map[string]any)
+		if !ok {
+			return nil
+		}
+		fields := jsonFields(t)
+		for key, member := range object {
+			if field, ok := fields[key]; ok {
+				if err := checkMembers(member, field); err != nil {
+					return err
+				}
+				continue
+			}
+			// strings.EqualFold applies the folding encoding/json uses to match member names.
+			for name := range fields {
+				if strings.EqualFold(key, name) {
+					return &Error{Code: CodeMalformed,
+						Detail: fmt.Sprintf("invalid JSON: member %q differs from %q only in case", key, name)}
+				}
+			}
+		}
+	case reflect.Map:
+		if object, ok := value.(map[string]any); ok {
+			for _, member := range object {
+				if err := checkMembers(member, t.Elem()); err != nil {
+					return err
+				}
+			}
+		}
+	case reflect.Slice, reflect.Array:
+		if items, ok := value.([]any); ok {
+			for _, item := range items {
+				if err := checkMembers(item, t.Elem()); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// Returns the exact JSON member names of a struct type with the type each one decodes into. It
+// follows the encoding/json rules for tags, unexported fields and embedded structs, where a
+// shallower field hides a deeper one with the same name.
+func jsonFields(t reflect.Type) map[string]reflect.Type {
+	fields := map[string]reflect.Type{}
+	level := []reflect.Type{t}
+	visited := map[reflect.Type]bool{}
+	for len(level) > 0 {
+		found := map[string]reflect.Type{}
+		var next []reflect.Type
+		for _, st := range level {
+			if visited[st] {
+				continue
+			}
+			visited[st] = true
+			for field := range st.Fields() {
+				tag := field.Tag.Get("json")
+				if tag == "-" {
+					continue
+				}
+				name, _, _ := strings.Cut(tag, ",")
+				fieldType := field.Type
+				if fieldType.Kind() == reflect.Pointer {
+					fieldType = fieldType.Elem()
+				}
+				if field.Anonymous && name == "" && fieldType.Kind() == reflect.Struct {
+					next = append(next, fieldType)
+					continue
+				}
+				if !field.IsExported() {
+					continue
+				}
+				if name == "" {
+					name = field.Name
+				}
+				if _, hidden := fields[name]; !hidden {
+					found[name] = field.Type
+				}
+			}
+		}
+		maps.Copy(fields, found)
+		level = next
+	}
+	return fields
 }
