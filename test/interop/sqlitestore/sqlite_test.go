@@ -3,6 +3,7 @@ package sqlitestore_test
 import (
 	"bufio"
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"os"
@@ -48,6 +49,39 @@ func TestDurabilitySettings(t *testing.T) {
 		t.Fatalf("settings = %q, %v", settings, err)
 	}
 	t.Log(settings)
+}
+
+// Reports a write that waited out the busy timeout as a backend failure, never as a contract error the
+// server would take for a concurrent update.
+func TestLockTimeoutIsABackendError(t *testing.T) {
+	path := filepath.Join(testutil.Scratch(t), "locked.sqlite")
+	store := openStore(t, path)
+	account := storetest.NewAccount(t, "account")
+	if err := store.CreateAccount(t.Context(), account); err != nil {
+		t.Fatal(err)
+	}
+	other, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = other.Close() })
+	holder, err := other.Conn(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = holder.Close() })
+	if _, err := holder.ExecContext(t.Context(), "BEGIN IMMEDIATE"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = holder.ExecContext(context.Background(), "ROLLBACK") })
+	account.Contact = []string{"mailto:locked@example.test"}
+	err = store.UpdateAccount(t.Context(), account)
+	for _, contract := range []error{acmeserver.ErrNotFound, acmeserver.ErrConflict, acmeserver.ErrRevisionMismatch,
+		acmeserver.ErrAlreadyReplaced} {
+		if err == nil || errors.Is(err, contract) {
+			t.Fatalf("update under a held lock = %v, want a backend error", err)
+		}
+	}
 }
 
 // Seeds one pending issuance operation for the cross-process fencing test.
