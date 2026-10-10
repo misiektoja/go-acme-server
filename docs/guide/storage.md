@@ -42,8 +42,8 @@ revision. The server reads the resource again and retries when it sees a mismatc
 must be part of the same transaction as the write.
 
 `UpdateAuthorization` has one extra duty. When the authorization reaches a terminal status, the
-same operation marks its order invalid unless issuance was already dispatched. The `storetest`
-suite checks this.
+same operation marks its order invalid with `Error` set to `InvalidAuthorizationProblem()` unless
+issuance was already dispatched. The `storetest` suite checks this.
 
 ## Tasks, leases and fences
 
