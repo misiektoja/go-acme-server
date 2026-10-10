@@ -134,7 +134,7 @@ func (s *Server) buildOrder(ctx context.Context, account *Account, payload *newO
 		Replaces:    replaces,
 		CreatedAt:   now,
 	}
-	if p := s.policyProblem(ctx, s.policy.NewOrder(ctx, account, order), "order policy"); p != nil {
+	if p := s.hostProblem(ctx, s.policy.NewOrder(ctx, account, order), "order policy"); p != nil {
 		return nil, p
 	}
 	return order, nil
