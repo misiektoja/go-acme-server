@@ -53,6 +53,8 @@ func TestNewValidatesConfig(t *testing.T) {
 		"fragment in base url": func(c *Config) { c.BaseURL = "https://acme.example/acme/#x" },
 		"user in base url":     func(c *Config) { c.BaseURL = "https://user@acme.example/acme/" },
 		"escaped path":         func(c *Config) { c.BaseURL = "https://acme.example/ac%2Fme/" },
+		"timeout over half":    func(c *Config) { c.Workers.Lease, c.Workers.TaskTimeout = time.Minute, 31*time.Second },
+		"lease too short":      func(c *Config) { c.Workers.Lease = time.Nanosecond },
 		"negative body limit":  func(c *Config) { c.MaxRequestBody = -1 },
 		"negative lifetime":    func(c *Config) { c.OrderLifetime = -1 },
 		"negative workers":     func(c *Config) { c.Workers.Concurrency = -1 },
@@ -84,6 +86,28 @@ func TestNewValidatesConfig(t *testing.T) {
 	cfg.BaseURL, cfg.AllowInsecureBaseURL = "http://localhost:8080/", true
 	if _, err := New(cfg); err != nil {
 		t.Fatalf("New with AllowInsecureBaseURL: %v", err)
+	}
+}
+
+// Derives the lease and task timeout from each other so the default pair stays valid.
+func TestWorkerLeaseDefaults(t *testing.T) {
+	cases := []struct {
+		name                     string
+		lease, taskTimeout       time.Duration
+		wantLease, wantTaskLimit time.Duration
+	}{
+		{"neither", 0, 0, 2 * time.Minute, 30 * time.Second},
+		{"long task timeout", 0, 5 * time.Minute, 10 * time.Minute, 5 * time.Minute},
+		{"short task timeout", 0, time.Second, 2 * time.Minute, time.Second},
+		{"short lease", 20 * time.Second, 0, 20 * time.Second, 10 * time.Second},
+		{"long lease", time.Hour, 0, time.Hour, 30 * time.Second},
+		{"both", time.Minute, 30 * time.Second, time.Minute, 30 * time.Second},
+	}
+	for _, tc := range cases {
+		got, err := WorkerConfig{Lease: tc.lease, TaskTimeout: tc.taskTimeout}.withDefaults()
+		if err != nil || got.Lease != tc.wantLease || got.TaskTimeout != tc.wantTaskLimit {
+			t.Errorf("%s: withDefaults = %v, %v, %v", tc.name, got.Lease, got.TaskTimeout, err)
+		}
 	}
 }
 
