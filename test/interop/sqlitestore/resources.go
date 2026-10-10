@@ -198,6 +198,7 @@ func (s *Store) UpdateAuthorization(ctx context.Context, a *acmeserver.Authoriza
 			return nil
 		}
 		order.Status = acmeserver.OrderInvalid
+		order.Error = acmeserver.InvalidAuthorizationProblem()
 		return saveOrder(ctx, c, &order)
 	})
 	if err == nil {

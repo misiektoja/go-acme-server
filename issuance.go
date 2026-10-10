@@ -142,7 +142,7 @@ func (s *Server) issuanceAuthorization(ctx context.Context, operationID string, 
 			return nil, nil, nil, err
 		}
 		if effectiveAuthzStatus(a, now) != AuthorizationValid {
-			return nil, nil, NewProblem(ErrorUnauthorized, "an order authorization is no longer valid"), nil
+			return nil, nil, InvalidAuthorizationProblem(), nil
 		}
 		if !a.GrantExpires.IsZero() && !a.GrantExpires.After(now) {
 			return nil, nil, NewProblem(ErrorUnauthorized, "authority token expired before issuance dispatch"), nil

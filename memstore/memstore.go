@@ -266,7 +266,8 @@ func (s *Store) Authorization(ctx context.Context, id string) (*acmeserver.Autho
 	return cloneAuthorization(authz), nil
 }
 
-// Replaces the stored authorization when the revision matches.
+// Replaces the stored authorization when the revision matches and invalidates an order that has
+// not dispatched issuance.
 func (s *Store) UpdateAuthorization(ctx context.Context, authz *acmeserver.Authorization) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -283,6 +284,7 @@ func (s *Store) UpdateAuthorization(ctx context.Context, authz *acmeserver.Autho
 		if order != nil && (order.Status == acmeserver.OrderPending || order.Status == acmeserver.OrderReady ||
 			(order.Status == acmeserver.OrderProcessing && order.Issuance == nil)) {
 			order.Status = acmeserver.OrderInvalid
+			order.Error = acmeserver.InvalidAuthorizationProblem()
 			order.Revision++
 		}
 	}
