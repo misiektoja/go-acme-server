@@ -55,7 +55,8 @@ refuse special-purpose and private destinations unless allowed, recheck every re
 proxy environment variables, bound every read and never include fetched content in error details.
 The rules are in [Challenge validators](../guide/validators.md).
 
-**Bounded parsing.** JSON is limited in size, nesting depth and duplicate members. JWS, JWK, DNS
+**Bounded parsing.** JSON is limited in size, nesting depth and duplicate members. Member names
+are exact, so a name that matches a known member only when case is ignored is refused. JWS, JWK, DNS
 responses, TLS handshakes and TLS-ALPN proofs are parsed with explicit limits. Those parsers
 have fuzz targets that CI runs.
 
