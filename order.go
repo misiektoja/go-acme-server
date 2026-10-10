@@ -6,6 +6,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"reflect"
+	"slices"
 	"strings"
 	"time"
 )
@@ -134,10 +136,34 @@ func (s *Server) buildOrder(ctx context.Context, account *Account, payload *newO
 		Replaces:    replaces,
 		CreatedAt:   now,
 	}
-	if p := s.hostProblem(ctx, s.policy.NewOrder(ctx, account, order), "order policy"); p != nil {
+	if p := s.reviewOrder(ctx, account, order); p != nil {
 		return nil, p
 	}
 	return order, nil
+}
+
+// Asks the policy about a new order and keeps only its changes to NotBefore and NotAfter. Any
+// other change, or a validity period the server would refuse from a client, fails the request.
+func (s *Server) reviewOrder(ctx context.Context, account *Account, order *Order) *Problem {
+	reviewed := *order
+	reviewed.Identifiers = slices.Clone(order.Identifiers)
+	if p := s.hostProblem(ctx, s.policy.NewOrder(ctx, account, &reviewed), "order policy"); p != nil {
+		return p
+	}
+	notBefore, notAfter := reviewed.NotBefore, reviewed.NotAfter
+	reviewed.NotBefore, reviewed.NotAfter = order.NotBefore, order.NotAfter
+	var err error
+	switch {
+	case !reflect.DeepEqual(&reviewed, order):
+		err = errors.New("the policy changed order fields other than NotBefore and NotAfter")
+	case !notBefore.IsZero() && !notAfter.IsZero() && !notAfter.After(notBefore):
+		err = errors.New("the policy set NotAfter no later than NotBefore")
+	}
+	if err != nil {
+		return s.hostProblem(ctx, err, "order policy")
+	}
+	order.NotBefore, order.NotAfter = notBefore, notAfter
+	return nil
 }
 
 // Creates one pending authorization per identifier with a challenge per supported type.

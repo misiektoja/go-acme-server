@@ -129,7 +129,8 @@ type Policy interface {
 	// Reviews a new account. The key, contacts and external account identity are set.
 	NewAccount(ctx context.Context, account *Account) error
 	// Reviews a new order after identifier normalization. The policy may change NotBefore and
-	// NotAfter but not the identifiers.
+	// NotAfter. Any other change, or a NotAfter no later than NotBefore, fails the request with
+	// serverInternal.
 	NewOrder(ctx context.Context, account *Account, order *Order) error
 }
 
