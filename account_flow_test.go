@@ -412,3 +412,23 @@ func TestExternalAccountKeyLookupFailures(t *testing.T) {
 		t.Fatalf("lookup failure not logged: %s", f.logs.String())
 	}
 }
+
+// Refuses member names that differ from a known member only in case, which encoding/json would
+// otherwise decode into that member.
+func TestAccountUpdateRejectsCaseVariantMembers(t *testing.T) {
+	f := newFlow(t, nil)
+	c := f.newClient()
+	c.register()
+	for _, payload := range []string{
+		`{"contact":["mailto:first@example.test"],"Contact":["mailto:second@example.test"]}`,
+		`{"STATUS":"deactivated"}`,
+		"{\"\u017ftatus\":\"deactivated\"}",
+	} {
+		assertProblem(t, c.postRaw(c.kid, []byte(payload), false), http.StatusBadRequest, acmeserver.ErrorMalformed)
+	}
+	var account accountBody
+	c.get(c.kid, &account)
+	if account.Status != statusValid || len(account.Contact) != 1 || account.Contact[0] != "mailto:admin@example.test" {
+		t.Fatalf("account after refused updates = %+v", account)
+	}
+}
