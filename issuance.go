@@ -144,6 +144,9 @@ func (s *Server) issuanceAuthorization(ctx context.Context, operationID string, 
 		if effectiveAuthzStatus(a, now) != AuthorizationValid {
 			return nil, nil, NewProblem(ErrorUnauthorized, "an order authorization is no longer valid"), nil
 		}
+		if !a.GrantExpires.IsZero() && !a.GrantExpires.After(now) {
+			return nil, nil, NewProblem(ErrorUnauthorized, "authority token expired before issuance dispatch"), nil
+		}
 		v, err := s.validationEvidence(ctx, a)
 		if err != nil {
 			return nil, nil, nil, err
@@ -152,6 +155,10 @@ func (s *Server) issuanceAuthorization(ctx context.Context, operationID string, 
 		state.Validations = append(state.Validations, v)
 		if a.Expires.Before(state.Deadline) {
 			state.Deadline = a.Expires
+		}
+		// The certificate may not outlive the authority token, so no signing may start after it.
+		if !a.GrantExpires.IsZero() && a.GrantExpires.Before(state.Deadline) {
+			state.Deadline = a.GrantExpires
 		}
 	}
 	return authzs, state, nil, nil

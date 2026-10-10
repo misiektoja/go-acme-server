@@ -28,7 +28,8 @@ type IssueRequest struct {
 	NotAfter  time.Time
 	// How each identifier was validated.
 	Validations []Validation
-	// The earliest order or authorization expiry, after which new signing is forbidden.
+	// The earliest order, authorization or authority token expiry, after which new signing is
+	// forbidden.
 	Deadline time.Time
 	// Allows only recovery of an existing result, never a new signing operation.
 	RecoveryOnly bool
