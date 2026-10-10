@@ -124,7 +124,8 @@ another claim superseded them. This is what lets a worker die mid-task and anoth
 without committing stale results.
 
 The worker never interrupts a task in flight when its context is canceled. Shutdown waits for the
-current tasks or lets their leases lapse for another worker.
+current tasks or lets their leases lapse for another worker. A task run stops when its lease ends,
+so it never overlaps the run of the worker that claims the task next.
 
 ## What the host decides
 

@@ -55,8 +55,8 @@ The `meta` object is omitted from the directory when every field is empty.
 | --- | --- | --- |
 | `Concurrency` | 4 | Tasks processed at the same time by one `Run` |
 | `PollInterval` | 1 second | How often an idle worker looks for work. Also the minimum delay before a pending issuance is asked again |
-| `Lease` | 2 minutes | How long a claimed task stays leased before another worker may take it |
-| `TaskTimeout` | 30 seconds | Bounds each phase of a task separately: one validator or issuer call, and each store operation that records its outcome |
+| `Lease` | 2 minutes, or twice `TaskTimeout` if that is longer | How long a claimed task stays leased before another worker may take it. A task run stops when its lease ends. It must be at least twice `TaskTimeout` |
+| `TaskTimeout` | 30 seconds, or half of `Lease` if that is shorter | Bounds each phase of a task separately: one validator or issuer call, and each store operation that records its outcome. The lease bounds the whole run |
 | `MaxAttempts` | 5 | Limits validation and pre-dispatch policy retries. Issuance recovery is not limited |
 | `RetryDelay` | 5 seconds | The first retry delay, doubled on every further attempt up to 32 times the base |
 | `StaleAfter` | 1 minute | How long accepted work may wait unclaimed before `Ready` reports a problem |
