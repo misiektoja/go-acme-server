@@ -133,9 +133,11 @@ func normalizeBaseURL(raw string, allowInsecure bool) (*url.URL, error) {
 	default:
 		return nil, errors.New("acmeserver: Config.BaseURL must be an absolute http or https URL")
 	}
-	if u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.RawPath != "" || u.Opaque != "" {
+	// Signed request URLs are compared in escaped form, so a path that needs escaping could never match.
+	if u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.EscapedPath() != u.Path ||
+		u.Opaque != "" {
 		return nil, errors.New("acmeserver: Config.BaseURL must have a host and no user info, query, fragment " +
-			"or escaped path")
+			"or path that needs percent-encoding")
 	}
 	if !strings.HasSuffix(u.Path, "/") {
 		u.Path += "/"
