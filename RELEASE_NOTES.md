@@ -2,19 +2,28 @@
 
 All notable changes to this project are documented in this file.
 
-## [0.4.2] - TBD
+## [0.5.0] - TBD
 
-This version fixes revocation after a refused attempt, challenge responses that were not stored and issuance after an authority token expired. All three defects date back to 0.1.0.
+This version fixes challenges that stayed `processing`, revocation after a refused attempt, challenge responses that were not stored and issuance after an authority token expired. It also adds stricter checks. `New` refuses a lease shorter than twice the task timeout, and stores must record why an authorization change invalidated its order.
 
 ### Protocol
 
 * **Challenge responses that the store did not record** are answered with `serverInternal` and logged as `challenge update failed`. Previously the client received the unchanged pending challenge with status 200 while no validation ran.
+* **A challenge whose authorization moved on during validation** becomes `invalid` with `authorization was <status> before validation` (RFC 8555 section 7.1.6). This happens when the authorization is deactivated or another challenge proves it first. Previously the challenge stayed `processing` with no task left to finish it.
+* **An order invalidated by a deactivated authorization** carries the `error` member `an order authorization is no longer valid` (RFC 8555 section 7.1.3). Previously the order had no error.
+* **JSON member names are exact** (RFC 8259 section 8.3). A name that matches a known member only when case is ignored, such as `Status` for `status`, is refused with `malformed`. This includes Unicode case variants. Previously it was decoded as that member, so a payload with both `contact` and `Contact` kept the second list.
 
 ### Host integration
 
 * **A `*Problem` returned by the `Revoker`** now discards the revocation attempt. The next request starts a new operation with a new `OperationID` and the reason the client sends. Previously every later request repeated the refused operation and reason, so the certificate could not be revoked through ACME.
 * **An expired authority token** now ends issuance before the CA is called. The order becomes invalid with `authority token expired before issuance dispatch`. `IssueRequest.Deadline` also ends at the token expiry. Previously the CA was asked to sign a certificate whose validity had already ended.
 * **The SQLite example store** in `test/interop/sqlitestore` reports a lock that stays busy past its timeout as a backend error instead of `ErrRevisionMismatch`. Apply the same change to stores derived from it.
+* **`Store.UpdateAuthorization` sets `Order.Error`** to `InvalidAuthorizationProblem()` when it invalidates the order. `memstore` and the SQLite example do this. Update custom stores and run `storetest`, which now checks it.
+* **A task run ends with its lease.** `New` refuses a `WorkerConfig.Lease` shorter than twice `TaskTimeout`. When only one of them is set, the other follows. `Lease` defaults to 2 minutes or twice `TaskTimeout`, whichever is longer. `TaskTimeout` defaults to 30 seconds or half the lease, whichever is shorter. `Run` returns within one lease after its context is canceled. Previously a slow run could outlast its lease and overlap the worker that claimed the task next.
+* **A `*Problem` from `ExternalAccountKeys` or `RenewalAdvisor`** reaches the client unchanged, as documented. Previously the client received `serverInternal`.
+* **`Policy.NewOrder` may change only `NotBefore` and `NotAfter`.** Any other change, or a `NotAfter` that is not later than `NotBefore`, is logged and answered with `serverInternal`. Previously such changes were stored without being checked.
+* **`Config.BaseURL` with a path that needs percent-encoding**, such as one with a space or a non-ASCII character, is refused by `New`. Previously the server started and refused every signed request.
+* **The quickstart CA signs composite ML-DSA requests.** Previously it failed with `x509: unsupported public key type` and the order stayed `processing`. The getting started guide now runs `go mod tidy` after saving the program, which the build needs.
 
 ## [0.4.1] - 9 Oct 2026
 
