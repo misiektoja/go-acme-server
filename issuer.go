@@ -59,18 +59,20 @@ type IssuancePolicy interface {
 
 // What the host CA receives for a revocation.
 type RevokeRequest struct {
-	// Stable across every attempt to revoke one certificate. It is stored before the first call.
+	// Stable across retries until the CA accepts or refuses the revocation. It is stored before the
+	// first call and discarded when Revoke returns a *Problem.
 	OperationID string
 	Certificate *x509.Certificate
 	DER         []byte
-	// The CRL reason code recorded with the operation. A retry keeps the first recorded reason.
+	// The CRL reason code recorded with the operation. A retry keeps the recorded reason.
 	Reason int
 	// The account that requested the revocation. Empty when the certificate key signed the request.
 	AccountID string
 }
 
 // Revokes certificates. Revoke returns nil only after the CA recorded the revocation durably.
-// A returned *Problem is sent to the client, any other error is reported as serverInternal.
+// A returned *Problem is a final refusal sent to the client. Any other error is reported as
+// serverInternal and the next request repeats the same operation.
 // The CA must deduplicate by OperationID because a client retries after an uncertain answer.
 type Revoker interface {
 	Revoke(ctx context.Context, req RevokeRequest) error
