@@ -128,6 +128,7 @@ The suite does not measure durability. Add your own test that kills the process 
 
 The interoperability module contains a SQLite adapter at `test/interop/sqlitestore`. It uses one
 table per resource, a `revision` column checked in every `UPDATE ... WHERE revision = ?`,
-`BEGIN IMMEDIATE` transactions for claims and maps SQLite lock conflicts to `ErrRevisionMismatch`.
+`BEGIN IMMEDIATE` transactions for claims and a busy timeout for lock waits. A lock that is still
+held when the timeout ends is reported as a backend error, not as `ErrRevisionMismatch`.
 It is test infrastructure without a migration or support contract, but it is a complete and
 readable implementation of every method.
