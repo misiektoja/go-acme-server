@@ -37,7 +37,8 @@ posted to, which the server compares with the one it expects. The two must match
 * Keep the path prefix in place through any reverse proxy. Do not strip it. See [Deployment](../operations/deployment.md).
 * Use `https`. `AllowInsecureBaseURL` accepts `http` for local tests only.
 
-A missing trailing slash is added. User info, a query string, a fragment or an escaped path are refused.
+A missing trailing slash is added. User info, a query string, a fragment or a path that needs
+percent-encoding, such as one with a space or a non-ASCII character, are refused.
 
 ## Mount the handler
 
