@@ -718,15 +718,50 @@ func (denyPolicy) NewAccount(_ context.Context, account *acmeserver.Account) err
 	return nil
 }
 
-// Refuses blocked names and fails on broken ones.
+// Refuses blocked names, fails on broken ones and edits the orders of the other names it knows.
 func (denyPolicy) NewOrder(_ context.Context, _ *acmeserver.Account, order *acmeserver.Order) error {
 	switch order.Identifiers[0].Value {
 	case "blocked.test":
 		return acmeserver.NewProblem(acmeserver.ErrorRejectedIdentifier, "name is blocked").WithIdentifier(order.Identifiers[0])
 	case "broken.test":
 		return errTransient
+	case "limited.test":
+		order.NotAfter = order.CreatedAt.Add(time.Hour).Truncate(time.Second)
+	case "renamed.test":
+		order.Identifiers[0].Value = "other.test"
+	case "extended.test":
+		order.Expires = order.Expires.Add(time.Hour)
+	case "inverted.test":
+		order.NotBefore, order.NotAfter = order.CreatedAt.Add(2*time.Hour), order.CreatedAt.Add(time.Hour)
 	}
 	return nil
+}
+
+// Keeps a policy's change to the validity period and refuses any other edit as a host failure.
+func TestOrderPolicyEdits(t *testing.T) {
+	f := newFlow(t, func(c *acmeserver.Config) { c.Policy = denyPolicy{} })
+	c := f.newClient()
+	c.register()
+	location, order := c.newOrder("limited.test")
+	notAfter, err := time.Parse(time.RFC3339, order.NotAfter)
+	if err != nil || order.NotBefore != "" || notAfter.Before(time.Now()) || notAfter.After(time.Now().Add(time.Hour)) {
+		t.Fatalf("order limited by the policy = %+v", order)
+	}
+	c.get(location, &order)
+	if stored, err := time.Parse(time.RFC3339, order.NotAfter); err != nil || !stored.Equal(notAfter) {
+		t.Fatalf("stored order = %+v", order)
+	}
+	for name, logged := range map[string]string{
+		"renamed.test":  "changed order fields other than NotBefore and NotAfter",
+		"extended.test": "changed order fields other than NotBefore and NotAfter",
+		"inverted.test": "set NotAfter no later than NotBefore",
+	} {
+		assertProblem(t, c.post(baseURL+"new-order", map[string]any{"identifiers": []map[string]string{{"type": "dns", "value": name}}}),
+			http.StatusInternalServerError, acmeserver.ErrorServerInternal)
+		if !strings.Contains(f.logs.String(), logged) {
+			t.Fatalf("%s: policy edit not logged: %s", name, f.logs.String())
+		}
+	}
 }
 
 // A non-problem error for retry paths.
