@@ -87,6 +87,8 @@ validation.
 
 **Validation.** The worker claims the task with a lease, checks that the authorization is still
 pending and the account still valid, then calls the validator under `WorkerConfig.TaskTimeout`. A
+challenge whose authorization stopped being pending, before or during validation, becomes invalid
+with `authorization was <status> before validation`. A
 returned `*Problem` is final and makes the challenge and authorization invalid. Any other error is
 a transport failure and is retried with exponential backoff until `WorkerConfig.MaxAttempts` or the
 authorization expiry. Success makes the authorization valid for `Config.AuthorizationLifetime`.
