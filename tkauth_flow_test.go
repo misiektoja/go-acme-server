@@ -13,6 +13,7 @@ import (
 	"encoding/pem"
 	"math/big"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -103,12 +104,22 @@ func (a *tokenAuthority) tokenUntil(t *testing.T, thumbprint string, list []byte
 // Builds a server that offers tkauth-01 for TNAuthList identifiers alongside the network types.
 func newTKAuthFlow(t *testing.T) (*flow, *tokenAuthority) {
 	t.Helper()
+	return newTKAuthFlowAt(t, nil)
+}
+
+// Builds a tkauth-01 flow whose server and validator read clock, or the system clock when it is nil.
+func newTKAuthFlowAt(t *testing.T, clock *flowClock) (*flow, *tokenAuthority) {
+	t.Helper()
 	a := newTokenAuthority(t)
-	validator, err := challenge.NewTKAuth01(challenge.TKAuthOptions{
+	options := challenge.TKAuthOptions{
 		Authorities: challenge.StaticTokenAuthorities{
 			ByURL: map[string]*x509.Certificate{authorityCertURL: a.certificate},
 		},
-	})
+	}
+	if clock != nil {
+		options.Now = clock.Now
+	}
+	validator, err := challenge.NewTKAuth01(options)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,6 +127,9 @@ func newTKAuthFlow(t *testing.T) (*flow, *tokenAuthority) {
 		cfg.Validators[acmeserver.ChallengeTKAuth01] = validator
 		cfg.TNAuthListIdentifiers = true
 		cfg.TokenAuthority = tokenAuthorityURL
+		if clock != nil {
+			cfg.Clock = clock
+		}
 	})
 	return f, a
 }
@@ -348,6 +362,38 @@ func TestTKAuth01TokenExpiryBoundsCertificate(t *testing.T) {
 	}
 	if got := f.ca.calls[0].NotAfter; !got.Equal(exp) {
 		t.Fatalf("issue request NotAfter = %v, want %v", got, exp)
+	}
+	if got := f.ca.calls[0].Deadline; !got.Equal(exp) {
+		t.Fatalf("issue request Deadline = %v, want the token expiry %v", got, exp)
+	}
+}
+
+// Fails the order without a CA call when the Authority Token expires between validation and dispatch.
+func TestTKAuth01TokenExpiryBeforeDispatch(t *testing.T) {
+	clock := &flowClock{now: time.Now()}
+	f, authority := newTKAuthFlowAt(t, clock)
+	f.runWorker()
+	c := f.newClient()
+	c.register()
+	orderURL, order := c.newAuthorityListOrder(flowAuthorityList)
+	ch := c.onlyChallenge(order)
+	exp := clock.Now().Add(10 * time.Minute).Truncate(time.Second)
+	token := authority.tokenUntil(t, thumbprint(t, &c.key.PublicKey), flowAuthorityList, false, exp)
+	if rec := c.post(ch.URL, map[string]any{"tkauth": token}); rec.Code != http.StatusOK {
+		t.Fatalf("challenge response = %d %s", rec.Code, rec.Body.String())
+	}
+	order = c.waitOrder(orderURL, statusReady)
+	clock.advance(15 * time.Minute)
+	if rec := c.finalizeCSR(order, makeTNAuthListCSR(t, newKey(t), flowAuthorityList, false)); rec.Code != http.StatusOK {
+		t.Fatalf("finalize = %d %s", rec.Code, rec.Body.String())
+	}
+	order = c.waitOrder(orderURL, statusInvalid)
+	if order.Error == nil || order.Error.Type != acmeserver.ErrorUnauthorized ||
+		!strings.Contains(order.Error.Detail, "authority token expired") {
+		t.Fatalf("order error = %+v", order.Error)
+	}
+	if n := f.ca.callCount(); n != 0 {
+		t.Fatalf("the CA was called %d times after the token expired", n)
 	}
 }
 
