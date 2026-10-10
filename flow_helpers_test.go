@@ -81,8 +81,8 @@ func newFlow(t *testing.T, mutate func(*acmeserver.Config)) *flow {
 		Workers: acmeserver.WorkerConfig{
 			Concurrency:  2,
 			PollInterval: 5 * time.Millisecond,
-			Lease:        time.Second,
-			TaskTimeout:  2 * time.Second,
+			Lease:        2 * time.Second,
+			TaskTimeout:  time.Second,
 			MaxAttempts:  3,
 			RetryDelay:   time.Millisecond,
 			StaleAfter:   50 * time.Millisecond,
