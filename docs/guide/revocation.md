@@ -31,9 +31,9 @@ follow RFC 5280. `unspecified`, `keyCompromise`, `affiliationChanged`, `supersed
 
 | Field | Meaning |
 | --- | --- |
-| `OperationID` | Stable for one certificate across every attempt. Committed before the first call |
+| `OperationID` | Stable across retries until the CA accepts or refuses the revocation. Committed before the first call |
 | `Certificate`, `DER` | The parsed leaf and its encoding |
-| `Reason` | The CRL reason code. A retry keeps the reason recorded on the first attempt |
+| `Reason` | The CRL reason code. A retry keeps the recorded reason |
 | `AccountID` | The requesting account, empty when the certificate key signed the request |
 
 ## The sequence
@@ -41,8 +41,9 @@ follow RFC 5280. `unspecified`, `keyCompromise`, `affiliationChanged`, `supersed
 1. The server checks the signature, the reason and the requester's authority.
 2. It stores `RevocationOperationID`, `RevocationReason` and `RevocationRequestedAt` on the certificate. A concurrent request for the same certificate finds the record and continues the same operation.
 3. It calls `Revoke`.
-4. On success it stores `Revoked` and `RevokedAt`. This write is detached from the client request and bounded by `Config.DetachedWriteTimeout`, so a client that disconnects after the CA acted does not leave the certificate recorded as live.
-5. A later request for the same certificate is answered with `alreadyRevoked`.
+4. If `Revoke` returns a `*Problem`, the server clears the recorded operation and sends the problem. The next request starts a new operation with its own reason.
+5. On success it stores `Revoked` and `RevokedAt`. This write is detached from the client request and bounded by `Config.DetachedWriteTimeout`, so a client that disconnects after the CA acted does not leave the certificate recorded as live.
+6. A later request for the same certificate is answered with `alreadyRevoked`.
 
 ## What the revoker must do
 
@@ -53,8 +54,9 @@ records it.
 `Revoke` again with the same `OperationID`. The second call must succeed without a second CA
 action. A CA that already knows the serial should treat the repeat as success.
 
-**Choose the error type.** A returned `*Problem` is sent to the client unchanged. Any other error is
-logged and answered with `serverInternal`. The client may retry.
+**Choose the error type.** A returned `*Problem` is a final refusal. It is sent to the client
+unchanged and the operation is discarded. Any other error is logged and answered with
+`serverInternal`. The client may retry. The retry repeats the same operation and reason.
 
 The revoker does not receive the account key or the client's reason for the request beyond the
 reason code. If the CA needs to distinguish key compromise from a routine revocation, the reason
