@@ -62,6 +62,7 @@ Read `Order.Error`:
 | `issuer returned an unacceptable certificate` | The CA's chain failed a publication check. The result is in `Order.UnpublishedResult` and the log names the order. See [Issuing certificates](../guide/issuance.md#publication-checks) |
 | `issuer returned a duplicate certificate` | The leaf digest or renewal identifier already exists. The CA reused a serial or a result |
 | `authorization expired before issuance dispatch` | The client finalized so late that an authorization or the order expired first |
+| `authority token expired before issuance dispatch` | The `tkauth-01` token expired before the worker dispatched the order. The client needs a new order with a fresh token |
 | `an order authorization is no longer valid` | An authorization was deactivated or invalidated between validation and dispatch |
 | `account is no longer valid` | The account was deactivated |
 | a problem from your `IssuancePolicy` | The policy refused the dispatch |
