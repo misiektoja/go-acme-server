@@ -54,6 +54,10 @@ The validator performs steps 1 to 8 of RFC 9448 section 6:
 7. `exp` and `nbf` hold, with `ClockSkew` tolerance, one minute by default.
 8. `fingerprint` identifies the responding account key, either as the RFC 7638 thumbprint or as `SHA256` followed by the colon-separated hex form of the same digest.
 
+The server does not track `jti` values. The same account can answer further `tkauth-01` challenges
+with one token until its `exp`. RFC 9447 anticipates one token answering several challenges within
+its lifetime, so keep `exp` short when that window matters.
+
 The validator never fetches the `x5u` URL. Trusting a Token Authority is a deployment decision, so
 the reference goes to your `TokenAuthorities` implementation. `StaticTokenAuthorities` covers a
 fixed trust list indexed by exact URL and by `x5c` leaf certificate. A host whose ecosystem
