@@ -147,7 +147,7 @@ func TestAuthorizationDeactivation(t *testing.T) {
 	f := newFlow(t, nil)
 	c := f.newClient()
 	c.register()
-	_, order := c.newOrder("a.test")
+	location, order := c.newOrder("a.test")
 	assertProblem(t, c.post(order.Authorizations[0], map[string]any{"status": statusValid}), http.StatusBadRequest,
 		acmeserver.ErrorMalformed)
 	rec := c.post(order.Authorizations[0], map[string]any{"status": "deactivated"})
@@ -163,11 +163,57 @@ func TestAuthorizationDeactivation(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("repeated deactivate = %d", rec.Code)
 	}
+	assertInvalidAuthorizationError(t, c, location)
 	assertProblem(t, c.post(authz.Challenges[0].URL, map[string]any{}), http.StatusBadRequest, acmeserver.ErrorMalformed)
 	var ch challengeBody
 	c.get(authz.Challenges[0].URL, &ch)
 	if ch.Status != statusPending {
 		t.Fatalf("challenge after refused response = %+v", ch)
+	}
+}
+
+// Checks that the order failed because one of its authorizations stopped being valid.
+func assertInvalidAuthorizationError(t *testing.T, c *client, location string) {
+	t.Helper()
+	want := acmeserver.InvalidAuthorizationProblem()
+	var order orderBody
+	c.get(location, &order)
+	if order.Status != statusInvalid || order.Error == nil || order.Error.Type != want.Type || order.Error.Detail != want.Detail {
+		t.Fatalf("order = %+v, error %+v", order, order.Error)
+	}
+}
+
+// Records why the order failed when its authorization is deactivated after finalization and before
+// the worker dispatches issuance.
+func TestDeactivationBeforeDispatchRecordsTheOrderError(t *testing.T) {
+	f := newFlow(t, nil)
+	ctx, stop := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { done <- f.srv.Run(ctx) }()
+	c := f.newClient()
+	c.register()
+	location, order := c.newOrder("cascade.test")
+	c.respondHTTP01(order)
+	c.waitOrder(location, statusReady)
+	stop()
+	if err := <-done; err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if rec := c.finalize(order, newKey(t)); rec.Code != http.StatusOK {
+		t.Fatalf("finalize = %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := c.post(order.Authorizations[0], map[string]any{"status": "deactivated"}); rec.Code != http.StatusOK {
+		t.Fatalf("deactivate = %d %s", rec.Code, rec.Body.String())
+	}
+	assertInvalidAuthorizationError(t, c, location)
+	f.runWorker()
+	waitFor(t, "the issuance task to finish", func() bool {
+		n, err := f.store.PendingTasks(t.Context(), time.Now().Add(time.Hour))
+		return err == nil && n == 0
+	})
+	assertInvalidAuthorizationError(t, c, location)
+	if f.ca.callCount() != 0 {
+		t.Fatalf("CA called %d times for an invalid order", f.ca.callCount())
 	}
 }
 
