@@ -53,6 +53,8 @@ func TestNewValidatesConfig(t *testing.T) {
 		"fragment in base url": func(c *Config) { c.BaseURL = "https://acme.example/acme/#x" },
 		"user in base url":     func(c *Config) { c.BaseURL = "https://user@acme.example/acme/" },
 		"escaped path":         func(c *Config) { c.BaseURL = "https://acme.example/ac%2Fme/" },
+		"space in base path":   func(c *Config) { c.BaseURL = "https://acme.example/my%20ca/" },
+		"non-ascii base path":  func(c *Config) { c.BaseURL = "https://acme.example/caf\u00e9/" },
 		"timeout over half":    func(c *Config) { c.Workers.Lease, c.Workers.TaskTimeout = time.Minute, 31*time.Second },
 		"lease too short":      func(c *Config) { c.Workers.Lease = time.Nanosecond },
 		"negative body limit":  func(c *Config) { c.MaxRequestBody = -1 },
