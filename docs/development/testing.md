@@ -68,7 +68,10 @@ make test-cert-manager
 Starts a kind cluster, deploys the server from `test/interop/cmd/server` with the test CA and an
 HTTP-01 validator, issues and renews a certificate through a cert-manager `ClusterIssuer` and
 verifies both against the test root. It needs Docker, kind, kubectl and openssl. The cluster is
-deleted afterwards unless `ACME_KEEP_CLUSTER=1` is set. CI runs it weekly and on request.
+deleted afterwards unless `ACME_KEEP_CLUSTER=1` is set. The runner refuses an existing cluster
+named `acme-cert-manager` or the value of `ACME_KIND_CLUSTER`. Choose an unused name for each run.
+It uses a separate kubeconfig in the scratch directory and cleans up only a cluster it created.
+CI runs it weekly and on request.
 
 ## Testing your integration
 
