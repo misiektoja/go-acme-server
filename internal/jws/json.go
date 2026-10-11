@@ -118,9 +118,10 @@ func checkMemberNames(data []byte, t reflect.Type) error {
 		return nil
 	}
 	var document any
-	if err := json.Unmarshal(data, &document); err != nil {
-		// The decoder reports the same error with its own context.
-		return nil
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	if err := decoder.Decode(&document); err != nil {
+		return &Error{Code: CodeMalformed, Detail: "invalid JSON: " + err.Error()}
 	}
 	return checkMembers(document, t)
 }
