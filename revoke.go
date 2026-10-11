@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"slices"
+	"time"
 
 	"github.com/misiektoja/go-acme-server/internal/jws"
 )
@@ -79,6 +80,7 @@ func (s *Server) serveRevokeCert(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.revoker.Revoke(ctx, revokeReq); err != nil {
 		if p, ok := AsProblem(err); ok {
+			s.abandonRevocation(ctx, cert)
 			s.writeProblem(ctx, w, p)
 			return
 		}
@@ -162,18 +164,42 @@ func (s *Server) beginRevocation(ctx context.Context, cert *Certificate, reason 
 func (s *Server) recordRevocation(parent context.Context, cert *Certificate) *Problem {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), s.detachedWrite)
 	defer cancel()
-	cert.Revoked = true
-	cert.RevokedAt = s.clock.Now()
-	err := s.store.UpdateCertificate(ctx, cert)
-	if errors.Is(err, ErrRevisionMismatch) {
+	operationID, reason, requestedAt := cert.RevocationOperationID, cert.RevocationReason, cert.RevocationRequestedAt
+	var err error
+	// A concurrent request refused by the CA may have cleared the record while this call succeeded,
+	// so the accepted operation is written over the current version once.
+	for range 2 {
+		cert.Revoked = true
+		cert.RevokedAt = s.clock.Now()
+		cert.RevocationOperationID, cert.RevocationReason, cert.RevocationRequestedAt = operationID, reason, requestedAt
+		if err = s.store.UpdateCertificate(ctx, cert); !errors.Is(err, ErrRevisionMismatch) {
+			break
+		}
 		current, lookupErr := s.store.Certificate(ctx, cert.ID)
-		if lookupErr == nil && current.Revoked {
+		if lookupErr != nil {
+			err = lookupErr
+			break
+		}
+		if current.Revoked {
 			return nil
 		}
+		cert = current
 	}
 	if err != nil {
 		s.logError(ctx, "revocation record failed", err)
 		return NewProblem(ErrorServerInternal, "revocation could not be recorded")
 	}
 	return nil
+}
+
+// Clears the recorded operation after the CA refused it with a problem, so the next request starts
+// a new operation with its own reason. The write is detached so a disconnect cannot keep the
+// refused operation. A concurrent change to the certificate is left in place.
+func (s *Server) abandonRevocation(parent context.Context, cert *Certificate) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), s.detachedWrite)
+	defer cancel()
+	cert.RevocationOperationID, cert.RevocationReason, cert.RevocationRequestedAt = "", 0, time.Time{}
+	if err := s.store.UpdateCertificate(ctx, cert); err != nil && !errors.Is(err, ErrRevisionMismatch) {
+		s.logError(ctx, "refused revocation could not be cleared", err)
+	}
 }

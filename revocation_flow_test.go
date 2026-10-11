@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -162,5 +163,97 @@ func TestRevocationWriteHonorsTheDetachedTimeout(t *testing.T) {
 	assertProblem(t, rec, http.StatusInternalServerError, acmeserver.ErrorServerInternal)
 	if elapsed := time.Since(start); elapsed > 5*time.Second {
 		t.Fatalf("the revocation write took %v, so the configured timeout was not used", elapsed)
+	}
+}
+
+// Starts a new operation with the client's reason once the CA refused the recorded one.
+func TestRevocationAfterARefusalStartsANewOperation(t *testing.T) {
+	f := newFlow(t, nil)
+	f.runWorker()
+	owner := f.newClient()
+	owner.register()
+	location, order := owner.newOrder("refused.test")
+	owner.respondHTTP01(order)
+	owner.waitOrder(location, statusReady)
+	owner.finalize(order, newKey(t))
+	valid := owner.waitOrder(location, statusValid)
+	chain := parsePEMChain(t, owner.get(valid.Certificate, nil).Body.Bytes())
+	leaf := base64.RawURLEncoding.EncodeToString(chain[0].Raw)
+	certID := valid.Certificate[len(baseURL+"cert/"):]
+	f.revoker.err = acmeserver.NewProblem(acmeserver.ErrorBadRevocationReason, "keyCompromise needs the certificate key")
+	assertProblem(t, owner.post(baseURL+"revoke-cert", map[string]any{"certificate": leaf, "reason": 1}),
+		http.StatusBadRequest, acmeserver.ErrorBadRevocationReason)
+	stored, err := f.store.Certificate(t.Context(), certID)
+	if err != nil || stored.Revoked || stored.RevocationOperationID != "" || stored.RevocationReason != 0 ||
+		!stored.RevocationRequestedAt.IsZero() {
+		t.Fatalf("certificate after the refusal = %+v, %v", stored, err)
+	}
+	f.revoker.err = nil
+	if rec := owner.post(baseURL+"revoke-cert", map[string]any{"certificate": leaf, "reason": 4}); rec.Code != http.StatusOK {
+		t.Fatalf("revocation after the refusal = %d %s", rec.Code, rec.Body.String())
+	}
+	if len(f.revoker.requests) != 2 {
+		t.Fatalf("revoker requests = %+v", f.revoker.requests)
+	}
+	refused, accepted := f.revoker.requests[0], f.revoker.requests[1]
+	if refused.Reason != 1 || accepted.Reason != 4 || accepted.OperationID == "" || accepted.OperationID == refused.OperationID {
+		t.Fatalf("revoker requests = %+v", f.revoker.requests)
+	}
+	stored, err = f.store.Certificate(t.Context(), certID)
+	if err != nil || !stored.Revoked || stored.RevocationReason != 4 || stored.RevocationOperationID != accepted.OperationID {
+		t.Fatalf("stored revocation = %+v, %v", stored, err)
+	}
+}
+
+// A store that clears the revocation record just before the first write that marks a certificate
+// revoked, the way a concurrent request refused by the CA would.
+type refusedRevocationStore struct {
+	acmeserver.Store
+	once    sync.Once
+	cleared error
+}
+
+// Clears the stored record once and then performs the requested update.
+func (s *refusedRevocationStore) UpdateCertificate(ctx context.Context, cert *acmeserver.Certificate) error {
+	if cert.Revoked {
+		s.once.Do(func() {
+			current, err := s.Certificate(ctx, cert.ID)
+			if err == nil {
+				current.RevocationOperationID, current.RevocationReason, current.RevocationRequestedAt = "", 0, time.Time{}
+				err = s.Store.UpdateCertificate(ctx, current)
+			}
+			s.cleared = err
+		})
+	}
+	return s.Store.UpdateCertificate(ctx, cert)
+}
+
+// Records the operation the CA accepted even when a concurrent refusal cleared the record first.
+func TestRevocationRecordedAfterAConcurrentRefusal(t *testing.T) {
+	store := &refusedRevocationStore{}
+	f := newFlow(t, func(cfg *acmeserver.Config) {
+		store.Store = cfg.Store
+		cfg.Store = store
+	})
+	f.runWorker()
+	owner := f.newClient()
+	owner.register()
+	location, order := owner.newOrder("cleared.test")
+	owner.respondHTTP01(order)
+	owner.waitOrder(location, statusReady)
+	owner.finalize(order, newKey(t))
+	valid := owner.waitOrder(location, statusValid)
+	chain := parsePEMChain(t, owner.get(valid.Certificate, nil).Body.Bytes())
+	payload := map[string]any{"certificate": base64.RawURLEncoding.EncodeToString(chain[0].Raw), "reason": 3}
+	if rec := owner.post(baseURL+"revoke-cert", payload); rec.Code != http.StatusOK {
+		t.Fatalf("revocation = %d %s", rec.Code, rec.Body.String())
+	}
+	if store.cleared != nil {
+		t.Fatalf("clearing the record failed: %v", store.cleared)
+	}
+	stored, err := f.store.Certificate(t.Context(), valid.Certificate[len(baseURL+"cert/"):])
+	if err != nil || len(f.revoker.requests) != 1 || !stored.Revoked || stored.RevocationReason != 3 ||
+		stored.RevocationOperationID != f.revoker.requests[0].OperationID {
+		t.Fatalf("stored revocation = %+v, %v, revoker requests %+v", stored, err, f.revoker.requests)
 	}
 }

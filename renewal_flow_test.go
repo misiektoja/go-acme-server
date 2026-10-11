@@ -1,6 +1,7 @@
 package acmeserver_test
 
 import (
+	"context"
 	"crypto/x509"
 	"encoding/base64"
 	"errors"
@@ -189,5 +190,31 @@ func TestReplacesClaim(t *testing.T) {
 	stored, err = f.store.CertificateByRenewalID(t.Context(), id)
 	if err != nil || stored.ReplacedByOrderID != rec.Header().Get("Location")[len(baseURL+"order/"):] {
 		t.Fatalf("stored certificate after the second claim = %+v, %v", stored, err)
+	}
+}
+
+// A RenewalAdvisor backed by a function.
+type advisorFunc func(ctx context.Context, cert *acmeserver.Certificate) (acmeserver.RenewalInfo, error)
+
+// Calls the function.
+func (f advisorFunc) RenewalInfo(ctx context.Context, cert *acmeserver.Certificate) (acmeserver.RenewalInfo, error) {
+	return f(ctx, cert)
+}
+
+// Sends a *Problem from the advisor to the client with its status and Retry-After.
+func TestRenewalInfoAdvisorProblem(t *testing.T) {
+	f := newFlow(t, func(c *acmeserver.Config) {
+		c.RenewalInfo = advisorFunc(func(context.Context, *acmeserver.Certificate) (acmeserver.RenewalInfo, error) {
+			return acmeserver.RenewalInfo{}, acmeserver.NewProblem(acmeserver.ErrorRateLimited, "renewal information is rate limited").
+				WithRetryAfter(time.Minute)
+		})
+	})
+	f.runWorker()
+	c := f.newClient()
+	c.register()
+	rec := f.renewalInfo(ariID(t, c.issue("a.test")))
+	assertProblem(t, rec, http.StatusTooManyRequests, acmeserver.ErrorRateLimited)
+	if rec.Header().Get("Retry-After") != "60" {
+		t.Fatalf("Retry-After = %q", rec.Header().Get("Retry-After"))
 	}
 }

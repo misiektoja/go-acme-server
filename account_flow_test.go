@@ -1,6 +1,7 @@
 package acmeserver_test
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -375,5 +376,62 @@ func TestValidationStopsAfterAccountDeactivation(t *testing.T) {
 	})
 	if n := f.validator.callCount(); n != 0 {
 		t.Fatalf("the validator ran %d times for a deactivated account", n)
+	}
+}
+
+// External account keys looked up by a function.
+type eabFunc func(ctx context.Context, keyID string) ([]byte, error)
+
+// Calls the function.
+func (f eabFunc) MACKey(ctx context.Context, keyID string) ([]byte, error) { return f(ctx, keyID) }
+
+// Sends a *Problem from the key lookup to the client and answers other failures with serverInternal.
+func TestExternalAccountKeyLookupFailures(t *testing.T) {
+	f := newFlow(t, func(c *acmeserver.Config) {
+		c.Meta.ExternalAccountRequired = true
+		c.ExternalAccounts = eabFunc(func(_ context.Context, keyID string) ([]byte, error) {
+			if keyID == "suspended" {
+				return nil, acmeserver.NewProblem(acmeserver.ErrorUnauthorized, "external account is suspended")
+			}
+			return nil, errTransient
+		})
+	})
+	c := f.newClient()
+	mac := []byte("0123456789abcdef0123456789abcdef")
+	jwk := publicJWK(t, &c.key.PublicKey)
+	rec := c.post(baseURL+"new-account", map[string]any{"termsOfServiceAgreed": true,
+		"externalAccountBinding": binding("suspended", mac, baseURL+"new-account", jwk, "HS256")})
+	assertProblem(t, rec, http.StatusForbidden, acmeserver.ErrorUnauthorized)
+	if !strings.Contains(rec.Body.String(), "external account is suspended") {
+		t.Fatalf("problem detail = %s", rec.Body.String())
+	}
+	assertProblem(t, c.post(baseURL+"new-account", map[string]any{"termsOfServiceAgreed": true,
+		"externalAccountBinding": binding("broken", mac, baseURL+"new-account", jwk, "HS256")}),
+		http.StatusInternalServerError, acmeserver.ErrorServerInternal)
+	if !strings.Contains(f.logs.String(), "external account key lookup failed") {
+		t.Fatalf("lookup failure not logged: %s", f.logs.String())
+	}
+}
+
+// Refuses member names that differ from a known member only in case, which encoding/json would
+// otherwise decode into that member.
+func TestAccountUpdateRejectsCaseVariantMembers(t *testing.T) {
+	f := newFlow(t, nil)
+	c := f.newClient()
+	c.register()
+	for _, payload := range []string{
+		`{"contact":["mailto:first@example.test"],"Contact":["mailto:second@example.test"]}`,
+		`{"STATUS":"deactivated"}`,
+		`{"Status":"deactivated","unknown":1e1000}`,
+		`{"Contact":["mailto:changed@example.test"],"unknown":-1e1000}`,
+		`{"\u017ftatus":"deactivated","unknown":{"nested":[1e1000]}}`,
+		"{\"\u017ftatus\":\"deactivated\"}",
+	} {
+		assertProblem(t, c.postRaw(c.kid, []byte(payload), false), http.StatusBadRequest, acmeserver.ErrorMalformed)
+	}
+	var account accountBody
+	c.get(c.kid, &account)
+	if account.Status != statusValid || len(account.Contact) != 1 || account.Contact[0] != "mailto:admin@example.test" {
+		t.Fatalf("account after refused updates = %+v", account)
 	}
 }

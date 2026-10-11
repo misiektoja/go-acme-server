@@ -31,6 +31,12 @@ where `go run ./examples/quickstart` starts it without any setup. Save it as `ma
 --8<-- "examples/quickstart/main.go"
 ```
 
+Record the packages it imports in `go.mod`:
+
+```bash
+go mod tidy
+```
+
 The program has four parts and each one is a seam where your own code goes later:
 
 | Part | What the quickstart does | What replaces it |

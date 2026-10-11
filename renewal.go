@@ -91,6 +91,10 @@ func (s *Server) serveRenewalInfo(w http.ResponseWriter, r *http.Request, id str
 		return
 	}
 	info, err := s.renewal.RenewalInfo(ctx, cert)
+	if p, ok := AsProblem(err); ok {
+		s.writeProblem(ctx, w, p)
+		return
+	}
 	if err == nil && !info.End.After(info.Start) {
 		err = errors.New("acmeserver: renewal window end is not after its start")
 	}

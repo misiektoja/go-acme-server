@@ -97,3 +97,67 @@ func TestIssuanceRefusalIsRecordedAfterTimeouts(t *testing.T) {
 		t.Fatalf("the CA was asked %d times after a final refusal, want 1", calls)
 	}
 }
+
+// A store whose account lookups by the worker outlast their deadline, as a store that ignores its
+// context would, and which records the lease end of the latest claim.
+type slowAccountStore struct {
+	acmeserver.Store
+	delay      time.Duration
+	leaseUntil atomic.Int64
+}
+
+// Records the lease end the worker asked for.
+func (s *slowAccountStore) ClaimTask(ctx context.Context, now, leaseUntil time.Time) (*acmeserver.Task, error) {
+	task, err := s.Store.ClaimTask(ctx, now, leaseUntil)
+	if err == nil {
+		s.leaseUntil.Store(leaseUntil.UnixNano())
+	}
+	return task, err
+}
+
+// Delays lookups made under a deadline and completes them regardless of it.
+func (s *slowAccountStore) Account(ctx context.Context, id string) (*acmeserver.Account, error) {
+	if _, ok := ctx.Deadline(); ok {
+		time.Sleep(s.delay)
+		ctx = context.WithoutCancel(ctx)
+	}
+	return s.Store.Account(ctx, id)
+}
+
+// A Validator that records the deadline of its context and the lease of the run calling it.
+type deadlineValidator struct {
+	store              *slowAccountStore
+	deadline, leaseEnd atomic.Int64
+}
+
+// Records the deadline and accepts the response.
+func (v *deadlineValidator) Validate(ctx context.Context, _ acmeserver.ValidationRequest) error {
+	deadline, _ := ctx.Deadline()
+	v.deadline.Store(deadline.UnixNano())
+	v.leaseEnd.Store(v.store.leaseUntil.Load())
+	return nil
+}
+
+// Requires a host call to end with the lease when earlier phases of the run were slow, so it cannot
+// overlap a run that claims the task once the lease has expired.
+func TestTaskRunEndsWithItsLease(t *testing.T) {
+	store := &slowAccountStore{delay: 150 * time.Millisecond}
+	validator := &deadlineValidator{store: store}
+	f := newFlow(t, func(c *acmeserver.Config) {
+		store.Store = c.Store
+		c.Store = store
+		c.Validators = map[acmeserver.ChallengeType]acmeserver.Validator{acmeserver.ChallengeHTTP01: validator}
+		c.Workers = exhaustingWorkers()
+		c.Workers.Lease, c.Workers.TaskTimeout = 200*time.Millisecond, 100*time.Millisecond
+	})
+	f.runWorker()
+	c := f.newClient()
+	c.register()
+	location, order := c.newOrder("lease.test")
+	c.respondHTTP01(order)
+	c.waitOrder(location, statusReady)
+	deadline, leaseEnd := time.Unix(0, validator.deadline.Load()), time.Unix(0, validator.leaseEnd.Load())
+	if validator.deadline.Load() == 0 || deadline.After(leaseEnd) {
+		t.Fatalf("validator deadline %s is after the lease end %s", deadline.Format(time.StampMicro), leaseEnd.Format(time.StampMicro))
+	}
+}

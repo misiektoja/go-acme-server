@@ -148,14 +148,15 @@ func (s *Server) buildAccount(ctx context.Context, req *signedRequest, thumbprin
 	if s.singleUseEAB {
 		account.ExternalAccountClaim = externalID
 	}
-	if p := s.policyProblem(ctx, s.policy.NewAccount(ctx, account), "account policy"); p != nil {
+	if p := s.hostProblem(ctx, s.policy.NewAccount(ctx, account), "account policy"); p != nil {
 		return nil, p
 	}
 	return account, nil
 }
 
-// Maps a policy result to a problem, logging unexpected errors.
-func (s *Server) policyProblem(ctx context.Context, err error, what string) *Problem {
+// Maps an error from a host interface to a problem. A *Problem passes through and any other error
+// is logged and answered with serverInternal.
+func (s *Server) hostProblem(ctx context.Context, err error, what string) *Problem {
 	if err == nil {
 		return nil
 	}

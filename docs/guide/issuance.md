@@ -15,7 +15,7 @@ type Issuer interface {
 Finalization accepts a CSR only when it is self-signed with an accepted key that is not the
 account key and requests exactly the identifiers of the order. The worker then records the dispatch
 decision in the store before the first CA call: an `OperationID`, the validation evidence and the
-earliest expiry among the order and its authorizations as the `Deadline`. An optional
+earliest expiry among the order, its authorizations and any authority token as the `Deadline`. An optional
 [`IssuancePolicy`](#issuance-policy) runs before that record is written.
 
 From this point every call for the order presents the same `OperationID`, whether it is the first
@@ -153,4 +153,5 @@ any validation work. See [Accounts and policy](accounts-and-policy.md).
 | Deadline passes while the outcome is unknown | The request carries `RecoveryOnly`. The issuer returns an existing result or `Rejected` |
 | Account deactivated after finalization | Recovery of an existing CA operation continues, because the certificate may exist |
 | Authorization invalidated between finalization and dispatch | `BeginIssuance` fails and the order becomes invalid without a CA call |
+| Authority token expires between validation and dispatch | The order becomes invalid without a CA call |
 | Same CSR finalized twice | The second finalization is accepted without a second issuance |

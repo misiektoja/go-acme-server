@@ -198,6 +198,12 @@ func testUpdateAuthorization(t *testing.T, store acmeserver.Store) {
 	if err != nil || got.Status != acmeserver.AuthorizationDeactivated || got.Revision != 2 {
 		t.Fatalf("Authorization after update = %+v, %v", got, err)
 	}
+	want := acmeserver.InvalidAuthorizationProblem()
+	order, err := store.Order(ctx, authz.OrderID)
+	if err != nil || order.Status != acmeserver.OrderInvalid || order.Error == nil || order.Error.Type != want.Type ||
+		order.Error.Detail != want.Detail {
+		t.Fatalf("order after its authorization was deactivated = %+v, %v", order, err)
+	}
 	missing := *authz
 	missing.ID = "missing"
 	if err := store.UpdateAuthorization(ctx, &missing); !errors.Is(err, acmeserver.ErrNotFound) {

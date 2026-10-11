@@ -28,12 +28,11 @@ func (s *Server) verifyExternalAccountBinding(ctx context.Context, accountThumbp
 		return "", NewProblem(ErrorMalformed, "externalAccountBinding url does not match the request URL")
 	}
 	key, err := s.eabKeys.MACKey(ctx, msg.Header.KeyID)
-	switch {
-	case errors.Is(err, ErrNotFound):
+	if errors.Is(err, ErrNotFound) {
 		return "", NewProblem(ErrorUnauthorized, "external account key is unknown")
-	case err != nil:
-		s.logError(ctx, "external account key lookup failed", err)
-		return "", NewProblem(ErrorServerInternal, "external account key lookup failed")
+	}
+	if p := s.hostProblem(ctx, err, "external account key lookup"); p != nil {
+		return "", p
 	}
 	if err := msg.VerifyMAC(key); err != nil {
 		return "", NewProblem(ErrorUnauthorized, "externalAccountBinding signature verification failed")

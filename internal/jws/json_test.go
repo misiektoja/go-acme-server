@@ -119,3 +119,84 @@ func jsonDepth(v any) int {
 	}
 	return 0
 }
+
+// Enforces exact struct member names without restricting unknown member values.
+func TestUnmarshalStrictMemberNames(t *testing.T) {
+	type embedded struct {
+		KeyID string `json:"kid"`
+	}
+	type item struct {
+		Name string `json:"name"`
+	}
+	type target struct {
+		embedded
+		Status  string `json:"status"`
+		Untag   int
+		Skipped int `json:"-"`
+		Inner   struct {
+			Value int `json:"value"`
+		} `json:"inner"`
+		Items  []item          `json:"items"`
+		ByName map[string]item `json:"byName"`
+		Raw    json.RawMessage `json:"raw"`
+		Free   map[string]any  `json:"free"`
+	}
+	rejected := map[string]string{
+		"upper case":      `{"STATUS":"x"}`,
+		"case duplicate":  `{"status":"x","Status":"y"}`,
+		"unicode fold":    "{\"\u017ftatus\":\"x\"}",
+		"embedded field":  `{"KID":"x"}`,
+		"untagged field":  `{"untag":1}`,
+		"nested object":   `{"inner":{"VALUE":1}}`,
+		"object in array": `{"items":[{"name":"a"},{"Name":"b"}]}`,
+		"object in map":   `{"byName":{"a":{"NAME":"b"}}}`,
+		"struct field":    `{"status":"x","Inner":{}}`,
+		"large unknown":   `{"Status":"x","unknown":1e1000}`,
+		"negative large":  `{"status":"x","Status":"y","unknown":-1e1000}`,
+		"nested large":    `{"items":[{"Name":"x"}],"unknown":{"value":1e1000}}`,
+		"unicode large":   `{"\u017ftatus":"x","unknown":[1e1000]}`,
+	}
+	for name, in := range rejected {
+		t.Run(name, func(t *testing.T) {
+			var v target
+			err := UnmarshalStrict([]byte(in), &v)
+			var jwsErr *Error
+			if !errors.As(err, &jwsErr) || jwsErr.Code != CodeMalformed || !strings.Contains(jwsErr.Detail, "only in case") {
+				t.Fatalf("UnmarshalStrict(%q) error = %v, want a case mismatch", in, err)
+			}
+		})
+	}
+	accepted := `{"status":"x","kid":"k","Untag":1,"skipped":2,"Skipped":3,"inner":{"value":1},` +
+		`"items":[{"name":"a"}],"byName":{"A":{"name":"b"},"a":{"name":"c"}},"raw":{"ANY":1},"free":{"X":{"Y":1}},"other":[1e1000,-1e1000]}`
+	var v target
+	if err := UnmarshalStrict([]byte(accepted), &v); err != nil {
+		t.Fatalf("UnmarshalStrict: %v", err)
+	}
+	if v.Status != "x" || v.KeyID != "k" || v.Untag != 1 || v.Skipped != 0 || len(v.Items) != 1 || len(v.ByName) != 2 {
+		t.Fatalf("decoded %+v", v)
+	}
+	var p *target
+	if err := UnmarshalStrict([]byte(`{"Status":"x"}`), &p); err == nil {
+		t.Fatal("case mismatch accepted through a pointer")
+	}
+}
+
+// Unknown values must never let a case variant mutate a known struct field.
+func FuzzUnmarshalStrictMemberNames(f *testing.F) {
+	for _, value := range []string{`1e1000`, `-1e1000`, `null`, `{"nested":[1e1000]}`, `"text"`} {
+		f.Add([]byte(value))
+	}
+	f.Fuzz(func(t *testing.T, unknown []byte) {
+		if !json.Valid(unknown) {
+			return
+		}
+		data := append([]byte(`{"Status":"deactivated","unknown":`), unknown...)
+		data = append(data, '}')
+		var target struct {
+			Status string `json:"status"`
+		}
+		if err := UnmarshalStrict(data, &target); err == nil || target.Status != "" {
+			t.Fatalf("case variant decoded: status=%q error=%v", target.Status, err)
+		}
+	})
+}

@@ -106,7 +106,9 @@ func (s *Store) transaction(ctx context.Context, write bool, operation func(*sql
 	return storageError(err)
 }
 
-// Maps absence, uniqueness and temporary SQLite lock conflicts to distinct storage outcomes.
+// Maps absence and uniqueness violations to contract errors. A lock that stays busy past the busy
+// timeout is a backend failure, never a revision mismatch, so the server does not mistake it for a
+// concurrent update that already succeeded.
 func storageError(err error) error {
 	if errors.Is(err, sql.ErrNoRows) {
 		return acmeserver.ErrNotFound
@@ -115,9 +117,6 @@ func storageError(err error) error {
 		switch sqliteError.Code() {
 		case 1555, 2067:
 			return acmeserver.ErrConflict
-		}
-		if code := sqliteError.Code() & 255; code == 5 || code == 6 {
-			return acmeserver.ErrRevisionMismatch
 		}
 	}
 	return err

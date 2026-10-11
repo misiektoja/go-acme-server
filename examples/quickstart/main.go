@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/misiektoja/go-composite-mldsa/compositex509"
+
 	acmeserver "github.com/misiektoja/go-acme-server"
 	"github.com/misiektoja/go-acme-server/challenge"
 	"github.com/misiektoja/go-acme-server/memstore"
@@ -112,7 +114,12 @@ func (ca *devCA) Issue(_ context.Context, req acmeserver.IssueRequest) (acmeserv
 				"unsupported identifier type")}, nil
 		}
 	}
-	der, err := x509.CreateCertificate(rand.Reader, leaf, ca.root, req.CSR.PublicKey, ca.key)
+	// CSR.PublicKey is nil for a composite ML-DSA key, so the key is read from the raw request.
+	pub, err := compositex509.ParsePKIXPublicKey(req.CSR.RawSubjectPublicKeyInfo)
+	if err != nil {
+		return acmeserver.IssueResult{}, err
+	}
+	der, err := compositex509.CreateCertificate(rand.Reader, leaf, ca.root, pub, ca.key)
 	if err != nil {
 		return acmeserver.IssueResult{}, err
 	}

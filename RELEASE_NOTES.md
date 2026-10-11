@@ -2,6 +2,32 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.5.0] - 11 Oct 2026
+
+Fixes stuck challenges, revocation retries and DNS failover. Custom stores and worker settings may need updates.
+
+### Protocol
+
+* **Processing challenges** become `invalid` when their authorization is deactivated or proved by another challenge. Updates that were not saved return `serverInternal`.
+* **JSON member names** must match exactly. Case variants such as `Status` for `status`, including Unicode variants, return `malformed` (RFC 8259 section 8.3).
+* **Expired authority tokens** invalidate the order before the CA is called. Token expiry also bounds `IssueRequest.Deadline`.
+
+### Host integration
+
+* **Custom stores** must set `Order.Error` to `InvalidAuthorizationProblem()` when `Store.UpdateAuthorization` invalidates an order. Update your store and run `storetest`.
+* **`WorkerConfig.Lease`** must be at least twice `TaskTimeout`. Task runs and shutdown are bounded by the lease. Defaults are 2 minutes and 30 seconds, adjusted when only one setting is supplied.
+* **Revocation retries** use a new `OperationID` and the next request's reason after the `Revoker` returns a `*Problem`.
+* **`ExternalAccountKeys` and `RenewalAdvisor`** return their `*Problem` to the client unchanged.
+* **`Policy.NewOrder`** may change only `NotBefore` and `NotAfter`. Other edits or invalid date ranges return `serverInternal`.
+* **`Config.BaseURL`** paths that need percent-encoding are rejected at startup.
+* **DNS fallback servers** get time to respond when an earlier server is silent, within the shared lookup deadline.
+* **Composite ML-DSA** support uses go-composite-mldsa v0.2.1. The quickstart CA now signs composite requests.
+* **The SQLite example** reports lock timeouts as backend errors instead of `ErrRevisionMismatch`. Update stores derived from it.
+
+### Verification
+
+* **The cert-manager runner** refuses existing cluster names and uses its own kubeconfig. It removes only the cluster it creates, unless `ACME_KEEP_CLUSTER=1`.
+
 ## [0.4.1] - 9 Oct 2026
 
 This version requires Go 1.27.2 and updates composite ML-DSA support to the published v0.2.0 library.

@@ -54,6 +54,10 @@ The validator performs steps 1 to 8 of RFC 9448 section 6:
 7. `exp` and `nbf` hold, with `ClockSkew` tolerance, one minute by default.
 8. `fingerprint` identifies the responding account key, either as the RFC 7638 thumbprint or as `SHA256` followed by the colon-separated hex form of the same digest.
 
+The server does not track `jti` values. The same account can answer further `tkauth-01` challenges
+with one token until its `exp`. RFC 9447 anticipates one token answering several challenges within
+its lifetime, so keep `exp` short when that window matters.
+
 The validator never fetches the `x5u` URL. Trusting a Token Authority is a deployment decision, so
 the reference goes to your `TokenAuthorities` implementation. `StaticTokenAuthorities` covers a
 fixed trust list indexed by exact URL and by `x5c` leaf certificate. A host whose ecosystem
@@ -77,7 +81,9 @@ CA basic constraint after the grant. Network challenges grant nothing, so a mixe
 finalize a CA certificate.
 
 The issuer receives the token expiry as `IssueRequest.NotAfter` unless the order asked for an
-earlier time. A leaf valid past the token expiry fails the publication check and is retained as an
+earlier time. The expiry also bounds `IssueRequest.Deadline`. If the token expires before the worker
+dispatches the order, the order becomes invalid with `authority token expired before issuance
+dispatch` and the CA is not called. A leaf valid past the token expiry fails the publication check and is retained as an
 unpublished result, see [Unpublished results](issuance.md#unpublished-results). The issuer recognizes a STIR order by the
 `TNAuthList` identifier in `req.Identifiers` and copies the list from the CSR extension into the
 certificate.

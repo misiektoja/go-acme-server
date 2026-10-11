@@ -195,11 +195,18 @@ func (c WorkerConfig) withDefaults() (WorkerConfig, error) {
 	if c.PollInterval == 0 {
 		c.PollInterval = time.Second
 	}
-	if c.Lease == 0 {
-		c.Lease = 2 * time.Minute
+	// A host call that uses its whole TaskTimeout must still leave time within the lease to record
+	// its outcome, so each default follows the other when only one is set.
+	switch {
+	case c.Lease == 0 && c.TaskTimeout == 0:
+		c.Lease, c.TaskTimeout = 2*time.Minute, 30*time.Second
+	case c.Lease == 0:
+		c.Lease = max(2*time.Minute, 2*c.TaskTimeout)
+	case c.TaskTimeout == 0:
+		c.TaskTimeout = min(30*time.Second, c.Lease/2)
 	}
-	if c.TaskTimeout == 0 {
-		c.TaskTimeout = 30 * time.Second
+	if c.TaskTimeout <= 0 || c.Lease < 2*c.TaskTimeout {
+		return c, errorf("Config.Workers.Lease must be at least twice TaskTimeout")
 	}
 	if c.MaxAttempts == 0 {
 		c.MaxAttempts = 5

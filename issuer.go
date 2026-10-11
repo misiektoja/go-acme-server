@@ -28,7 +28,8 @@ type IssueRequest struct {
 	NotAfter  time.Time
 	// How each identifier was validated.
 	Validations []Validation
-	// The earliest order or authorization expiry, after which new signing is forbidden.
+	// The earliest order, authorization or authority token expiry, after which new signing is
+	// forbidden.
 	Deadline time.Time
 	// Allows only recovery of an existing result, never a new signing operation.
 	RecoveryOnly bool
@@ -59,18 +60,20 @@ type IssuancePolicy interface {
 
 // What the host CA receives for a revocation.
 type RevokeRequest struct {
-	// Stable across every attempt to revoke one certificate. It is stored before the first call.
+	// Stable across retries until the CA accepts or refuses the revocation. It is stored before the
+	// first call and discarded when Revoke returns a *Problem.
 	OperationID string
 	Certificate *x509.Certificate
 	DER         []byte
-	// The CRL reason code recorded with the operation. A retry keeps the first recorded reason.
+	// The CRL reason code recorded with the operation. A retry keeps the recorded reason.
 	Reason int
 	// The account that requested the revocation. Empty when the certificate key signed the request.
 	AccountID string
 }
 
 // Revokes certificates. Revoke returns nil only after the CA recorded the revocation durably.
-// A returned *Problem is sent to the client, any other error is reported as serverInternal.
+// A returned *Problem is a final refusal sent to the client. Any other error is reported as
+// serverInternal and the next request repeats the same operation.
 // The CA must deduplicate by OperationID because a client retries after an uncertain answer.
 type Revoker interface {
 	Revoke(ctx context.Context, req RevokeRequest) error
@@ -126,7 +129,8 @@ type Policy interface {
 	// Reviews a new account. The key, contacts and external account identity are set.
 	NewAccount(ctx context.Context, account *Account) error
 	// Reviews a new order after identifier normalization. The policy may change NotBefore and
-	// NotAfter but not the identifiers.
+	// NotAfter. Any other change, or a NotAfter no later than NotBefore, fails the request with
+	// serverInternal.
 	NewOrder(ctx context.Context, account *Account, order *Order) error
 }
 

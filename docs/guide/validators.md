@@ -35,6 +35,9 @@ Replace the documentation address with your recursive resolver. Up to three serv
 The resolver speaks TCP, accepts a response only when its ID and question match the query, follows
 CNAMEs only from the answer owner and bounds the lookup time, the CNAME chain, the message size and
 the record count. The defaults are ten seconds, eight hops, 16 KiB and 64 records.
+Servers are tried in order. Each attempt receives an equal share of the time remaining for the
+untried servers, so a silent endpoint leaves time for a fallback. All attempts and CNAME hops
+share the lookup deadline. A terminal DNS error ends the lookup without trying another server.
 
 A custom `IPResolver` or `TXTResolver` may replace it, for example a resolver that consults an
 internal zone during tests. It must honor context cancellation and bound its own work, because the

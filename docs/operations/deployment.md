@@ -73,8 +73,8 @@ touches no store.
 
 | Setting | Default | Guidance |
 | --- | --- | --- |
-| `WorkerConfig.TaskTimeout` | 30 seconds | Above the slowest validator or CA call. Each phase gets the full budget |
-| `WorkerConfig.Lease` | 2 minutes | Above the sum of the phases of one task, or a live worker loses tasks to its peers |
+| `WorkerConfig.TaskTimeout` | 30 seconds | Above the slowest validator or CA call. Each phase gets the full budget within the lease |
+| `WorkerConfig.Lease` | 2 minutes | At least twice `TaskTimeout`, which `New` enforces. Above the sum of the phases of one task, or a slow run stops before it records the outcome and the task runs again |
 | `NetworkOptions.Timeout` | 10 seconds | Per validation attempt. Clients often need a few seconds to publish a DNS record |
 | `Config.DetachedWriteTimeout` | 30 seconds | Above the store's worst-case write latency |
 | HTTP server read and write timeouts | host choice | A POST completes within one store round trip, except revocation, which includes the CA call |
@@ -83,7 +83,7 @@ touches no store.
 
 1. Stop accepting connections and drain in-flight requests with the HTTP server's shutdown.
 2. Cancel the worker context. Tasks already in flight complete their current phases.
-3. Wait for `Run` to return or let the process exit and rely on leases. A task whose worker vanished is claimed again after `WorkerConfig.Lease`.
+3. Wait for `Run` to return, which takes at most `WorkerConfig.Lease`, or let the process exit and rely on leases. A task whose worker vanished is claimed again after `WorkerConfig.Lease`.
 
 Give the process at least `Config.DetachedWriteTimeout` after the HTTP server stops, so a
 revocation the CA already carried out is recorded.
@@ -100,8 +100,9 @@ Query for them regularly and revoke or reconcile in the CA. See
 
 ## Data retention
 
-The library never deletes anything. Expired orders, invalid authorizations and finished tasks stay
-in the store until the host removes them. A retention job should keep:
+The host controls retention of accounts, orders, authorizations and certificates. Completed tasks
+are removed from the queue when their results are committed or `FinishTask` runs. A retention job
+should keep:
 
 * certificates for as long as revocation and renewal information must work
 * orders with an unpublished result until they are reconciled

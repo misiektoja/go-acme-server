@@ -16,6 +16,12 @@ var (
 	ErrAlreadyReplaced = errors.New("acmeserver: certificate already replaced")
 )
 
+// Returns the order error for an authorization that stopped being valid before issuance was
+// dispatched. UpdateAuthorization stores it on the order it invalidates.
+func InvalidAuthorizationProblem() *Problem {
+	return NewProblem(ErrorUnauthorized, "an order authorization is no longer valid")
+}
+
 // Persists accounts. Every method is atomic and returns copies the caller owns.
 type AccountStore interface {
 	// Stores a new account with revision 1. It returns ErrConflict when the ID, the key
@@ -47,7 +53,7 @@ type OrderStore interface {
 	Authorization(ctx context.Context, id string) (*Authorization, error)
 	// Replaces the stored authorization when the revisions match and increments authz.Revision.
 	// When the authorization reaches a terminal status, the same operation marks its order invalid
-	// unless issuance was already dispatched.
+	// with Error set to InvalidAuthorizationProblem() unless issuance was already dispatched.
 	UpdateAuthorization(ctx context.Context, authz *Authorization) error
 	// Reports whether the account holds a valid unexpired authorization for every identifier,
 	// read in one consistent snapshot. Revocation by another account relies on it.

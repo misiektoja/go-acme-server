@@ -147,7 +147,7 @@ func TestAuthorizationDeactivation(t *testing.T) {
 	f := newFlow(t, nil)
 	c := f.newClient()
 	c.register()
-	_, order := c.newOrder("a.test")
+	location, order := c.newOrder("a.test")
 	assertProblem(t, c.post(order.Authorizations[0], map[string]any{"status": statusValid}), http.StatusBadRequest,
 		acmeserver.ErrorMalformed)
 	rec := c.post(order.Authorizations[0], map[string]any{"status": "deactivated"})
@@ -163,11 +163,57 @@ func TestAuthorizationDeactivation(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("repeated deactivate = %d", rec.Code)
 	}
+	assertInvalidAuthorizationError(t, c, location)
 	assertProblem(t, c.post(authz.Challenges[0].URL, map[string]any{}), http.StatusBadRequest, acmeserver.ErrorMalformed)
 	var ch challengeBody
 	c.get(authz.Challenges[0].URL, &ch)
 	if ch.Status != statusPending {
 		t.Fatalf("challenge after refused response = %+v", ch)
+	}
+}
+
+// Checks that the order failed because one of its authorizations stopped being valid.
+func assertInvalidAuthorizationError(t *testing.T, c *client, location string) {
+	t.Helper()
+	want := acmeserver.InvalidAuthorizationProblem()
+	var order orderBody
+	c.get(location, &order)
+	if order.Status != statusInvalid || order.Error == nil || order.Error.Type != want.Type || order.Error.Detail != want.Detail {
+		t.Fatalf("order = %+v, error %+v", order, order.Error)
+	}
+}
+
+// Records why the order failed when its authorization is deactivated after finalization and before
+// the worker dispatches issuance.
+func TestDeactivationBeforeDispatchRecordsTheOrderError(t *testing.T) {
+	f := newFlow(t, nil)
+	ctx, stop := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { done <- f.srv.Run(ctx) }()
+	c := f.newClient()
+	c.register()
+	location, order := c.newOrder("cascade.test")
+	c.respondHTTP01(order)
+	c.waitOrder(location, statusReady)
+	stop()
+	if err := <-done; err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if rec := c.finalize(order, newKey(t)); rec.Code != http.StatusOK {
+		t.Fatalf("finalize = %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := c.post(order.Authorizations[0], map[string]any{"status": "deactivated"}); rec.Code != http.StatusOK {
+		t.Fatalf("deactivate = %d %s", rec.Code, rec.Body.String())
+	}
+	assertInvalidAuthorizationError(t, c, location)
+	f.runWorker()
+	waitFor(t, "the issuance task to finish", func() bool {
+		n, err := f.store.PendingTasks(t.Context(), time.Now().Add(time.Hour))
+		return err == nil && n == 0
+	})
+	assertInvalidAuthorizationError(t, c, location)
+	if f.ca.callCount() != 0 {
+		t.Fatalf("CA called %d times for an invalid order", f.ca.callCount())
 	}
 }
 
@@ -672,15 +718,50 @@ func (denyPolicy) NewAccount(_ context.Context, account *acmeserver.Account) err
 	return nil
 }
 
-// Refuses blocked names and fails on broken ones.
+// Refuses blocked names, fails on broken ones and edits the orders of the other names it knows.
 func (denyPolicy) NewOrder(_ context.Context, _ *acmeserver.Account, order *acmeserver.Order) error {
 	switch order.Identifiers[0].Value {
 	case "blocked.test":
 		return acmeserver.NewProblem(acmeserver.ErrorRejectedIdentifier, "name is blocked").WithIdentifier(order.Identifiers[0])
 	case "broken.test":
 		return errTransient
+	case "limited.test":
+		order.NotAfter = order.CreatedAt.Add(time.Hour).Truncate(time.Second)
+	case "renamed.test":
+		order.Identifiers[0].Value = "other.test"
+	case "extended.test":
+		order.Expires = order.Expires.Add(time.Hour)
+	case "inverted.test":
+		order.NotBefore, order.NotAfter = order.CreatedAt.Add(2*time.Hour), order.CreatedAt.Add(time.Hour)
 	}
 	return nil
+}
+
+// Keeps a policy's change to the validity period and refuses any other edit as a host failure.
+func TestOrderPolicyEdits(t *testing.T) {
+	f := newFlow(t, func(c *acmeserver.Config) { c.Policy = denyPolicy{} })
+	c := f.newClient()
+	c.register()
+	location, order := c.newOrder("limited.test")
+	notAfter, err := time.Parse(time.RFC3339, order.NotAfter)
+	if err != nil || order.NotBefore != "" || notAfter.Before(time.Now()) || notAfter.After(time.Now().Add(time.Hour)) {
+		t.Fatalf("order limited by the policy = %+v", order)
+	}
+	c.get(location, &order)
+	if stored, err := time.Parse(time.RFC3339, order.NotAfter); err != nil || !stored.Equal(notAfter) {
+		t.Fatalf("stored order = %+v", order)
+	}
+	for name, logged := range map[string]string{
+		"renamed.test":  "changed order fields other than NotBefore and NotAfter",
+		"extended.test": "changed order fields other than NotBefore and NotAfter",
+		"inverted.test": "set NotAfter no later than NotBefore",
+	} {
+		assertProblem(t, c.post(baseURL+"new-order", map[string]any{"identifiers": []map[string]string{{"type": "dns", "value": name}}}),
+			http.StatusInternalServerError, acmeserver.ErrorServerInternal)
+		if !strings.Contains(f.logs.String(), logged) {
+			t.Fatalf("%s: policy edit not logged: %s", name, f.logs.String())
+		}
+	}
 }
 
 // A non-problem error for retry paths.

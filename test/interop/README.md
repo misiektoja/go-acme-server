@@ -62,7 +62,10 @@ creates and a CoreDNS hosts entry points the test domain at it, so cert-manager'
 and the server's validation reach the same solver. The script waits for the ClusterIssuer and the
 Certificate, verifies the secret against the test root, triggers a renewal the way `cmctl renew`
 does and verifies the second certificate. The cluster is deleted afterwards unless
-`ACME_KEEP_CLUSTER=1` is set. CI runs it weekly and on request rather than on every push.
+`ACME_KEEP_CLUSTER=1` is set. The runner refuses an existing cluster named `acme-cert-manager`
+or the value of `ACME_KIND_CLUSTER`. Choose an unused name for each run. It uses a separate
+kubeconfig in the scratch directory and cleans up only a cluster it created.
+CI runs it weekly and on request rather than on every push.
 
 Two live processes exercise lease exclusion and fencing. Another test keeps the HTTP process
 running while killing a worker after the test CA commits issuance but before ACME publication.

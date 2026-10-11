@@ -42,8 +42,8 @@ revision. The server reads the resource again and retries when it sees a mismatc
 must be part of the same transaction as the write.
 
 `UpdateAuthorization` has one extra duty. When the authorization reaches a terminal status, the
-same operation marks its order invalid unless issuance was already dispatched. The `storetest`
-suite checks this.
+same operation marks its order invalid with `Error` set to `InvalidAuthorizationProblem()` unless
+issuance was already dispatched. The `storetest` suite checks this.
 
 ## Tasks, leases and fences
 
@@ -128,6 +128,7 @@ The suite does not measure durability. Add your own test that kills the process 
 
 The interoperability module contains a SQLite adapter at `test/interop/sqlitestore`. It uses one
 table per resource, a `revision` column checked in every `UPDATE ... WHERE revision = ?`,
-`BEGIN IMMEDIATE` transactions for claims and maps SQLite lock conflicts to `ErrRevisionMismatch`.
+`BEGIN IMMEDIATE` transactions for claims and a busy timeout for lock waits. A lock that is still
+held when the timeout ends is reported as a backend error, not as `ErrRevisionMismatch`.
 It is test infrastructure without a migration or support contract, but it is a complete and
 readable implementation of every method.

@@ -59,6 +59,7 @@ reconcile the certificates in its CA. See [Issuing certificates](guide/issuance.
 | Authorization lifetime | 30 days | `Config.AuthorizationLifetime` |
 | Validation and pre-dispatch policy attempts | 5 | `WorkerConfig.MaxAttempts` |
 | Time per validator, issuer or store phase | 30 seconds | `WorkerConfig.TaskTimeout` |
+| Time per task run | 2 minutes | `WorkerConfig.Lease` |
 | Outstanding nonces in `nonce.Manager` | 100000 | `nonce.Options.Capacity` |
 
 Issuance recovery has no attempt limit, because an uncertain CA answer may mean the certificate

@@ -23,6 +23,7 @@ type ResolverOptions struct {
 	// Numeric TCP resolver endpoints, including ports, with at most three entries.
 	Servers []netip.AddrPort
 	// Bounds one lookup including every alias hop and defaults to ten seconds.
+	// Each server gets an equal share of the time remaining for untried servers.
 	Timeout time.Duration
 	// Bounds the CNAME chain followed for one name and defaults to eight.
 	MaxCNAMEs int
@@ -192,8 +193,15 @@ func (r *Resolver) query(ctx context.Context, name string, typ dnsmessage.Type) 
 		return nil, err
 	}
 	var last error
-	for _, server := range r.servers {
-		response, err := r.exchange(ctx, server, query)
+	for index, server := range r.servers {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		// Reserve time for fallback endpoints within the lookup's shared deadline.
+		deadline, _ := ctx.Deadline()
+		attempt, cancel := context.WithTimeout(ctx, time.Until(deadline)/time.Duration(len(r.servers)-index))
+		response, err := r.exchange(attempt, server, query)
+		cancel()
 		if err != nil {
 			last = err
 			continue

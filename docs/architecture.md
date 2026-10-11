@@ -87,6 +87,8 @@ validation.
 
 **Validation.** The worker claims the task with a lease, checks that the authorization is still
 pending and the account still valid, then calls the validator under `WorkerConfig.TaskTimeout`. A
+challenge whose authorization stopped being pending, before or during validation, becomes invalid
+with `authorization was <status> before validation`. A
 returned `*Problem` is final and makes the challenge and authorization invalid. Any other error is
 a transport failure and is retried with exponential backoff until `WorkerConfig.MaxAttempts` or the
 authorization expiry. Success makes the authorization valid for `Config.AuthorizationLifetime`.
@@ -122,7 +124,8 @@ another claim superseded them. This is what lets a worker die mid-task and anoth
 without committing stale results.
 
 The worker never interrupts a task in flight when its context is canceled. Shutdown waits for the
-current tasks or lets their leases lapse for another worker.
+current tasks or lets their leases lapse for another worker. A task run stops when its lease ends,
+so it never overlaps the run of the worker that claims the task next.
 
 ## What the host decides
 

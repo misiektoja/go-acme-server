@@ -37,7 +37,8 @@ posted to, which the server compares with the one it expects. The two must match
 * Keep the path prefix in place through any reverse proxy. Do not strip it. See [Deployment](../operations/deployment.md).
 * Use `https`. `AllowInsecureBaseURL` accepts `http` for local tests only.
 
-A missing trailing slash is added. User info, a query string, a fragment or an escaped path are refused.
+A missing trailing slash is added. User info, a query string, a fragment or a path that needs
+percent-encoding, such as one with a space or a non-ASCII character, are refused.
 
 ## Mount the handler
 
@@ -72,9 +73,9 @@ finalized orders never issue. `Run` returns an error if it is already active on 
 
 The worker may live in another process than the handler as long as both use the same store. Set
 `WorkerConfig.External` in the handler process so it does not warn every time work is accepted
-while no local worker is running. Several workers may share one store. Leases and fences make
-sure no task is processed twice at the same time and a worker that dies is replaced once its lease
-lapses.
+while no local worker is running. Several workers may share one store. A task run stops when its
+lease ends and fences refuse a stale commit, so no task is processed twice at the same time. A
+worker that dies is replaced once its lease lapses.
 
 `WorkerConfig` tunes concurrency, poll interval, lease length, per-phase timeouts, retry policy
 and the staleness threshold. The defaults are listed in
@@ -124,7 +125,7 @@ workerCancel()
 
 Canceling the context stops new claims but does not interrupt a task in flight. A validator or
 issuer call that has already started runs to its `TaskTimeout`. The store operations that
-record its outcome get their own budget. `Run` can therefore take several `TaskTimeout` periods to
+record its outcome get their own budget. `Run` can therefore take up to `WorkerConfig.Lease` to
 return. Waiting is optional. A task whose worker disappears is leased. Another worker picks it
 up once the lease ends.
 
