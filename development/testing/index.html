@@ -1548,7 +1548,10 @@ writes.</p>
 <p>Starts a kind cluster, deploys the server from <code>test/interop/cmd/server</code> with the test CA and an
 HTTP-01 validator, issues and renews a certificate through a cert-manager <code>ClusterIssuer</code> and
 verifies both against the test root. It needs Docker, kind, kubectl and openssl. The cluster is
-deleted afterwards unless <code>ACME_KEEP_CLUSTER=1</code> is set. CI runs it weekly and on request.</p>
+deleted afterwards unless <code>ACME_KEEP_CLUSTER=1</code> is set. The runner refuses an existing cluster
+named <code>acme-cert-manager</code> or the value of <code>ACME_KIND_CLUSTER</code>. Choose an unused name for each run.
+It uses a separate kubeconfig in the scratch directory and cleans up only a cluster it created.
+CI runs it weekly and on request.</p>
 <h2 id="testing-your-integration">Testing your integration<a class="headerlink" href="#testing-your-integration" title="Permanent link">&para;</a></h2>
 <p>The pieces you implement have their own verification paths:</p>
 <table>

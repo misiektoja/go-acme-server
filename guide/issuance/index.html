@@ -1557,7 +1557,7 @@ the result.</p>
 <p>Finalization accepts a CSR only when it is self-signed with an accepted key that is not the
 account key and requests exactly the identifiers of the order. The worker then records the dispatch
 decision in the store before the first CA call: an <code>OperationID</code>, the validation evidence and the
-earliest expiry among the order and its authorizations as the <code>Deadline</code>. An optional
+earliest expiry among the order, its authorizations and any authority token as the <code>Deadline</code>. An optional
 <a href="#issuance-policy"><code>IssuancePolicy</code></a> runs before that record is written.</p>
 <p>From this point every call for the order presents the same <code>OperationID</code>, whether it is the first
 attempt, a retry after a timeout or a recovery from another worker after a crash.</p>
@@ -1737,6 +1737,10 @@ any validation work. See <a href="../accounts-and-policy/">Accounts and policy</
 <tr>
 <td>Authorization invalidated between finalization and dispatch</td>
 <td><code>BeginIssuance</code> fails and the order becomes invalid without a CA call</td>
+</tr>
+<tr>
+<td>Authority token expires between validation and dispatch</td>
+<td>The order becomes invalid without a CA call</td>
 </tr>
 <tr>
 <td>Same CSR finalized twice</td>

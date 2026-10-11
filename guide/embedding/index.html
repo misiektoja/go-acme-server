@@ -1599,7 +1599,8 @@ posted to, which the server compares with the one it expects. The two must match
 <li>Keep the path prefix in place through any reverse proxy. Do not strip it. See <a href="../../operations/deployment/">Deployment</a>.</li>
 <li>Use <code>https</code>. <code>AllowInsecureBaseURL</code> accepts <code>http</code> for local tests only.</li>
 </ul>
-<p>A missing trailing slash is added. User info, a query string, a fragment or an escaped path are refused.</p>
+<p>A missing trailing slash is added. User info, a query string, a fragment or a path that needs
+percent-encoding, such as one with a space or a non-ASCII character, are refused.</p>
 <h2 id="mount-the-handler">Mount the handler<a class="headerlink" href="#mount-the-handler" title="Permanent link">&para;</a></h2>
 <p><code>Server</code> implements <code>http.Handler</code> and expects requests whose path starts with the base URL path:</p>
 <div class="highlight"><pre><span></span><code><span class="nx">mux</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">NewServeMux</span><span class="p">()</span>
@@ -1623,9 +1624,9 @@ canceled. It is not optional. Without a running worker challenges stay <code>pro
 finalized orders never issue. <code>Run</code> returns an error if it is already active on the same <code>Server</code>.</p>
 <p>The worker may live in another process than the handler as long as both use the same store. Set
 <code>WorkerConfig.External</code> in the handler process so it does not warn every time work is accepted
-while no local worker is running. Several workers may share one store. Leases and fences make
-sure no task is processed twice at the same time and a worker that dies is replaced once its lease
-lapses.</p>
+while no local worker is running. Several workers may share one store. A task run stops when its
+lease ends and fences refuse a stale commit, so no task is processed twice at the same time. A
+worker that dies is replaced once its lease lapses.</p>
 <p><code>WorkerConfig</code> tunes concurrency, poll interval, lease length, per-phase timeouts, retry policy
 and the staleness threshold. The defaults are listed in
 <a href="../../reference/configuration/#workerconfig">Configuration</a>.</p>
@@ -1661,7 +1662,7 @@ wants an audit trail of refusals wraps the handler.</p>
 </code></pre></div>
 <p>Canceling the context stops new claims but does not interrupt a task in flight. A validator or
 issuer call that has already started runs to its <code>TaskTimeout</code>. The store operations that
-record its outcome get their own budget. <code>Run</code> can therefore take several <code>TaskTimeout</code> periods to
+record its outcome get their own budget. <code>Run</code> can therefore take up to <code>WorkerConfig.Lease</code> to
 return. Waiting is optional. A task whose worker disappears is leased. Another worker picks it
 up once the lease ends.</p>
 <p>A revocation the CA already carried out is recorded even if the client disconnects, within

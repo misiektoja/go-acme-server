@@ -1723,8 +1723,12 @@ account state in development.</p>
 <td>The client finalized so late that an authorization or the order expired first</td>
 </tr>
 <tr>
+<td><code>authority token expired before issuance dispatch</code></td>
+<td>The <code>tkauth-01</code> token expired before the worker dispatched the order. The client needs a new order with a fresh token</td>
+</tr>
+<tr>
 <td><code>an order authorization is no longer valid</code></td>
-<td>An authorization was deactivated or invalidated between validation and dispatch</td>
+<td>An authorization was deactivated or invalidated before dispatch. The store records this when the authorization changes</td>
 </tr>
 <tr>
 <td><code>account is no longer valid</code></td>

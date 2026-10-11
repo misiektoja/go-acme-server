@@ -1594,6 +1594,8 @@ thumbprint is captured on the challenge, so a later key rollover does not change
 validation.</p>
 <p><strong>Validation.</strong> The worker claims the task with a lease, checks that the authorization is still
 pending and the account still valid, then calls the validator under <code>WorkerConfig.TaskTimeout</code>. A
+challenge whose authorization stopped being pending, before or during validation, becomes invalid
+with <code>authorization was &lt;status&gt; before validation</code>. A
 returned <code>*Problem</code> is final and makes the challenge and authorization invalid. Any other error is
 a transport failure and is retried with exponential backoff until <code>WorkerConfig.MaxAttempts</code> or the
 authorization expiry. Success makes the authorization valid for <code>Config.AuthorizationLifetime</code>.
@@ -1622,7 +1624,8 @@ read and the store returns <code>ErrRevisionMismatch</code> when it moved. Tasks
 another claim superseded them. This is what lets a worker die mid-task and another worker take over
 without committing stale results.</p>
 <p>The worker never interrupts a task in flight when its context is canceled. Shutdown waits for the
-current tasks or lets their leases lapse for another worker.</p>
+current tasks or lets their leases lapse for another worker. A task run stops when its lease ends,
+so it never overlaps the run of the worker that claims the task next.</p>
 <h2 id="what-the-host-decides">What the host decides<a class="headerlink" href="#what-the-host-decides" title="Permanent link">&para;</a></h2>
 <p>The library makes no policy decisions beyond the protocol. It does not choose validity periods,
 key usages, rate limits or which identifiers a CA may issue for. Those belong in <code>Policy</code>,

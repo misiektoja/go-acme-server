@@ -1565,7 +1565,8 @@ key with the same identifier is refused with <code>unauthorized</code>.</p>
 <p><code>NewAccount</code> sees the key, the contacts, the terms of service flag and the external account
 identity before the account is stored. <code>NewOrder</code> sees the account and the order after identifier
 normalization and before any authorization is created. It may change <code>NotBefore</code> and <code>NotAfter</code>,
-for example to cap the requested validity, but must not change the identifiers.</p>
+for example to cap the requested validity. Any other change, or a <code>NotAfter</code> that is not later than
+<code>NotBefore</code>, is logged and answered with <code>serverInternal</code>.</p>
 <p>A returned <code>*Problem</code> is sent to the client. Any other error is logged and answered with
 <code>serverInternal</code>. Rate limiting belongs here too. Return a <code>rateLimited</code> problem built with
 <code>WithRetryAfter</code> and the client backs off.</p>

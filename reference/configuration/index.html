@@ -1708,13 +1708,13 @@ problem. Zero values select the defaults below. Negative limits are refused.</p>
 </tr>
 <tr>
 <td><code>Lease</code></td>
-<td>2 minutes</td>
-<td>How long a claimed task stays leased before another worker may take it</td>
+<td>2 minutes, or twice <code>TaskTimeout</code> if that is longer</td>
+<td>How long a claimed task stays leased before another worker may take it. A task run stops when its lease ends. It must be at least twice <code>TaskTimeout</code></td>
 </tr>
 <tr>
 <td><code>TaskTimeout</code></td>
-<td>30 seconds</td>
-<td>Bounds each phase of a task separately: one validator or issuer call, and each store operation that records its outcome</td>
+<td>30 seconds, or half of <code>Lease</code> if that is shorter</td>
+<td>Bounds each phase of a task separately: one validator or issuer call, and each store operation that records its outcome. The lease bounds the whole run</td>
 </tr>
 <tr>
 <td><code>MaxAttempts</code></td>

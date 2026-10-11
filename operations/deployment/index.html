@@ -1627,12 +1627,12 @@ touches no store.</p>
 <tr>
 <td><code>WorkerConfig.TaskTimeout</code></td>
 <td>30 seconds</td>
-<td>Above the slowest validator or CA call. Each phase gets the full budget</td>
+<td>Above the slowest validator or CA call. Each phase gets the full budget within the lease</td>
 </tr>
 <tr>
 <td><code>WorkerConfig.Lease</code></td>
 <td>2 minutes</td>
-<td>Above the sum of the phases of one task, or a live worker loses tasks to its peers</td>
+<td>At least twice <code>TaskTimeout</code>, which <code>New</code> enforces. Above the sum of the phases of one task, or a slow run stops before it records the outcome and the task runs again</td>
 </tr>
 <tr>
 <td><code>NetworkOptions.Timeout</code></td>
@@ -1655,7 +1655,7 @@ touches no store.</p>
 <ol>
 <li>Stop accepting connections and drain in-flight requests with the HTTP server's shutdown.</li>
 <li>Cancel the worker context. Tasks already in flight complete their current phases.</li>
-<li>Wait for <code>Run</code> to return or let the process exit and rely on leases. A task whose worker vanished is claimed again after <code>WorkerConfig.Lease</code>.</li>
+<li>Wait for <code>Run</code> to return, which takes at most <code>WorkerConfig.Lease</code>, or let the process exit and rely on leases. A task whose worker vanished is claimed again after <code>WorkerConfig.Lease</code>.</li>
 </ol>
 <p>Give the process at least <code>Config.DetachedWriteTimeout</code> after the HTTP server stops, so a
 revocation the CA already carried out is recorded.</p>
@@ -1667,8 +1667,9 @@ keys, tokens or request bodies. For an audit trail of issued certificates read t
 Query for them regularly and revoke or reconcile in the CA. See
 <a href="../../guide/issuance/#unpublished-results">Issuing certificates</a>.</p>
 <h2 id="data-retention">Data retention<a class="headerlink" href="#data-retention" title="Permanent link">&para;</a></h2>
-<p>The library never deletes anything. Expired orders, invalid authorizations and finished tasks stay
-in the store until the host removes them. A retention job should keep:</p>
+<p>The host controls retention of accounts, orders, authorizations and certificates. Completed tasks
+are removed from the queue when their results are committed or <code>FinishTask</code> runs. A retention job
+should keep:</p>
 <ul>
 <li>certificates for as long as revocation and renewal information must work</li>
 <li>orders with an unpublished result until they are reconciled</li>

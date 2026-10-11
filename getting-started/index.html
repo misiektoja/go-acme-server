@@ -1545,6 +1545,8 @@ where <code>go run ./examples/quickstart</code> starts it without any setup. Sav
 <span class="w">    </span><span class="s">"sync"</span>
 <span class="w">    </span><span class="s">"time"</span>
 
+<span class="w">    </span><span class="s">"github.com/misiektoja/go-composite-mldsa/compositex509"</span>
+
 <span class="w">    </span><span class="nx">acmeserver</span><span class="w"> </span><span class="s">"github.com/misiektoja/go-acme-server"</span>
 <span class="w">    </span><span class="s">"github.com/misiektoja/go-acme-server/challenge"</span>
 <span class="w">    </span><span class="s">"github.com/misiektoja/go-acme-server/memstore"</span>
@@ -1634,7 +1636,12 @@ where <code>go run ./examples/quickstart</code> starts it without any setup. Sav
 <span class="w">                </span><span class="s">"unsupported identifier type"</span><span class="p">)},</span><span class="w"> </span><span class="kc">nil</span>
 <span class="w">        </span><span class="p">}</span>
 <span class="w">    </span><span class="p">}</span>
-<span class="w">    </span><span class="nx">der</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">x509</span><span class="p">.</span><span class="nx">CreateCertificate</span><span class="p">(</span><span class="nx">rand</span><span class="p">.</span><span class="nx">Reader</span><span class="p">,</span><span class="w"> </span><span class="nx">leaf</span><span class="p">,</span><span class="w"> </span><span class="nx">ca</span><span class="p">.</span><span class="nx">root</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">CSR</span><span class="p">.</span><span class="nx">PublicKey</span><span class="p">,</span><span class="w"> </span><span class="nx">ca</span><span class="p">.</span><span class="nx">key</span><span class="p">)</span>
+<span class="w">    </span><span class="c1">// CSR.PublicKey is nil for a composite ML-DSA key, so the key is read from the raw request.</span>
+<span class="w">    </span><span class="nx">pub</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">compositex509</span><span class="p">.</span><span class="nx">ParsePKIXPublicKey</span><span class="p">(</span><span class="nx">req</span><span class="p">.</span><span class="nx">CSR</span><span class="p">.</span><span class="nx">RawSubjectPublicKeyInfo</span><span class="p">)</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">IssueResult</span><span class="p">{},</span><span class="w"> </span><span class="nx">err</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="nx">der</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">compositex509</span><span class="p">.</span><span class="nx">CreateCertificate</span><span class="p">(</span><span class="nx">rand</span><span class="p">.</span><span class="nx">Reader</span><span class="p">,</span><span class="w"> </span><span class="nx">leaf</span><span class="p">,</span><span class="w"> </span><span class="nx">ca</span><span class="p">.</span><span class="nx">root</span><span class="p">,</span><span class="w"> </span><span class="nx">pub</span><span class="p">,</span><span class="w"> </span><span class="nx">ca</span><span class="p">.</span><span class="nx">key</span><span class="p">)</span>
 <span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
 <span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">IssueResult</span><span class="p">{},</span><span class="w"> </span><span class="nx">err</span>
 <span class="w">    </span><span class="p">}</span>
@@ -1771,6 +1778,9 @@ where <code>go run ./examples/quickstart</code> starts it without any setup. Sav
 <span class="w">    </span><span class="p">}</span>
 <span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="kc">nil</span>
 <span class="p">}</span>
+</code></pre></div>
+<p>Record the packages it imports in <code>go.mod</code>:</p>
+<div class="highlight"><pre><span></span><code>go<span class="w"> </span>mod<span class="w"> </span>tidy
 </code></pre></div>
 <p>The program has four parts and each one is a seam where your own code goes later:</p>
 <table>

@@ -1647,8 +1647,8 @@ returns <code>ErrRevisionMismatch</code> when they differ and otherwise writes t
 revision. The server reads the resource again and retries when it sees a mismatch, so the check
 must be part of the same transaction as the write.</p>
 <p><code>UpdateAuthorization</code> has one extra duty. When the authorization reaches a terminal status, the
-same operation marks its order invalid unless issuance was already dispatched. The <code>storetest</code>
-suite checks this.</p>
+same operation marks its order invalid with <code>Error</code> set to <code>InvalidAuthorizationProblem()</code> unless
+issuance was already dispatched. The <code>storetest</code> suite checks this.</p>
 <h2 id="tasks-leases-and-fences">Tasks, leases and fences<a class="headerlink" href="#tasks-leases-and-fences" title="Permanent link">&para;</a></h2>
 <p>A <code>Task</code> names a challenge to validate or an order to issue. <code>AcceptChallenge</code> and <code>FinalizeOrder</code>
 enqueue it in the same transaction that changes the resource, so a crash between the two cannot
@@ -1740,7 +1740,8 @@ so run it again when upgrading.</p>
 <h2 id="a-worked-example">A worked example<a class="headerlink" href="#a-worked-example" title="Permanent link">&para;</a></h2>
 <p>The interoperability module contains a SQLite adapter at <code>test/interop/sqlitestore</code>. It uses one
 table per resource, a <code>revision</code> column checked in every <code>UPDATE ... WHERE revision = ?</code>,
-<code>BEGIN IMMEDIATE</code> transactions for claims and maps SQLite lock conflicts to <code>ErrRevisionMismatch</code>.
+<code>BEGIN IMMEDIATE</code> transactions for claims and a busy timeout for lock waits. A lock that is still
+held when the timeout ends is reported as a backend error, not as <code>ErrRevisionMismatch</code>.
 It is test infrastructure without a migration or support contract, but it is a complete and
 readable implementation of every method.</p>
 
