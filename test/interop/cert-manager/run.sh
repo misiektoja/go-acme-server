@@ -21,14 +21,18 @@ WORK=$SCRATCH/cert-manager
 STATE=$WORK/state
 SUMMARY=$SCRATCH/cert-manager-summary.json
 START=$(date +%s)
+CLUSTER_CREATED=0
 
 # Prints a timestamped progress line.
 log() { printf '%s %s\n' "$(date -u +%H:%M:%S)" "$*"; }
 
-# Saves cluster diagnostics without secret contents, then removes the cluster.
+# Directs every operation to this run's cluster and isolated kubeconfig.
+kubectl() { command kubectl --context "kind-$CLUSTER" "$@"; }
+
+# Saves diagnostics and removes only a cluster successfully created by this run.
 cleanup() {
 	status=$?
-	if kind get clusters 2>/dev/null | grep -qx "$CLUSTER"; then
+	if [ "$CLUSTER_CREATED" -eq 1 ]; then
 		if [ "$status" -ne 0 ]; then
 			log "collecting diagnostics into $WORK"
 			kubectl get certificate,certificaterequest,order,challenge -A -o wide >"$WORK/resources.txt" 2>&1 || true
@@ -45,7 +49,6 @@ cleanup() {
 		"$CERT_MANAGER_VERSION" "$KIND_NODE_IMAGE" "$([ "$status" -eq 0 ] && echo pass || echo fail)" "$(($(date +%s) - START))" >"$SUMMARY"
 	exit "$status"
 }
-trap cleanup EXIT
 
 # Retries a command until it succeeds or the attempt budget runs out.
 retry() {
@@ -77,6 +80,14 @@ verify_secret() {
 
 mkdir -p "$WORK"
 : >"$SUMMARY"
+trap cleanup EXIT
+CLUSTERS=$(kind get clusters)
+if printf '%s\n' "$CLUSTERS" | grep -Fxq -- "$CLUSTER"; then
+	log "refusing existing kind cluster $CLUSTER: choose an unused ACME_KIND_CLUSTER"
+	exit 1
+fi
+KUBECONFIG=$(mktemp "$WORK/kubeconfig.XXXXXX")
+export KUBECONFIG
 log "building the test server for $(docker version -f '{{.Server.Os}}/{{.Server.Arch}}')"
 (cd "$ROOT/test/interop" && CGO_ENABLED=0 GOOS=linux GOARCH="$(docker version -f '{{.Server.Arch}}')" go build -o "$WORK/acme-server" ./cmd/server)
 (cd "$ROOT/test/interop" && go run ./cmd/server -init -state "$STATE" -names "$SERVER_NAME")
@@ -89,8 +100,8 @@ fi
 echo "$CERT_MANAGER_SHA256  $WORK/cert-manager-$CERT_MANAGER_VERSION.yaml" | shasum -a 256 -c - >/dev/null
 
 log "creating kind cluster $CLUSTER"
-kind delete cluster --name "$CLUSTER" >/dev/null 2>&1 || true
-kind create cluster --name "$CLUSTER" --image "$KIND_NODE_IMAGE" --wait 120s >"$WORK/kind.log" 2>&1
+kind create cluster --name "$CLUSTER" --image "$KIND_NODE_IMAGE" --kubeconfig "$KUBECONFIG" --wait 120s >"$WORK/kind.log" 2>&1
+CLUSTER_CREATED=1
 kind load docker-image "$IMAGE" --name "$CLUSTER" >>"$WORK/kind.log" 2>&1
 
 log "installing cert-manager $CERT_MANAGER_VERSION"
