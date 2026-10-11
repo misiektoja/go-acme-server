@@ -2,34 +2,31 @@
 
 All notable changes to this project are documented in this file.
 
-## [0.5.0] - TBD
+## [0.5.0] - 11 Oct 2026
 
-This version fixes stalled challenges, revocation retries, unrecorded challenge responses, DNS failover and issuance after authority-token expiry. It tightens JSON and worker lease checks, updates composite ML-DSA support and makes the cert-manager runner refuse existing clusters. Stores must record why an authorization change invalidated its order.
+Fixes stuck challenges, revocation retries and DNS failover. Custom stores and worker settings may need updates.
 
 ### Protocol
 
-* **Challenge responses that the store did not record** are answered with `serverInternal` and logged as `challenge update failed`. Previously the client received the unchanged pending challenge with status 200 while no validation ran.
-* **A challenge whose authorization moved on during validation** becomes `invalid` with `authorization was <status> before validation` (RFC 8555 section 7.1.6). This happens when the authorization is deactivated or another challenge proves it first. Previously the challenge stayed `processing` with no task left to finish it.
-* **An order invalidated by a deactivated authorization** carries the `error` member `an order authorization is no longer valid` (RFC 8555 section 7.1.3). Previously the order had no error.
-* **JSON member names are exact** (RFC 8259 section 8.3). A name that matches a known member only when case is ignored, such as `Status` for `status`, is refused with `malformed`. This includes Unicode case variants. Previously it was decoded as that member, so a payload with both `contact` and `Contact` kept the second list.
+* **Processing challenges** become `invalid` when their authorization is deactivated or proved by another challenge. Updates that were not saved return `serverInternal`.
+* **JSON member names** must match exactly. Case variants such as `Status` for `status`, including Unicode variants, return `malformed` (RFC 8259 section 8.3).
+* **Expired authority tokens** invalidate the order before the CA is called. Token expiry also bounds `IssueRequest.Deadline`.
 
 ### Host integration
 
-* **A `*Problem` returned by the `Revoker`** now discards the revocation attempt. The next request starts a new operation with a new `OperationID` and the reason the client sends. Previously every later request repeated the refused operation and reason, so the certificate could not be revoked through ACME.
-* **An expired authority token** now ends issuance before the CA is called. The order becomes invalid with `authority token expired before issuance dispatch`. `IssueRequest.Deadline` also ends at the token expiry. Previously the CA was asked to sign a certificate whose validity had already ended.
-* **The SQLite example store** in `test/interop/sqlitestore` reports a lock that stays busy past its timeout as a backend error instead of `ErrRevisionMismatch`. Apply the same change to stores derived from it.
-* **`Store.UpdateAuthorization` sets `Order.Error`** to `InvalidAuthorizationProblem()` when it invalidates the order. `memstore` and the SQLite example do this. Update custom stores and run `storetest`, which now checks it.
-* **A task run ends with its lease.** `New` refuses a `WorkerConfig.Lease` shorter than twice `TaskTimeout`. When only one of them is set, the other follows. `Lease` defaults to 2 minutes or twice `TaskTimeout`, whichever is longer. `TaskTimeout` defaults to 30 seconds or half the lease, whichever is shorter. `Run` returns within one lease after its context is canceled. Previously a slow run could outlast its lease and overlap the worker that claimed the task next.
-* **A `*Problem` from `ExternalAccountKeys` or `RenewalAdvisor`** reaches the client unchanged, as documented. Previously the client received `serverInternal`.
-* **`Policy.NewOrder` may change only `NotBefore` and `NotAfter`.** Any other change, or a `NotAfter` that is not later than `NotBefore`, is logged and answered with `serverInternal`. Previously such changes were stored without being checked.
-* **`Config.BaseURL` with a path that needs percent-encoding**, such as one with a space or a non-ASCII character, is refused by `New`. Previously the server started and refused every signed request.
-* **The quickstart CA signs composite ML-DSA requests.** Previously it failed with `x509: unsupported public key type` and the order stayed `processing`. The getting started guide now runs `go mod tidy` after saving the program, which the build needs.
-* **DNS resolver fallback** now receives part of the remaining lookup timeout when an earlier server is silent. All configured servers and CNAME hops share the total lookup deadline.
-* **go-composite-mldsa v0.2.1** replaces v0.2.0. It rejects signers that do not match a composite CA key and checks key usage supplied through CSR attributes.
+* **Custom stores** must set `Order.Error` to `InvalidAuthorizationProblem()` when `Store.UpdateAuthorization` invalidates an order. Update your store and run `storetest`.
+* **`WorkerConfig.Lease`** must be at least twice `TaskTimeout`. Task runs and shutdown are bounded by the lease. Defaults are 2 minutes and 30 seconds, adjusted when only one setting is supplied.
+* **Revocation retries** use a new `OperationID` and the next request's reason after the `Revoker` returns a `*Problem`.
+* **`ExternalAccountKeys` and `RenewalAdvisor`** return their `*Problem` to the client unchanged.
+* **`Policy.NewOrder`** may change only `NotBefore` and `NotAfter`. Other edits or invalid date ranges return `serverInternal`.
+* **`Config.BaseURL`** paths that need percent-encoding are rejected at startup.
+* **DNS fallback servers** get time to respond when an earlier server is silent, within the shared lookup deadline.
+* **Composite ML-DSA** support uses go-composite-mldsa v0.2.1. The quickstart CA now signs composite requests.
+* **The SQLite example** reports lock timeouts as backend errors instead of `ErrRevisionMismatch`. Update stores derived from it.
 
 ### Verification
 
-* **The cert-manager runner** refuses an existing cluster named by `ACME_KIND_CLUSTER` or its default `acme-cert-manager`. It uses a separate kubeconfig and deletes only a cluster it created. `ACME_KEEP_CLUSTER=1` retains that cluster after success or failure.
+* **The cert-manager runner** refuses existing cluster names and uses its own kubeconfig. It removes only the cluster it creates, unless `ACME_KEEP_CLUSTER=1`.
 
 ## [0.4.1] - 9 Oct 2026
 
