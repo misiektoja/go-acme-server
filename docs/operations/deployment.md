@@ -100,8 +100,9 @@ Query for them regularly and revoke or reconcile in the CA. See
 
 ## Data retention
 
-The library never deletes anything. Expired orders, invalid authorizations and finished tasks stay
-in the store until the host removes them. A retention job should keep:
+The host controls retention of accounts, orders, authorizations and certificates. Completed tasks
+are removed from the queue when their results are committed or `FinishTask` runs. A retention job
+should keep:
 
 * certificates for as long as revocation and renewal information must work
 * orders with an unpublished result until they are reconciled
