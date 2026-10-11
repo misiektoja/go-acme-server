@@ -422,6 +422,9 @@ func TestAccountUpdateRejectsCaseVariantMembers(t *testing.T) {
 	for _, payload := range []string{
 		`{"contact":["mailto:first@example.test"],"Contact":["mailto:second@example.test"]}`,
 		`{"STATUS":"deactivated"}`,
+		`{"Status":"deactivated","unknown":1e1000}`,
+		`{"Contact":["mailto:changed@example.test"],"unknown":-1e1000}`,
+		`{"\u017ftatus":"deactivated","unknown":{"nested":[1e1000]}}`,
 		"{\"\u017ftatus\":\"deactivated\"}",
 	} {
 		assertProblem(t, c.postRaw(c.kid, []byte(payload), false), http.StatusBadRequest, acmeserver.ErrorMalformed)

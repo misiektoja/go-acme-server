@@ -120,6 +120,7 @@ func jsonDepth(v any) int {
 	return 0
 }
 
+// Enforces exact struct member names without restricting unknown member values.
 func TestUnmarshalStrictMemberNames(t *testing.T) {
 	type embedded struct {
 		KeyID string `json:"kid"`
@@ -150,6 +151,10 @@ func TestUnmarshalStrictMemberNames(t *testing.T) {
 		"object in array": `{"items":[{"name":"a"},{"Name":"b"}]}`,
 		"object in map":   `{"byName":{"a":{"NAME":"b"}}}`,
 		"struct field":    `{"status":"x","Inner":{}}`,
+		"large unknown":   `{"Status":"x","unknown":1e1000}`,
+		"negative large":  `{"status":"x","Status":"y","unknown":-1e1000}`,
+		"nested large":    `{"items":[{"Name":"x"}],"unknown":{"value":1e1000}}`,
+		"unicode large":   `{"\u017ftatus":"x","unknown":[1e1000]}`,
 	}
 	for name, in := range rejected {
 		t.Run(name, func(t *testing.T) {
@@ -162,7 +167,7 @@ func TestUnmarshalStrictMemberNames(t *testing.T) {
 		})
 	}
 	accepted := `{"status":"x","kid":"k","Untag":1,"skipped":2,"Skipped":3,"inner":{"value":1},` +
-		`"items":[{"name":"a"}],"byName":{"A":{"name":"b"},"a":{"name":"c"}},"raw":{"ANY":1},"free":{"X":{"Y":1}},"other":true}`
+		`"items":[{"name":"a"}],"byName":{"A":{"name":"b"},"a":{"name":"c"}},"raw":{"ANY":1},"free":{"X":{"Y":1}},"other":[1e1000,-1e1000]}`
 	var v target
 	if err := UnmarshalStrict([]byte(accepted), &v); err != nil {
 		t.Fatalf("UnmarshalStrict: %v", err)
@@ -174,4 +179,24 @@ func TestUnmarshalStrictMemberNames(t *testing.T) {
 	if err := UnmarshalStrict([]byte(`{"Status":"x"}`), &p); err == nil {
 		t.Fatal("case mismatch accepted through a pointer")
 	}
+}
+
+// Unknown values must never let a case variant mutate a known struct field.
+func FuzzUnmarshalStrictMemberNames(f *testing.F) {
+	for _, value := range []string{`1e1000`, `-1e1000`, `null`, `{"nested":[1e1000]}`, `"text"`} {
+		f.Add([]byte(value))
+	}
+	f.Fuzz(func(t *testing.T, unknown []byte) {
+		if !json.Valid(unknown) {
+			return
+		}
+		data := append([]byte(`{"Status":"deactivated","unknown":`), unknown...)
+		data = append(data, '}')
+		var target struct {
+			Status string `json:"status"`
+		}
+		if err := UnmarshalStrict(data, &target); err == nil || target.Status != "" {
+			t.Fatalf("case variant decoded: status=%q error=%v", target.Status, err)
+		}
+	})
 }

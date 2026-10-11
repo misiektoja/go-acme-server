@@ -72,7 +72,7 @@ FUZZ_TIME ?= 20s
 # (golang/go#75804), so the bounded runs disable it. Set a duration to minimize crashers locally.
 FUZZ_MINIMIZE_TIME ?= 0
 FUZZ_TARGETS := ./internal/jws:FuzzParse ./internal/jws:FuzzParseProfiles ./internal/jws:FuzzParseCompact \
-	./internal/jws:FuzzParseJWK ./internal/jws:FuzzUnmarshalStrict \
+	./internal/jws:FuzzParseJWK ./internal/jws:FuzzUnmarshalStrict ./internal/jws:FuzzUnmarshalStrictMemberNames \
 	.:FuzzIdentifierNormalize ./challenge:FuzzDNSResponse ./challenge:FuzzALPNProof
 
 .PHONY: fuzz
