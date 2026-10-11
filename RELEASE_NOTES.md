@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file.
 
 ## [0.5.0] - TBD
 
-This version fixes challenges that stayed `processing`, revocation after a refused attempt, challenge responses that were not stored and issuance after an authority token expired. It also adds stricter checks. `New` refuses a lease shorter than twice the task timeout, and stores must record why an authorization change invalidated its order.
+This version fixes stalled challenges, revocation retries, unrecorded challenge responses, DNS failover and issuance after authority-token expiry. It tightens JSON and worker lease checks, updates composite ML-DSA support and makes the cert-manager runner refuse existing clusters. Stores must record why an authorization change invalidated its order.
 
 ### Protocol
 
@@ -24,6 +24,12 @@ This version fixes challenges that stayed `processing`, revocation after a refus
 * **`Policy.NewOrder` may change only `NotBefore` and `NotAfter`.** Any other change, or a `NotAfter` that is not later than `NotBefore`, is logged and answered with `serverInternal`. Previously such changes were stored without being checked.
 * **`Config.BaseURL` with a path that needs percent-encoding**, such as one with a space or a non-ASCII character, is refused by `New`. Previously the server started and refused every signed request.
 * **The quickstart CA signs composite ML-DSA requests.** Previously it failed with `x509: unsupported public key type` and the order stayed `processing`. The getting started guide now runs `go mod tidy` after saving the program, which the build needs.
+* **DNS resolver fallback** now receives part of the remaining lookup timeout when an earlier server is silent. All configured servers and CNAME hops share the total lookup deadline.
+* **go-composite-mldsa v0.2.1** replaces v0.2.0. It rejects signers that do not match a composite CA key and checks key usage supplied through CSR attributes.
+
+### Verification
+
+* **The cert-manager runner** refuses an existing cluster named by `ACME_KIND_CLUSTER` or its default `acme-cert-manager`. It uses a separate kubeconfig and deletes only a cluster it created. `ACME_KEEP_CLUSTER=1` retains that cluster after success or failure.
 
 ## [0.4.1] - 9 Oct 2026
 
