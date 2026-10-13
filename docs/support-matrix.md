@@ -50,7 +50,7 @@ Issuer chains may use composite ML-DSA signatures.
 | Interface | Required | Included implementation |
 | --- | --- | --- |
 | `Store` | Yes | `memstore` for tests and examples, `storetest` contract suite for your own adapter |
-| `NonceManager` | Yes | `nonce` for a single process |
+| `NonceManager` | Yes | `nonce` for a single process, `noncetest` contract suite for a shared manager |
 | `Issuer` and `Revoker` | Yes | None, they call your CA |
 | `Validator` | At least one | `challenge.HTTP01`, `challenge.DNS01`, `challenge.TLSALPN01`, `challenge.TKAuth01` |
 | `Policy` | No | `AllowAll` |
