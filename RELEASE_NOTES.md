@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file.
 
 ## [0.6.0] - TBD
 
-Validation failures that may clear are retried and then report their cause. Policies can approve order names in advance. Custom stores need an update.
+Validation failures that may clear are retried and then report their cause. Policies can approve order names in advance. A contract suite checks custom nonce managers. Custom stores need an update.
 
 ### Protocol
 
@@ -16,6 +16,9 @@ Validation failures that may clear are retried and then report their cause. Poli
 * **`PreApprover`** is an optional extension of `Policy` that names the identifiers of a new order that need no challenge, for example names an administrator approved for an external account binding. Their authorizations start `valid` with `PreApproved` set and no challenges. An order whose identifiers are all pre-approved starts `ready`. `IssueRequest.Validations` marks them with `PreApproved`. A pre-approved authorization never lets an account revoke a certificate another account ordered.
 * **Custom stores** must persist `Authorization.PreApproved` and leave those authorizations out of `AuthorizedFor`. Update your store and run `storetest`.
 * **`Retryable`** lets a custom validator mark a failure for retry and name the problem reported once the attempts run out. Other errors are still reported as `serverInternal`.
+* **`noncetest`** checks a custom `NonceManager`. `Run` covers single use, unknown values and concurrent requests. `RunShared` checks that replicas sharing nonces accept each other's nonces exactly once.
+* **Data retention guidance** now says to keep authorizations until they expire, because a valid authorization lets an account revoke another account's certificate for the same names.
+* **`Ready`** no longer says that `Run` is not active when work waits. Several processes may share the store, so waiting work can also mean that every worker is busy or stuck.
 
 ## [0.5.0] - 11 Oct 2026
 
