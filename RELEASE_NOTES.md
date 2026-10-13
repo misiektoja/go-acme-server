@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.6.0] - TBD
+
+Validation failures that may clear are retried and then report their cause. Policies can approve order names in advance. Custom stores need an update.
+
+### Protocol
+
+* **Failed validations name their cause.** A refused or unanswered connection gives `connection`, a failed TLS handshake gives `tls` and a name that cannot be resolved gives `dns`. These failures are retried and the problem is reported after the last attempt. Earlier versions reported them as `serverInternal`. A wrong proof still fails at once with `incorrectResponse`.
+* **A name that does not exist (NXDOMAIN)** is retried and the next DNS server is asked, because a record the client has just added may not have reached every resolver yet. It was final before.
+
+### Host integration
+
+* **`PreApprover`** is an optional extension of `Policy` that names the identifiers of a new order that need no challenge, for example names an administrator approved for an external account binding. Their authorizations start `valid` with `PreApproved` set and no challenges. An order whose identifiers are all pre-approved starts `ready`. `IssueRequest.Validations` marks them with `PreApproved`. A pre-approved authorization never lets an account revoke a certificate another account ordered.
+* **Custom stores** must persist `Authorization.PreApproved` and leave those authorizations out of `AuthorizedFor`. Update your store and run `storetest`.
+* **`Retryable`** lets a custom validator mark a failure for retry and name the problem reported once the attempts run out. Other errors are still reported as `serverInternal`.
+
 ## [0.5.0] - 11 Oct 2026
 
 Fixes stuck challenges, revocation retries and DNS failover. Custom stores and worker settings may need updates.
