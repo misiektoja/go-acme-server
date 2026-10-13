@@ -51,7 +51,7 @@ func (v *DNS01) Validate(ctx context.Context, request acmeserver.ValidationReque
 	defer cancel()
 	records, err := v.resolver.LookupTXT(ctx, "_acme-challenge."+id.Value+".")
 	if err != nil {
-		return err
+		return retryable(acmeserver.ErrorDNS, "TXT lookup failed", err)
 	}
 	if len(records) > 64 {
 		return dnsFailure("TXT response exceeds the record limit")

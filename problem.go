@@ -209,6 +209,29 @@ func (p *Problem) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// A validation failure worth retrying, such as a refused connection or an unanswered DNS query.
+// The worker retries it like any other error. When the attempts run out, Problem becomes the
+// challenge error instead of serverInternal. Err is the cause and must not be a *Problem,
+// because a *Problem in the chain ends validation at once.
+type RetryableError struct {
+	Problem *Problem
+	Err     error
+}
+
+// Returns a retryable failure that reports p once the attempts are exhausted.
+func Retryable(p *Problem, err error) error { return &RetryableError{Problem: p, Err: err} }
+
+// Returns the problem followed by the cause.
+func (e *RetryableError) Error() string {
+	if e.Err == nil {
+		return e.Problem.Error()
+	}
+	return e.Problem.Error() + ": " + e.Err.Error()
+}
+
+// Returns the cause, never the reported problem.
+func (e *RetryableError) Unwrap() error { return e.Err }
+
 // Returns the Problem in the error chain of err, if there is one.
 func AsProblem(err error) (*Problem, bool) {
 	if p, ok := errors.AsType[*Problem](err); ok {

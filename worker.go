@@ -171,6 +171,9 @@ func (s *Server) runValidation(base context.Context, task *Task) {
 		}
 		s.logError(base, "validation gave up", err, slog.String("challenge", ch.ID), slog.Int("attempts", task.Attempts))
 		p = NewProblem(ErrorServerInternal, "validation could not be completed")
+		if retryable, ok := errors.AsType[*RetryableError](err); ok && retryable.Problem != nil {
+			p = retryable.Problem
+		}
 	}
 	ch.Status = ChallengeInvalid
 	ch.Error = p

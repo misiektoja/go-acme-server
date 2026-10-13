@@ -74,7 +74,8 @@ func (v *TLSALPN01) Validate(ctx context.Context, request acmeserver.ValidationR
 		},
 	})
 	if err := client.HandshakeContext(ctx); err != nil {
-		return fmt.Errorf("challenge: TLS validation: %w", err)
+		return retryable(acmeserver.ErrorTLS, "TLS handshake with the validation destination failed",
+			fmt.Errorf("challenge: TLS validation: %w", err))
 	}
 	return nil
 }

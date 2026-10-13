@@ -87,7 +87,12 @@ func (v *HTTP01) Validate(ctx context.Context, request acmeserver.ValidationRequ
 	}
 	response, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("challenge: HTTP validation: %w", err)
+		// An HTTPS redirect target can fail its handshake, which is reported as a TLS problem.
+		typ := acmeserver.ErrorConnection
+		if tlsFailure(err) {
+			typ = acmeserver.ErrorTLS
+		}
+		return retryable(typ, "HTTP validation request failed", fmt.Errorf("challenge: HTTP validation: %w", err))
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
@@ -95,7 +100,8 @@ func (v *HTTP01) Validate(ctx context.Context, request acmeserver.ValidationRequ
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, v.maxBody+1))
 	if err != nil {
-		return fmt.Errorf("challenge: HTTP proof read: %w", err)
+		return retryable(acmeserver.ErrorConnection, "HTTP proof could not be read",
+			fmt.Errorf("challenge: HTTP proof read: %w", err))
 	}
 	if int64(len(body)) > v.maxBody || strings.TrimRight(string(body), " \t\r\n") != request.KeyAuthorization {
 		return incorrect("HTTP challenge proof did not match")
@@ -130,4 +136,12 @@ func (v *HTTP01) dial(ctx context.Context, _ string, address string) (net.Conn, 
 		port = v.testPort
 	}
 	return v.network.dial(ctx, host, port)
+}
+
+// Reports whether a request failed during a TLS handshake, which only an HTTPS redirect target
+// can cause. crypto/tls reports most handshake failures as plain errors prefixed with "tls:".
+func tlsFailure(err error) bool {
+	var alert tls.AlertError
+	var header tls.RecordHeaderError
+	return errors.As(err, &alert) || errors.As(err, &header) || strings.Contains(err.Error(), "tls: ")
 }
