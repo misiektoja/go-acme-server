@@ -170,6 +170,10 @@ func (s *Server) validationEvidence(ctx context.Context, a *Authorization) (Vali
 	if a.Wildcard {
 		v.Identifier.Value = "*." + v.Identifier.Value
 	}
+	if a.PreApproved {
+		v.PreApproved, v.Validated = true, a.CreatedAt
+		return v, nil
+	}
 	for _, id := range a.ChallengeIDs {
 		ch, err := s.store.Challenge(ctx, id)
 		if err != nil {

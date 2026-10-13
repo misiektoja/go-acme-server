@@ -55,8 +55,9 @@ type OrderStore interface {
 	// When the authorization reaches a terminal status, the same operation marks its order invalid
 	// with Error set to InvalidAuthorizationProblem() unless issuance was already dispatched.
 	UpdateAuthorization(ctx context.Context, authz *Authorization) error
-	// Reports whether the account holds a valid unexpired authorization for every identifier,
-	// read in one consistent snapshot. Revocation by another account relies on it.
+	// Reports whether the account holds a valid unexpired authorization that is not PreApproved
+	// for every identifier, read in one consistent snapshot. Revocation by another account relies
+	// on it.
 	AuthorizedFor(ctx context.Context, accountID string, identifiers []Identifier, now time.Time) (bool, error)
 	// Returns the challenge with the given ID or ErrNotFound.
 	Challenge(ctx context.Context, id string) (*Challenge, error)

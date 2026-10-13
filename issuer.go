@@ -134,6 +134,18 @@ type Policy interface {
 	NewOrder(ctx context.Context, account *Account, order *Order) error
 }
 
+// An optional extension of Policy that authorizes identifiers without a challenge, for example
+// names an administrator approved in advance for an external account binding. Their
+// authorizations start valid with no challenges and expire with the order. An order whose
+// identifiers are all pre-approved starts ready.
+type PreApprover interface {
+	// Returns the identifiers of a new order that need no challenge. It runs after NewOrder has
+	// accepted the order, which it must not change. Each returned identifier must be one of
+	// order.Identifiers, wildcard names included. A returned *Problem refuses the order and any
+	// other error, or an identifier the order does not contain, is reported as serverInternal.
+	PreApprove(ctx context.Context, account *Account, order *Order) ([]Identifier, error)
+}
+
 // A Policy that accepts every request.
 type AllowAll struct{}
 

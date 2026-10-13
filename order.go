@@ -54,7 +54,12 @@ func (s *Server) serveNewOrder(w http.ResponseWriter, r *http.Request) {
 		s.writeProblem(ctx, w, p)
 		return
 	}
-	authzs, challenges, p := s.buildAuthorizations(ctx, order)
+	preApproved, p := s.preApprove(ctx, req.Account, order)
+	if p != nil {
+		s.writeProblem(ctx, w, p)
+		return
+	}
+	authzs, challenges, p := s.buildAuthorizations(ctx, order, preApproved)
 	if p != nil {
 		s.writeProblem(ctx, w, p)
 		return
@@ -166,8 +171,37 @@ func (s *Server) reviewOrder(ctx context.Context, account *Account, order *Order
 	return nil
 }
 
-// Creates one pending authorization per identifier with a challenge per supported type.
-func (s *Server) buildAuthorizations(ctx context.Context, order *Order) ([]*Authorization, []*Challenge, *Problem) {
+// Asks a PreApprover policy which identifiers of a new order need no challenge.
+func (s *Server) preApprove(ctx context.Context, account *Account, order *Order) (map[Identifier]bool, *Problem) {
+	authorizer, ok := s.policy.(PreApprover)
+	if !ok {
+		return nil, nil
+	}
+	reviewed := *order
+	reviewed.Identifiers = slices.Clone(order.Identifiers)
+	const what = "pre-approval policy"
+	ids, err := authorizer.PreApprove(ctx, account, &reviewed)
+	if p := s.hostProblem(ctx, err, what); p != nil {
+		return nil, p
+	}
+	if !reflect.DeepEqual(&reviewed, order) {
+		return nil, s.hostProblem(ctx, errors.New("the policy changed the order"), what)
+	}
+	granted := make(map[Identifier]bool, len(ids))
+	for _, id := range ids {
+		normalized, err := id.Normalize()
+		if err != nil || !slices.Contains(order.Identifiers, normalized) {
+			return nil, s.hostProblem(ctx, errors.New("the policy returned an identifier the order does not contain"), what)
+		}
+		granted[normalized] = true
+	}
+	return granted, nil
+}
+
+// Creates one authorization per identifier. A pre-approved identifier gets a valid
+// authorization without challenges and every other one a pending authorization with a challenge
+// per supported type. An order whose authorizations are all valid starts ready.
+func (s *Server) buildAuthorizations(ctx context.Context, order *Order, preApproved map[Identifier]bool) ([]*Authorization, []*Challenge, *Problem) {
 	authzs := make([]*Authorization, 0, len(order.Identifiers))
 	var challenges []*Challenge
 	order.AuthorizationIDs = make([]string, 0, len(order.Identifiers))
@@ -189,6 +223,13 @@ func (s *Server) buildAuthorizations(ctx context.Context, order *Order) ([]*Auth
 		}
 		if authz.Wildcard {
 			authz.Identifier.Value = strings.TrimPrefix(id.Value, "*.")
+		}
+		if preApproved[id] {
+			authz.Status = AuthorizationValid
+			authz.PreApproved = true
+			authzs = append(authzs, authz)
+			order.AuthorizationIDs = append(order.AuthorizationIDs, authz.ID)
+			continue
 		}
 		for _, typ := range s.challengeTypesFor(id) {
 			challengeID, err := newID()
@@ -213,6 +254,9 @@ func (s *Server) buildAuthorizations(ctx context.Context, order *Order) ([]*Auth
 		}
 		authzs = append(authzs, authz)
 		order.AuthorizationIDs = append(order.AuthorizationIDs, authz.ID)
+	}
+	if len(preApproved) == len(order.Identifiers) {
+		order.Status = OrderReady
 	}
 	return authzs, challenges, nil
 }

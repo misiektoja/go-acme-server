@@ -90,8 +90,11 @@ type Authorization struct {
 	CACertificate bool
 	// The time after which the proof no longer covers a certificate, zero when unbounded.
 	GrantExpires time.Time
-	CreatedAt    time.Time
-	Revision     uint64
+	// Marks an authorization the Policy granted without a challenge, see PreApprover. It never
+	// lets the account revoke another account's certificate.
+	PreApproved bool
+	CreatedAt   time.Time
+	Revision    uint64
 }
 
 // A stored challenge resource.
@@ -164,4 +167,7 @@ type Validation struct {
 	CACertificate bool
 	// The latest acceptable certificate expiry under this proof, zero when unbounded.
 	GrantExpires time.Time
+	// Reports that the Policy authorized the identifier without a challenge. Type is then empty
+	// and Validated is when the order was created.
+	PreApproved bool
 }

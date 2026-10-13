@@ -350,7 +350,7 @@ func (s *Store) AuthorizedFor(ctx context.Context, accountID string, identifiers
 		valid := false
 		for _, id := range s.authzIndex[authorizationKey{accountID: accountID, identifier: identifier}] {
 			a := s.authzs[id]
-			if a.Status == acmeserver.AuthorizationValid && a.Expires.After(now) {
+			if a.Status == acmeserver.AuthorizationValid && !a.PreApproved && a.Expires.After(now) {
 				valid = true
 				break
 			}
