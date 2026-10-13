@@ -90,6 +90,35 @@ A returned `*Problem` is sent to the client. Any other error is logged and answe
 `serverInternal`. Rate limiting belongs here too. Return a `rateLimited` problem built with
 `WithRetryAfter` and the client backs off.
 
+## Pre-approved identifiers
+
+Some CAs let an administrator approve names in advance for an external account binding, because
+the CA cannot reach internal hosts and the team cannot publish DNS records. A policy that also
+implements `PreApprover` names the identifiers of a new order that need no challenge:
+
+```go
+func (p customerPolicy) PreApprove(ctx context.Context, account *acmeserver.Account, order *acmeserver.Order) ([]acmeserver.Identifier, error) {
+	var approved []acmeserver.Identifier
+	for _, id := range order.Identifiers {
+		if p.customers.Approved(ctx, account.ExternalAccountID, id) {
+			approved = append(approved, id)
+		}
+	}
+	return approved, nil
+}
+```
+
+`PreApprove` runs after `NewOrder` has accepted the order and must not change it. Each returned
+identifier must be one of `order.Identifiers`, wildcard names included. Its authorization starts
+`valid` with no challenges and expires with the order. An order whose identifiers are all
+pre-approved starts `ready`, so the client can finalize at once. The issuer sees `PreApproved` set
+on those entries of `IssueRequest.Validations`.
+
+A pre-approved authorization never lets the account revoke a certificate another account
+ordered, because it proves nothing about control of the name. A returned `*Problem` refuses the
+order. Any other error, or an identifier the order does not contain, is answered with
+`serverInternal`.
+
 ## Accounts over their lifetime
 
 * **Registration** returns the existing account when the key is already known, so a client that lost its account URL recovers it with `onlyReturnExisting`.

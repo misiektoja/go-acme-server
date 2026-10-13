@@ -76,9 +76,11 @@ sequenceDiagram
 ```
 
 **Order creation.** Identifiers are normalized and checked for duplicates and limits. `Policy.NewOrder`
-may refuse the order or adjust the requested validity. The store creates the order, one pending
-authorization per identifier and one challenge per applicable type in a single operation. There is
-no pre-authorization, so every order gets fresh authorizations.
+may refuse the order or adjust the requested validity. A policy that implements `PreApprover` may
+name identifiers that need no challenge. The store creates the order, one authorization per
+identifier and one challenge per applicable type in a single operation. A pre-approved identifier
+gets a valid authorization without challenges. There is no pre-authorization, so every order gets
+fresh authorizations.
 
 **Challenge response.** A POST to a pending challenge moves it to `processing` and enqueues a
 validation task in the same store operation. Repeated responses are harmless. The account key

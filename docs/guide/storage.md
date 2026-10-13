@@ -93,7 +93,7 @@ inside the transaction.
 
 `AuthorizedFor` reports whether an account holds a valid unexpired authorization for every
 identifier in the list, read in one consistent snapshot. Revocation by an account other than the
-issuer relies on it. A wildcard authorization covers the wildcard identifier and is stored with
+issuer relies on it, so an authorization with `PreApproved` set never counts. A wildcard authorization covers the wildcard identifier and is stored with
 `Wildcard` set and the base name in `Identifier`, so index authorizations by account, identifier
 type, value and wildcard flag.
 

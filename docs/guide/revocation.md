@@ -15,12 +15,13 @@ A `revokeCert` request is accepted from:
 
 * the account that ordered the certificate
 * the certificate's own private key, with the request signed by the certificate key as an embedded JWK
-* another valid account that holds a valid authorization for every identity the certificate asserts
+* another valid account that holds a valid authorization proved by a challenge for every identity the certificate asserts
 
 For the third case the server collects every SAN and adds a common name the SANs do not already
 cover, then asks the store's `AuthorizedFor` for the whole set. A wildcard authorization covers
 the wildcard name. The account has to prove the names through ordinary orders first, since there
-is no pre-authorization.
+is no pre-authorization. Names a policy pre-approved for the account do not count, see
+[Pre-approved identifiers](accounts-and-policy.md#pre-approved-identifiers).
 
 A certificate the server did not issue is refused with a `404` `malformed` problem. Reason codes
 follow RFC 5280. `unspecified`, `keyCompromise`, `affiliationChanged`, `superseded` and

@@ -34,7 +34,7 @@ Composite ML-DSA certificate requests are accepted too. The server checks both c
 | `CSR`, `CSRDER` | The accepted request, already checked against the order |
 | `Identifiers` | The normalized identifiers of the order |
 | `NotBefore`, `NotAfter` | The requested validity. Zero means the CA decides. An authority token expiry narrows `NotAfter` |
-| `Validations` | How each identifier was validated: challenge type, time and any CA grant |
+| `Validations` | How each identifier was validated: challenge type, time and any CA grant, or `PreApproved` when the policy approved it in advance |
 | `Deadline` | After this time no new signing may start |
 | `RecoveryOnly` | Set once the deadline has passed. Only an existing result may be returned |
 
