@@ -119,6 +119,29 @@ func testAuthorizationScope(t *testing.T, store acmeserver.Store) {
 	assertAuthorized(t, store, account.ID, order.Identifiers[:1], testNow, false)
 }
 
+// Stores the pre-approved flag and leaves such an authorization out of AuthorizedFor, so it
+// never lets an account revoke another account's certificate.
+func testPreApprovedScope(t *testing.T, store acmeserver.Store) {
+	ctx := t.Context()
+	account := NewAccount(t, "preapproved-account")
+	if err := store.CreateAccount(ctx, account); err != nil {
+		t.Fatal(err)
+	}
+	order, authzs, _ := NewOrder(t, account.ID, "preapproved-order", "approved.test")
+	order.Status = acmeserver.OrderReady
+	authzs[0].Status = acmeserver.AuthorizationValid
+	authzs[0].PreApproved = true
+	authzs[0].ChallengeIDs = nil
+	if err := store.CreateOrder(ctx, order, authzs, nil); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := store.Authorization(ctx, authzs[0].ID)
+	if err != nil || !stored.PreApproved || stored.Status != acmeserver.AuthorizationValid {
+		t.Fatalf("pre-approved authorization = %+v, %v", stored, err)
+	}
+	assertAuthorized(t, store, account.ID, order.Identifiers, testNow, false)
+}
+
 // Checks the consistent authorization lookup without treating backend errors as a refusal.
 func assertAuthorized(t *testing.T, store acmeserver.Store, accountID string, identifiers []acmeserver.Identifier, now time.Time, want bool) {
 	t.Helper()
