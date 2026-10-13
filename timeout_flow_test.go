@@ -61,6 +61,35 @@ func TestValidationStopsAtTheAttemptLimitAfterTimeouts(t *testing.T) {
 	}
 }
 
+// A Validator whose destination never accepts a connection.
+type refusingValidator struct{}
+
+// Reports a retryable connection failure.
+func (refusingValidator) Validate(context.Context, acmeserver.ValidationRequest) error {
+	return acmeserver.Retryable(acmeserver.NewProblem(acmeserver.ErrorConnection, "connection refused"),
+		errors.New("dial tcp: connection refused"))
+}
+
+// Requires the problem a retryable failure names, rather than serverInternal, once the attempts
+// run out.
+func TestRetryableValidationReportsItsProblem(t *testing.T) {
+	f := newFlow(t, func(cfg *acmeserver.Config) {
+		cfg.Validators = map[acmeserver.ChallengeType]acmeserver.Validator{acmeserver.ChallengeHTTP01: refusingValidator{}}
+		cfg.Workers = exhaustingWorkers()
+	})
+	f.runWorker()
+	c := f.newClient()
+	c.register()
+	orderURL, order := c.newOrder("refused.test")
+	c.respondHTTP01(order)
+	order = c.waitOrder(orderURL, statusInvalid)
+	var authz authzBody
+	c.get(order.Authorizations[0], &authz)
+	if problem := authz.Challenges[0].Error; problem == nil || problem.Type != acmeserver.ErrorConnection {
+		t.Fatalf("challenge error = %+v, want a connection problem", problem)
+	}
+}
+
 // An Issuer that refuses the order only once its context is done.
 type stallingIssuer struct{ calls atomic.Int64 }
 
