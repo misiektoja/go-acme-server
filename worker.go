@@ -58,14 +58,15 @@ func (s *Server) Run(ctx context.Context) error {
 }
 
 // Reports whether accepted work is being picked up. It returns an error when tasks have waited
-// longer than WorkerConfig.StaleAfter without a claim, which means no Run is active.
+// longer than WorkerConfig.StaleAfter without a claim. Either no Run is active on the store or
+// every worker is busy or stuck.
 func (s *Server) Ready(ctx context.Context) error {
 	n, err := s.store.PendingTasks(ctx, s.clock.Now().Add(-s.workers.StaleAfter))
 	if err != nil {
 		return fmt.Errorf("acmeserver: pending task count: %w", err)
 	}
 	if n > 0 {
-		return fmt.Errorf("acmeserver: %d tasks have waited longer than %s for a worker, Run is not active", n,
+		return fmt.Errorf("acmeserver: %d tasks have waited longer than %s for a worker", n,
 			s.workers.StaleAfter)
 	}
 	return nil
