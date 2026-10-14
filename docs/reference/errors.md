@@ -31,7 +31,7 @@ status. `AsProblem` extracts a problem from an error chain.
 | `badCSR` | 400 | The CSR signature, key, identifiers, common name or CA basic constraint do not match the order |
 | `badNonce` | 400 | The nonce is unknown, expired or was already used. Clients retry with the fresh nonce in the response |
 | `badPublicKey` | 400 | The account key type or size is not accepted |
-| `badRevocationReason` | 400 | The reason code is `certificateHold` or a CA reason |
+| `badRevocationReason` | 400 | The reason code is not in `Config.RevocationReasons`. The detail names the allowed reasons |
 | `badSignatureAlgorithm` | 400 | The JWS `alg` is not accepted. The problem lists the supported algorithms |
 | `compound` | 400 | Several subproblems, only from host policy |
 | `dns` | 400 | The bundled resolver could not complete a lookup in a way that is unlikely to change |

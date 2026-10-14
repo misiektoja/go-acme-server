@@ -27,10 +27,19 @@ A network function certificate, one that carries an `NfInstanceId` URN, is never
 way. 3GPP TS 33.310 clause J.4 limits its revocation to the enrolling account and the holder of the
 certificate key, see [Authority Token challenges](authority-tokens.md#network-function-certificates).
 
-A certificate the server did not issue is refused with a `404` `malformed` problem. Reason codes
-follow RFC 5280. `unspecified`, `keyCompromise`, `affiliationChanged`, `superseded` and
-`cessationOfOperation` are accepted. `certificateHold` and the CA reasons are refused with
-`badRevocationReason`.
+A certificate the server did not issue is refused with a `404` `malformed` problem.
+
+## Reason codes
+
+Reason codes follow RFC 5280. By default `unspecified` (0), `keyCompromise` (1),
+`affiliationChanged` (3), `superseded` (4) and `cessationOfOperation` (5) are accepted.
+`Config.RevocationReasons` replaces that list. It may also hold `cACompromise` (2),
+`privilegeWithdrawn` (9) and `aACompromise` (10). `certificateHold` (6) is never accepted, because
+an ACME revocation is final and the certificate cannot be released again. Any other code is
+refused with `badRevocationReason`, whose detail names the allowed reasons.
+
+A refused revocation is reported to `Config.Refusals` when it is set, see
+[Recording refusals](embedding.md#recording-refusals).
 
 ## The request
 

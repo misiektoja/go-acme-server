@@ -103,8 +103,34 @@ stalls.
 
 `Config.Logger` takes a `*slog.Logger`. Without one, nothing is logged. The server logs failed
 store, validator and CA calls at error level with the resource and operation IDs involved, and
-retried validations at warn level. Problem documents sent to clients are not logged, so a host that
-wants an audit trail of refusals wraps the handler.
+retried validations at warn level. Problem documents sent to clients are not logged. For an audit
+trail of refusals, see [Recording refusals](#recording-refusals).
+
+## Recording refusals
+
+Most refusals reach the host anyway, because they come from its own `Policy`, `IssuancePolicy`,
+`Issuer` or `Revoker`. The server refuses some requests itself: a CSR that does not match its
+order, a revocation by an account without authority or a revocation reason that is not allowed.
+`Config.Refusals` takes a `RefusalRecorder` that is told about these.
+
+```go
+type RefusalRecorder interface {
+	RecordRefusal(ctx context.Context, refusal Refusal) error
+}
+```
+
+`RecordRefusal` is called for every `finalize` and `revokeCert` request refused after the
+requester is known, including refusals that came from the `Revoker`. A `Refusal` carries the
+`Kind`, the `AccountID` and the `Problem` the client receives. A refused finalization adds the
+order, its identifiers and the CSR. A refused revocation adds the certificate and the requested
+reason. `AccountID` is empty for a revocation signed with the certificate key. Requests that fail authentication, a `finalize` for another account's order and
+`serverInternal` problems are not reported, because they say nothing about what a known client
+asked for.
+
+The call runs before the answer is sent, detached from the client request and bounded by
+`Config.DetachedWriteTimeout`. A returned error is logged as `refusal could not be recorded` and
+the client still gets the same answer. Refusals of new accounts and orders come from your
+`Policy`, which can record them itself.
 
 ## Time
 

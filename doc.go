@@ -28,7 +28,8 @@
 // of the identifier, which tkauth-01 uses for CA certificates and validity bounds.
 //
 // Policy reviews new accounts and orders, IssuancePolicy reviews the first issuance dispatch and
-// ExternalAccountKeys verifies external account bindings.
+// ExternalAccountKeys verifies external account bindings. A RefusalRecorder learns about the
+// finalize and revokeCert requests the server refuses itself.
 //
 // # Extensions
 //

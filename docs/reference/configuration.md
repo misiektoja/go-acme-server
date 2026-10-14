@@ -35,6 +35,8 @@ problem. Zero values select the defaults below. Negative limits are refused.
 | `OrderLifetime` | 7 days | How long a new order and its pending authorizations stay valid |
 | `AuthorizationLifetime` | 30 days | How long a validated authorization stays valid |
 | `MaxIdentifiers` | 100 | Bounds the identifiers of one order |
+| `RevocationReasons` | 0, 1, 3, 4 and 5 | The RFC 5280 reason codes clients may request. May hold 0 to 5, 9 and 10. See [Revocation](../guide/revocation.md#reason-codes) |
+| `Refusals` | none | Learns about `finalize` and `revokeCert` requests the server refuses. See [Recording refusals](../guide/embedding.md#recording-refusals) |
 | `DetachedWriteTimeout` | 30 seconds | Bounds a store write that finishes after the client request ended, such as recording a revocation the CA already carried out |
 | `RenewalInfo` | none | Serves RFC 9773 renewal information and accepts `replaces`. `LifetimeRenewal{}` is the built-in advisor |
 | `Profiles` | none | The certificate profiles advertised in the directory and accepted on new orders. See [Certificate profiles](../guide/certificate-profiles.md) |
@@ -104,4 +106,5 @@ field:
 * an invalid or repeated profile name, a profile without exactly one of `Description` and `URL`, a
   profile `URL` that is not an absolute `https` URL or a `Description` that is not valid UTF-8
 * `DefaultProfile` without `Profiles` or a `DefaultProfile` that names none of them
+* a `RevocationReasons` code other than 0 to 5, 9 and 10
 * a negative limit or worker value
