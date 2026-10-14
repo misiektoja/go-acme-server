@@ -60,7 +60,10 @@ func (s *Server) readSignedRequest(r *http.Request, rel string, mode keyMode) (*
 		return nil, NewProblem(ErrorServerInternal, "nonce lookup failed")
 	}
 	if !valid {
-		return nil, NewProblem(ErrorBadNonce, "JWS nonce is unknown or was already used")
+		// acme.sh retries a bad nonce only when the detail contains Let's Encrypt's wording and
+		// ignores the problem type, so the detail keeps that phrase.
+		return nil, NewProblem(ErrorBadNonce,
+			"JWS has an invalid anti-replay nonce: it is unknown, expired or was already used")
 	}
 	expected := s.resourceURL(rel)
 	if r.URL.RawQuery != "" || r.URL.ForceQuery {
