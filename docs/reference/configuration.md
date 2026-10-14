@@ -75,7 +75,7 @@ field:
 | `DNSOptions.Timeout` | 10 seconds |
 | `TKAuthOptions.ClockSkew` | 1 minute |
 | `nonce.Options.TTL`, `Capacity` | 1 hour, 100000 |
-| `LifetimeRenewal.Start`, `End`, `RetryAfter` | 2/3, 5/6, 6 hours |
+| `LifetimeRenewal.Start`, `End`, `RetryAfter`, `Clock` | 2/3, 5/6, 6 hours, system clock |
 
 ## Validation errors
 
