@@ -93,7 +93,8 @@ challenge whose authorization stopped being pending, before or during validation
 with `authorization was <status> before validation`. A
 returned `*Problem` is final and makes the challenge and authorization invalid. Any other error is
 a transport failure and is retried with exponential backoff until `WorkerConfig.MaxAttempts` or the
-authorization expiry. Success makes the authorization valid for `Config.AuthorizationLifetime`.
+authorization expiry. Each failed attempt is stored as the challenge's `error` while it stays
+`processing`, as RFC 8555 section 8.2 requires. Success makes the authorization valid for `Config.AuthorizationLifetime`.
 When the last authorization becomes valid the order becomes `ready`.
 
 **Finalization.** The CSR must be self-signed with an accepted key that is not the account key and

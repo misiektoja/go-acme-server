@@ -28,7 +28,7 @@ database.
 | `AccountStore` | `CreateAccount`, `Account`, `AccountByKey`, `UpdateAccount` | Account ID, key thumbprint and a non-empty `ExternalAccountClaim` are each unique |
 | `OrderStore` | `CreateOrder`, `Order`, `OrderIDs`, `Authorization`, `UpdateAuthorization`, `AuthorizedFor`, `Challenge` | `CreateOrder` writes the order with all its authorizations and challenges |
 | `CertificateStore` | `Certificate`, `CertificateByRenewalID`, `UpdateCertificate` | A non-empty `RenewalID` is unique |
-| `WorkStore` | `AcceptChallenge`, `FinalizeOrder`, `BeginIssuance`, `ClaimTask`, `RescheduleTask`, `FinishTask`, `CompleteValidation`, `CompleteIssuance`, `PendingTasks` | Combines resource updates with task changes in one transaction |
+| `WorkStore` | `AcceptChallenge`, `FinalizeOrder`, `BeginIssuance`, `ClaimTask`, `RescheduleTask`, `RetryValidation`, `FinishTask`, `CompleteValidation`, `CompleteIssuance`, `PendingTasks` | Combines resource updates with task changes in one transaction |
 
 The Go documentation on each method states its exact semantics. The sections below explain the
 ones that carry the most weight.
