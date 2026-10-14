@@ -27,7 +27,7 @@ What the library implements, what a configuration field turns on and what is out
 
 | Identifier | Challenges offered | Notes |
 | --- | --- | --- |
-| `dns` | `http-01`, `dns-01`, `tls-alpn-01` from the configured validators | A wildcard name is offered `dns-01` alone |
+| `dns` | `http-01`, `dns-01`, `tls-alpn-01` from the configured validators | A wildcard name is offered `dns-01` alone. Internationalized names must be valid A-labels (`xn--`) |
 | `ip` | `http-01` and `tls-alpn-01` from the configured validators | Needs `Config.IPIdentifiers`. Never `dns-01` |
 | `TNAuthList` | `tkauth-01` alone | Needs `Config.TNAuthListIdentifiers`. One per order |
 | `NfInstanceId` | `tkauth-01` alone | Needs `Config.NfInstanceIDIdentifiers`. One per order and never with `TNAuthList` |
