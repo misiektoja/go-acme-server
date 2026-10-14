@@ -218,22 +218,48 @@ func (m *Message) Verify(key crypto.PublicKey) error {
 	return verifySignature(m.Header.Algorithm, key, m.signingInput, m.signature)
 }
 
-// Checks an HMAC signature with the shared key.
-func (m *Message) VerifyMAC(key []byte) error {
-	var mac hash.Hash
-	switch m.Header.Algorithm {
+// Returns the hash of an HMAC algorithm, or nil for another algorithm.
+func macHash(alg string) func() hash.Hash {
+	switch alg {
 	case "HS256":
-		mac = hmac.New(sha256.New, key)
+		return sha256.New
 	case "HS384":
-		mac = hmac.New(sha512.New384, key)
+		return sha512.New384
 	case "HS512":
-		mac = hmac.New(sha512.New, key)
-	default:
+		return sha512.New
+	}
+	return nil
+}
+
+// Lists the HMAC algorithms a key of the given length may be used with. RFC 7518 section 3.2
+// requires a key at least as long as the hash output.
+func MACAlgorithmsFor(keyLength int) []string {
+	var out []string
+	for _, alg := range MACAlgorithms {
+		if keyLength >= macHash(alg)().Size() {
+			out = append(out, alg)
+		}
+	}
+	return out
+}
+
+// Checks an HMAC signature with the shared key. A key shorter than the hash output is refused
+// with CodeBadSignatureAlgorithm, because RFC 7518 section 3.2 forbids it for that algorithm.
+func (m *Message) VerifyMAC(key []byte) error {
+	newHash := macHash(m.Header.Algorithm)
+	if newHash == nil {
 		return &Error{
 			Code:   CodeBadSignatureAlgorithm,
 			Detail: fmt.Sprintf("JWS algorithm %q is not an HMAC", m.Header.Algorithm),
 		}
 	}
+	if size := newHash().Size(); len(key) < size {
+		return &Error{
+			Code:   CodeBadSignatureAlgorithm,
+			Detail: fmt.Sprintf("%s needs a MAC key of at least %d bits and this key is shorter", m.Header.Algorithm, size*8),
+		}
+	}
+	mac := hmac.New(newHash, key)
 	mac.Write(m.signingInput)
 	if !hmac.Equal(mac.Sum(nil), m.signature) {
 		return badSignature()
