@@ -44,8 +44,10 @@ a DER `TNAuthorizationList` from RFC 8226. That identifier receives a single `tk
 with `tkauth-type` set to `atc`. Any DNS or IP identifiers in the same order keep their network
 challenges.
 
-The client answers the challenge with a payload of the form `{"tkauth": "<token>"}`. The server
-stores the token on the challenge and hands it to the validator.
+The client answers the challenge with a payload of the form `{"tkauth": "<token>"}`. STIR/SHAKEN
+clients built to ATIS-1000080 clause 6.3.5.2 send `{"atc": "<token>"}` instead, and the server
+accepts either. A payload that carries both with different tokens is refused as `malformed`. The
+server stores the token on the challenge and hands it to the validator.
 
 ## What the validator checks
 
@@ -91,7 +93,14 @@ The issuer receives the token expiry as `IssueRequest.NotAfter` unless the order
 earlier time. The expiry also bounds `IssueRequest.Deadline`. If the token expires before the worker
 dispatches the order, the order becomes invalid with `authority token expired before issuance
 dispatch` and the CA is not called. A leaf valid past the token expiry fails the publication check and is retained as an
-unpublished result, see [Unpublished results](issuance.md#unpublished-results). The issuer recognizes a STIR order by the
+unpublished result, see [Unpublished results](issuance.md#unpublished-results).
+
+STIR/SHAKEN works differently. ATIS-1000080 clause 6.3.8 says a certificate stays valid for its
+own lifetime after the Service Provider Code token expires. Set
+`Config.TNAuthListCertificatesOutliveTokens` for that rule. The issuer then gets the order's
+`NotAfter`, or zero, and the TNAuthList `Validation.GrantExpires` is zero. The token must still be
+valid when signing starts, so `IssueRequest.Deadline` and the dispatch check keep the token
+expiry. The issuer recognizes a STIR order by the
 `TNAuthList` identifier in `req.Identifiers` and copies the list from the CSR extension into the
 certificate.
 

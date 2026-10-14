@@ -33,7 +33,7 @@ Composite ML-DSA certificate requests are accepted too. The server checks both c
 | `AccountID`, `AccountURL`, `OrderID` | For audit records |
 | `CSR`, `CSRDER` | The accepted request, already checked against the order |
 | `Identifiers` | The normalized identifiers of the order |
-| `NotBefore`, `NotAfter` | The requested validity. Zero means the CA decides. An authority token expiry narrows `NotAfter` |
+| `NotBefore`, `NotAfter` | The requested validity. Zero means the CA decides. An authority token expiry narrows `NotAfter`, except for TNAuthList with `Config.TNAuthListCertificatesOutliveTokens` |
 | `Validations` | How each identifier was validated: challenge type, time and any CA grant, or `PreApproved` when the policy approved it in advance. An NF token adds the `Names` and `NFType` it granted, see [Network function certificates](authority-tokens.md#network-function-certificates) |
 | `Deadline` | After this time no new signing may start |
 | `RecoveryOnly` | Set once the deadline has passed. Only an existing result may be returned |
@@ -109,7 +109,7 @@ Before a chain reaches a client the server verifies that:
 * the leaf public key equals the CSR public key
 * the leaf is valid now and its `NotAfter` is after its `NotBefore`
 * the leaf `NotBefore` is not earlier than the accepted order value and not in the future unless the order asked for it
-* the leaf `NotAfter` does not exceed the requested value or the authority token expiry
+* the leaf `NotAfter` does not exceed the requested value or the authority token expiry, unless `Config.TNAuthListCertificatesOutliveTokens` releases a TNAuthList certificate from the token expiry
 * the leaf's SANs and, unless an authority list is the only identity, its common name equal the order identifiers
 * the leaf's CA basic constraint matches what the authorizations granted, which is never for DNS and IP orders
 * every chain element is signed by the following one

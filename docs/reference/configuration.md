@@ -30,6 +30,7 @@ problem. Zero values select the defaults below. Negative limits are refused.
 | `RequireTermsOfServiceAgreed` | `false` | Refuses accounts that do not agree. Needs `Meta.TermsOfService` |
 | `IPIdentifiers` | `false` | Accepts RFC 8738 IP identifiers |
 | `TNAuthListIdentifiers` | `false` | Accepts RFC 9448 TNAuthList identifiers. Needs a `ChallengeTKAuth01` validator |
+| `TNAuthListCertificatesOutliveTokens` | `false` | Lets a TNAuthList certificate keep its own validity after the token expires, as ATIS-1000080 clause 6.3.8 specifies for STIR/SHAKEN. Needs `TNAuthListIdentifiers` |
 | `TokenAuthority` | empty | The `https` URL advertised as `token-authority` on `tkauth-01` challenges |
 | `OrderLifetime` | 7 days | How long a new order and its pending authorizations stay valid |
 | `AuthorizationLifetime` | 30 days | How long a validated authorization stays valid |
@@ -98,6 +99,7 @@ field:
 * `Meta.ExternalAccountRequired` or `SingleUseExternalAccounts` without `ExternalAccounts`
 * `RequireTermsOfServiceAgreed` without `Meta.TermsOfService`
 * `TNAuthListIdentifiers` without a `tkauth-01` validator
+* `TNAuthListCertificatesOutliveTokens` without `TNAuthListIdentifiers`
 * a `TokenAuthority` that is not an absolute `https` URL
 * an invalid or repeated profile name, a profile without exactly one of `Description` and `URL`, a
   profile `URL` that is not an absolute `https` URL or a `Description` that is not valid UTF-8
