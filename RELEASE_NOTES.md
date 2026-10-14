@@ -4,18 +4,20 @@ All notable changes to this project are documented in this file.
 
 ## [0.6.0] - TBD
 
-Validation failures that may clear are retried and then report their cause. Policies can approve order names in advance. A contract suite checks custom nonce managers. Custom stores need an update.
+Validation failures that may clear are retried and then report their cause. Renewal information asks clients to renew a revoked certificate at once. Policies can approve order names in advance. A contract suite checks custom nonce managers. Custom stores need an update.
 
 ### Protocol
 
 * **Failed validations name their cause.** A refused or unanswered connection gives `connection`, a failed TLS handshake gives `tls` and a name that cannot be resolved gives `dns`. These failures are retried and the problem is reported after the last attempt. Earlier versions reported them as `serverInternal`. A wrong proof still fails at once with `incorrectResponse`.
 * **A name that does not exist (NXDOMAIN)** is retried and the next DNS server is asked, because a record the client has just added may not have reached every resolver yet. It was final before.
+* **Renewal information for a revoked certificate** gives a window that ends at the time of the request. In 0.5.0 it ended a minute after the revocation, so during that minute a client that picks a random time in the window could wait instead of renewing at once.
 
 ### Host integration
 
 * **`PreApprover`** is an optional extension of `Policy` that names the identifiers of a new order that need no challenge, for example names an administrator approved for an external account binding. Their authorizations start `valid` with `PreApproved` set and no challenges. An order whose identifiers are all pre-approved starts `ready`. `IssueRequest.Validations` marks them with `PreApproved`. A pre-approved authorization never lets an account revoke a certificate another account ordered.
 * **Custom stores** must persist `Authorization.PreApproved` and leave those authorizations out of `AuthorizedFor`. Update your store and run `storetest`.
 * **`Retryable`** lets a custom validator mark a failure for retry and name the problem reported once the attempts run out. Other errors are still reported as `serverInternal`.
+* **`ImmediateRenewal`** returns the window that asks for renewal at once, for custom `RenewalAdvisor` implementations. `LifetimeRenewal.Clock` dates the window of a revoked certificate and defaults to the system clock.
 * **`noncetest`** checks a custom `NonceManager`. `Run` covers single use, unknown values and concurrent requests. `RunShared` checks that replicas sharing nonces accept each other's nonces exactly once.
 * **Data retention guidance** now says to keep authorizations until they expire, because a valid authorization lets an account revoke another account's certificate for the same names.
 * **`Ready`** no longer says that `Run` is not active when work waits. Several processes may share the store, so waiting work can also mean that every worker is busy or stuck.
