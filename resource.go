@@ -93,6 +93,10 @@ type Authorization struct {
 	CACertificate bool
 	// The time after which the proof no longer covers a certificate, zero when unbounded.
 	GrantExpires time.Time
+	// The further names and network function type the successful challenge granted, see
+	// ValidationGrant.
+	GrantNames  []Identifier
+	GrantNFType string
 	// Marks an authorization the Policy granted without a challenge, see PreApprover. It never
 	// lets the account revoke another account's certificate.
 	PreApproved bool
@@ -170,6 +174,10 @@ type Validation struct {
 	CACertificate bool
 	// The latest acceptable certificate expiry under this proof, zero when unbounded.
 	GrantExpires time.Time
+	// Further names the certificate may carry and the network function type, both granted by an
+	// authority token, see ValidationGrant.
+	Names  []Identifier
+	NFType string
 	// Reports that the Policy authorized the identifier without a challenge. Type is then empty
 	// and Validated is when the order was created.
 	PreApproved bool

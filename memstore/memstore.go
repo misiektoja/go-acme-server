@@ -692,7 +692,7 @@ func cloneOrder(o *acmeserver.Order) *acmeserver.Order {
 	c.Error = cloneProblem(o.Error)
 	if o.Issuance != nil {
 		state := *o.Issuance
-		state.Validations = slices.Clone(state.Validations)
+		state.Validations = cloneValidations(state.Validations)
 		c.Issuance = &state
 	}
 	if o.UnpublishedResult != nil {
@@ -708,7 +708,17 @@ func cloneOrder(o *acmeserver.Order) *acmeserver.Order {
 func cloneAuthorization(a *acmeserver.Authorization) *acmeserver.Authorization {
 	c := *a
 	c.ChallengeIDs = slices.Clone(a.ChallengeIDs)
+	c.GrantNames = slices.Clone(a.GrantNames)
 	return &c
+}
+
+// Returns a copy of validation evidence whose granted names are not shared.
+func cloneValidations(validations []acmeserver.Validation) []acmeserver.Validation {
+	out := slices.Clone(validations)
+	for i := range out {
+		out[i].Names = slices.Clone(out[i].Names)
+	}
+	return out
 }
 
 // Returns a copy of the challenge with its own error.
@@ -722,7 +732,7 @@ func cloneChallenge(ch *acmeserver.Challenge) *acmeserver.Challenge {
 func cloneCertificate(cert *acmeserver.Certificate) *acmeserver.Certificate {
 	c := *cert
 	c.Chain = cloneChain(cert.Chain)
-	c.Validations = slices.Clone(cert.Validations)
+	c.Validations = cloneValidations(cert.Validations)
 	return &c
 }
 

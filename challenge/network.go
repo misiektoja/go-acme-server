@@ -161,7 +161,8 @@ func checkRequest(req acmeserver.ValidationRequest, typ acmeserver.ChallengeType
 	if err != nil {
 		return acmeserver.Identifier{}, err
 	}
-	if req.Challenge.Type != typ || id.IsWildcard() || (req.Wildcard && typ != acmeserver.ChallengeDNS01) ||
+	if req.Challenge.Type != typ || (id.Type != acmeserver.IdentifierDNS && id.Type != acmeserver.IdentifierIP) ||
+		id.IsWildcard() || (req.Wildcard && typ != acmeserver.ChallengeDNS01) ||
 		(id.Type == acmeserver.IdentifierIP && typ == acmeserver.ChallengeDNS01) {
 		return acmeserver.Identifier{}, incorrect("identifier does not support this challenge")
 	}

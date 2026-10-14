@@ -63,6 +63,7 @@ type Server struct {
 	requireTOS     bool
 	ipIdentifiers  bool
 	tnAuthList     bool
+	nfInstanceIDs  bool
 	tokenAuthority string
 	renewal        RenewalAdvisor
 	profiles       map[string]Profile
@@ -109,6 +110,7 @@ func New(cfg Config) (*Server, error) {
 		requireTOS:     cfg.RequireTermsOfServiceAgreed,
 		ipIdentifiers:  cfg.IPIdentifiers,
 		tnAuthList:     cfg.TNAuthListIdentifiers,
+		nfInstanceIDs:  cfg.NfInstanceIDIdentifiers,
 		tokenAuthority: cfg.TokenAuthority,
 		renewal:        cfg.RenewalInfo,
 		profiles:       make(map[string]Profile, len(cfg.Profiles)),
@@ -175,6 +177,8 @@ func (cfg Config) validate() error {
 		return errorf("Config.RequireTermsOfServiceAgreed needs Meta.TermsOfService")
 	case cfg.TNAuthListIdentifiers && cfg.Validators[ChallengeTKAuth01] == nil:
 		return errorf("Config.TNAuthListIdentifiers needs a " + string(ChallengeTKAuth01) + " validator")
+	case cfg.NfInstanceIDIdentifiers && cfg.Validators[ChallengeTKAuth01] == nil:
+		return errorf("Config.NfInstanceIDIdentifiers needs a " + string(ChallengeTKAuth01) + " validator")
 	case cfg.TokenAuthority != "" && !isHTTPSURL(cfg.TokenAuthority):
 		return errorf("Config.TokenAuthority must be an absolute https URL")
 	case cfg.MaxRequestBody < 0 || cfg.OrderLifetime < 0 || cfg.AuthorizationLifetime < 0 ||

@@ -52,12 +52,21 @@ func (s *Server) serveFinalize(w http.ResponseWriter, r *http.Request, id string
 		s.writeProblem(ctx, w, NewProblem(ErrorInvalidProfile, "the server no longer offers the profile of this order"))
 		return
 	}
-	csr, p := checkCSR(der, order, req.Account)
+	authzs, p := s.orderAuthorizations(ctx, order)
 	if p != nil {
 		s.writeProblem(ctx, w, p)
 		return
 	}
-	if p := s.checkCAGrants(ctx, order, csr); p != nil {
+	var granted []Identifier
+	for _, authz := range authzs {
+		granted = append(granted, authz.GrantNames...)
+	}
+	csr, p := checkCSR(der, order, req.Account, granted)
+	if p != nil {
+		s.writeProblem(ctx, w, p)
+		return
+	}
+	if p := checkCAGrants(authzs, csr); p != nil {
 		s.writeProblem(ctx, w, p)
 		return
 	}
@@ -89,20 +98,29 @@ func (s *Server) serveFinalize(w http.ResponseWriter, r *http.Request, id string
 	s.writeOrder(ctx, w, http.StatusOK, order, now)
 }
 
+// Loads the authorizations of an order, whose grants decide what its certificate request may ask for.
+func (s *Server) orderAuthorizations(ctx context.Context, order *Order) ([]*Authorization, *Problem) {
+	authzs := make([]*Authorization, 0, len(order.AuthorizationIDs))
+	for _, id := range order.AuthorizationIDs {
+		authz, err := s.store.Authorization(ctx, id)
+		if err != nil {
+			return nil, s.storeProblem(ctx, err, "authorization")
+		}
+		authzs = append(authzs, authz)
+	}
+	return authzs, nil
+}
+
 // Requires every authorization of the order to have granted exactly what the request asks for,
 // see RFC 9448 section 6 step 9. A network challenge grants nothing, so a request for a CA
 // certificate needs a granting challenge behind every identifier, and a grant that one identifier
 // received cannot be dropped by requesting an end-entity certificate alongside other identifiers.
-func (s *Server) checkCAGrants(ctx context.Context, order *Order, csr *x509.CertificateRequest) *Problem {
+func checkCAGrants(authzs []*Authorization, csr *x509.CertificateRequest) *Problem {
 	requested, err := csrCACertificate(csr.Extensions)
 	if err != nil {
 		return NewProblem(ErrorBadCSR, "CSR basic constraints could not be read")
 	}
-	for _, id := range order.AuthorizationIDs {
-		authz, err := s.store.Authorization(ctx, id)
-		if err != nil {
-			return s.storeProblem(ctx, err, "authorization")
-		}
+	for _, authz := range authzs {
 		if authz.CACertificate != requested {
 			return NewProblem(ErrorBadCSR, "CSR CA basic constraint does not match the granted authorization")
 		}

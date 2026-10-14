@@ -95,6 +95,14 @@ func (s *Server) buildOrder(ctx context.Context, account *Account, payload *newO
 			return nil, NewProblem(ErrorUnsupportedIdentifier, "TNAuthList identifiers are not supported").
 				WithIdentifier(id)
 		}
+		if id.Type == IdentifierNfInstanceID && !s.nfInstanceIDs {
+			return nil, NewProblem(ErrorUnsupportedIdentifier, "NfInstanceId identifiers are not supported").
+				WithIdentifier(id)
+		}
+		if id.Type == IdentifierURI {
+			return nil, NewProblem(ErrorUnsupportedIdentifier, "uri names come only from authority tokens").
+				WithIdentifier(id)
+		}
 	}
 	identifiers, err := NormalizeIdentifiers(payload.Identifiers)
 	if err != nil {
@@ -105,6 +113,15 @@ func (s *Server) buildOrder(ctx context.Context, account *Account, payload *newO
 	// matched by a certificate request.
 	if countIdentifiers(identifiers, IdentifierTNAuthList) > 1 {
 		return nil, NewProblem(ErrorMalformed, "an order may have at most one TNAuthList identifier")
+	}
+	// A network function certificate names one instance (3GPP TS 33.310 clause 6.1.3c.3), and an
+	// authority list certificate is a STIR credential, so neither combines with the other.
+	nfInstances := countIdentifiers(identifiers, IdentifierNfInstanceID)
+	if nfInstances > 1 {
+		return nil, NewProblem(ErrorMalformed, "an order may have at most one NfInstanceId identifier")
+	}
+	if nfInstances > 0 && countIdentifiers(identifiers, IdentifierTNAuthList) > 0 {
+		return nil, NewProblem(ErrorMalformed, "an order may not combine NfInstanceId and TNAuthList identifiers")
 	}
 	for _, id := range identifiers {
 		if len(s.challengeTypesFor(id)) == 0 {
@@ -293,15 +310,17 @@ func countIdentifiers(ids []Identifier, typ IdentifierType) int {
 }
 
 // Returns the configured challenge types that may validate the identifier. Wildcard names need
-// dns-01, IP addresses exclude it and only TNAuthList identifiers use tkauth-01, see RFC 8555
-// section 7.1.3, RFC 8738 section 5 and RFC 9447 section 3.
+// dns-01, IP addresses exclude it and only TNAuthList and NfInstanceId identifiers use tkauth-01,
+// see RFC 8555 section 7.1.3, RFC 8738 section 5, RFC 9447 section 3 and 3GPP TS 33.310 clause
+// J.3.3.2.
 func (s *Server) challengeTypesFor(id Identifier) []ChallengeType {
 	var types []ChallengeType
+	token := id.Type == IdentifierTNAuthList || id.Type == IdentifierNfInstanceID
 	for _, typ := range []ChallengeType{ChallengeHTTP01, ChallengeDNS01, ChallengeTLSALPN01, ChallengeTKAuth01} {
 		if _, ok := s.validators[typ]; !ok {
 			continue
 		}
-		if (typ == ChallengeTKAuth01) != (id.Type == IdentifierTNAuthList) {
+		if (typ == ChallengeTKAuth01) != token {
 			continue
 		}
 		if id.IsWildcard() && typ != ChallengeDNS01 {

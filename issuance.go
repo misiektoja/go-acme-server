@@ -166,7 +166,8 @@ func (s *Server) issuanceAuthorization(ctx context.Context, operationID string, 
 
 // Loads the successful challenge that authorized an identifier.
 func (s *Server) validationEvidence(ctx context.Context, a *Authorization) (Validation, error) {
-	v := Validation{Identifier: a.Identifier, CACertificate: a.CACertificate, GrantExpires: a.GrantExpires}
+	v := Validation{Identifier: a.Identifier, CACertificate: a.CACertificate, GrantExpires: a.GrantExpires,
+		Names: slices.Clone(a.GrantNames), NFType: a.GrantNFType}
 	if a.Wildcard {
 		v.Identifier.Value = "*." + v.Identifier.Value
 	}

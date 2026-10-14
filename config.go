@@ -111,6 +111,9 @@ type Config struct {
 	IPIdentifiers bool
 	// Accepts TNAuthList identifiers as specified in RFC 9448. It needs a tkauth-01 validator.
 	TNAuthListIdentifiers bool
+	// Accepts NfInstanceId identifiers of 5G network functions as described in 3GPP TS 33.310
+	// Annex J. It needs a tkauth-01 validator.
+	NfInstanceIDIdentifiers bool
 	// The https URL offered as token-authority on tkauth-01 challenges, see RFC 9447 section 3.
 	// It is optional, and clients fall back to their own configuration when it is empty.
 	TokenAuthority string
@@ -148,7 +151,7 @@ func normalizeBaseURL(raw string, allowInsecure bool) (*url.URL, error) {
 		return nil, fmt.Errorf("acmeserver: Config.BaseURL: %w", err)
 	}
 	switch {
-	case u.Scheme == "https":
+	case u.Scheme == schemeHTTPS:
 	case u.Scheme == "http" && allowInsecure:
 	case u.Scheme == "http":
 		return nil, errors.New("acmeserver: Config.BaseURL must use https unless AllowInsecureBaseURL is set")
@@ -167,10 +170,13 @@ func normalizeBaseURL(raw string, allowInsecure bool) (*url.URL, error) {
 	return u, nil
 }
 
+// The URL scheme that base URLs, profile URLs and uri identifiers use.
+const schemeHTTPS = "https"
+
 // Reports whether raw is an absolute https URL without user info or a fragment.
 func isHTTPSURL(raw string) bool {
 	u, err := url.Parse(raw)
-	return err == nil && u.Scheme == "https" && u.Host != "" && u.User == nil && u.Fragment == "" && u.Opaque == ""
+	return err == nil && u.Scheme == schemeHTTPS && u.Host != "" && u.User == nil && u.Fragment == "" && u.Opaque == ""
 }
 
 // Bounds a profile name so it stays short in URLs and order objects.

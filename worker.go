@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 )
@@ -159,6 +160,8 @@ func (s *Server) runValidation(base context.Context, task *Task) {
 		authz.Expires = now.Add(s.authzLifetime)
 		authz.CACertificate = grant.CACertificate
 		authz.GrantExpires = grant.Expires
+		authz.GrantNames = grant.Names
+		authz.GrantNFType = grant.NFType
 		s.completeValidation(base, task, ch, authz)
 		return
 	}
@@ -213,10 +216,43 @@ func (s *Server) validationTargets(base context.Context, task *Task) (*Challenge
 func (s *Server) validate(base context.Context, v Validator, req ValidationRequest) (ValidationGrant, error) {
 	ctx, cancel := s.taskPhase(base)
 	defer cancel()
-	if granting, ok := v.(GrantingValidator); ok {
-		return granting.ValidateGrant(ctx, req)
+	granting, ok := v.(GrantingValidator)
+	if !ok {
+		return ValidationGrant{}, v.Validate(ctx, req)
 	}
-	return ValidationGrant{}, v.Validate(ctx, req)
+	grant, err := granting.ValidateGrant(ctx, req)
+	if err != nil {
+		return ValidationGrant{}, err
+	}
+	grant, err = checkGrant(grant)
+	if err != nil {
+		s.logError(base, "validator returned an unusable grant", err, slog.String("challenge", req.Challenge.ID))
+	}
+	return grant, err
+}
+
+// Normalizes the names a validator granted and refuses any that a certificate request cannot add
+// to an order, so a faulty validator cannot widen what the order may request.
+func checkGrant(grant ValidationGrant) (ValidationGrant, error) {
+	if grant.NFType != "" && !ValidNFType(grant.NFType) {
+		return ValidationGrant{}, NewProblem(ErrorServerInternal, "the validator granted an invalid NF type")
+	}
+	if len(grant.Names) == 0 {
+		grant.Names = nil
+		return grant, nil
+	}
+	names := make([]Identifier, 0, len(grant.Names))
+	for _, name := range grant.Names {
+		id, err := name.Normalize()
+		if err != nil || (id.Type != IdentifierDNS && id.Type != IdentifierIP && id.Type != IdentifierURI) {
+			return ValidationGrant{}, NewProblem(ErrorServerInternal, "the validator granted an unusable name")
+		}
+		if !slices.Contains(names, id) {
+			names = append(names, id)
+		}
+	}
+	grant.Names = names
+	return grant, nil
 }
 
 // Commits a validation result, deriving the order status from every authorization. A concurrent

@@ -104,6 +104,11 @@ type ValidationGrant struct {
 	// Bounds the validity of certificates issued on this proof, see RFC 9447 section 7. The zero
 	// value leaves the validity to the order and the issuer.
 	Expires time.Time
+	// Further names the certificate may carry on this proof, such as the sans of a 3GPP NF
+	// Certificate Authority Token. Each is a normalized dns, ip or uri identifier.
+	Names []Identifier
+	// The RFC 9310 network function type the proof attests, empty when it attests none.
+	NFType string
 }
 
 // Checks a challenge response. A nil result marks the challenge valid, a returned *Problem

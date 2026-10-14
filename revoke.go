@@ -98,6 +98,8 @@ func (s *Server) serveRevokeCert(w http.ResponseWriter, r *http.Request) {
 }
 
 // Accepts the issuing account, an account authorized for every identifier or the certificate key.
+// A network function certificate leaves out the second way, because 3GPP TS 33.310 clause J.4
+// limits its revocation to the enrolling client and the holder of the certificate key.
 func (s *Server) authorizeRevocation(ctx context.Context, req *signedRequest, cert *Certificate, leaf *x509.Certificate) *Problem {
 	if req.Account != nil {
 		if req.Account.ID == cert.AccountID {
@@ -106,6 +108,10 @@ func (s *Server) authorizeRevocation(ctx context.Context, req *signedRequest, ce
 		ids, err := revocationIdentifiers(leaf)
 		if err != nil {
 			return NewProblem(ErrorUnauthorized, "certificate identifiers cannot be authorized")
+		}
+		if slices.ContainsFunc(ids, func(id Identifier) bool { return id.Type == IdentifierNfInstanceID }) {
+			return NewProblem(ErrorUnauthorized, "a network function certificate is revoked by the enrolling account "+
+				"or with the certificate key")
 		}
 		allowed, err := s.store.AuthorizedFor(ctx, req.Account.ID, ids, s.clock.Now())
 		if err != nil {

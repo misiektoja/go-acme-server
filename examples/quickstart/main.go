@@ -105,8 +105,8 @@ func (ca *devCA) Issue(_ context.Context, req acmeserver.IssueRequest) (acmeserv
 			leaf.DNSNames = append(leaf.DNSNames, id.Value)
 		case acmeserver.IdentifierIP:
 			leaf.IPAddresses = append(leaf.IPAddresses, net.ParseIP(id.Value))
-		case acmeserver.IdentifierTNAuthList:
-			// TNAuthList identifiers are off in this configuration, so the server never sends one.
+		case acmeserver.IdentifierTNAuthList, acmeserver.IdentifierNfInstanceID, acmeserver.IdentifierURI:
+			// Token identifiers are off in this configuration, so the server never sends one.
 			return acmeserver.IssueResult{Rejected: acmeserver.NewProblem(acmeserver.ErrorRejectedIdentifier,
 				"unsupported identifier type")}, nil
 		default:
