@@ -232,8 +232,11 @@ func TestVerifyMACVector(t *testing.T) {
 	if err := msg.VerifyMAC(key); err != nil {
 		t.Fatalf("VerifyMAC: %v", err)
 	}
-	if !isCode(msg.VerifyMAC([]byte("wrong")), CodeBadSignature) {
+	if !isCode(msg.VerifyMAC(make([]byte, len(key))), CodeBadSignature) {
 		t.Fatal("wrong key verified")
+	}
+	if !isCode(msg.VerifyMAC(key[:31]), CodeBadSignatureAlgorithm) {
+		t.Fatal("HS256 accepted a key shorter than 256 bits")
 	}
 	msg.signature[0] ^= 1
 	if !isCode(msg.VerifyMAC(key), CodeBadSignature) {
@@ -242,6 +245,14 @@ func TestVerifyMACVector(t *testing.T) {
 	msg.Header.Algorithm = algES256
 	if !isCode(msg.VerifyMAC(key), CodeBadSignatureAlgorithm) {
 		t.Fatal("non-HMAC algorithm accepted by VerifyMAC")
+	}
+}
+
+func TestMACAlgorithmsFor(t *testing.T) {
+	for length, want := range map[int]string{0: "", 31: "", 32: "HS256", 47: "HS256", 48: "HS256 HS384", 64: "HS256 HS384 HS512", 100: "HS256 HS384 HS512"} {
+		if got := strings.Join(MACAlgorithmsFor(length), " "); got != want {
+			t.Errorf("MACAlgorithmsFor(%d) = %q, want %q", length, got, want)
+		}
 	}
 }
 
@@ -259,18 +270,27 @@ func TestParseMAC(t *testing.T) {
 	if err := msg.VerifyMAC(key); err != nil {
 		t.Fatalf("VerifyMAC: %v", err)
 	}
+	long := []byte("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	for _, alg := range []string{"HS384", "HS512"} {
 		h := map[string]any{"alg": alg, "kid": "eab-1", "url": "u"}
 		newHash := sha512.New384
 		if alg == "HS512" {
 			newHash = sha512.New
 		}
-		msg, err := ParseMAC(signMAC(t, key, h, nil, newHash))
+		msg, err := ParseMAC(signMAC(t, long, h, nil, newHash))
 		if err != nil {
 			t.Fatalf("ParseMAC(%s): %v", alg, err)
 		}
-		if err := msg.VerifyMAC(key); err != nil {
+		if err := msg.VerifyMAC(long); err != nil {
 			t.Fatalf("VerifyMAC(%s): %v", alg, err)
+		}
+		// RFC 7518 section 3.2 forbids a key shorter than the hash output.
+		short, err := ParseMAC(signMAC(t, key, h, nil, newHash))
+		if err != nil {
+			t.Fatalf("ParseMAC(%s, 256-bit key): %v", alg, err)
+		}
+		if !isCode(short.VerifyMAC(key), CodeBadSignatureAlgorithm) {
+			t.Fatalf("%s accepted a 256-bit key", alg)
 		}
 	}
 	priv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

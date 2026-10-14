@@ -185,6 +185,31 @@ func TestNewAccountWithExternalAccountBinding(t *testing.T) {
 	}
 }
 
+// Requires a MAC key at least as long as the hash of the binding algorithm, as RFC 7518 section
+// 3.2 does. A refused algorithm names the ones the key allows.
+func TestExternalAccountKeyLength(t *testing.T) {
+	short := []byte("0123456789abcdef")
+	mac := []byte("0123456789abcdef0123456789abcdef")
+	f := newFlow(t, func(c *acmeserver.Config) {
+		c.Meta.ExternalAccountRequired = true
+		c.ExternalAccounts = eabKeys{"kid-256": mac, "kid-short": short}
+	})
+	newAccount := baseURL + "new-account"
+	c := f.newClient()
+	rec := c.post(newAccount, map[string]any{"termsOfServiceAgreed": true,
+		"externalAccountBinding": binding("kid-256", mac, newAccount, publicJWK(t, &c.key.PublicKey), "HS512")})
+	assertProblem(t, rec, http.StatusBadRequest, acmeserver.ErrorBadSignatureAlgorithm)
+	var p acmeserver.Problem
+	decode(t, rec, &p)
+	if strings.Join(p.Algorithms, ",") != "HS256" {
+		t.Fatalf("algorithms for a 256-bit key = %v, want HS256", p.Algorithms)
+	}
+	c = f.newClient()
+	assertProblem(t, c.post(newAccount, map[string]any{"termsOfServiceAgreed": true,
+		"externalAccountBinding": binding("kid-short", short, newAccount, publicJWK(t, &c.key.PublicKey), "HS256")}),
+		http.StatusForbidden, acmeserver.ErrorUnauthorized)
+}
+
 // Binds each external account key identifier to one account when configured.
 func TestSingleUseExternalAccount(t *testing.T) {
 	const kid = "kid-1"
