@@ -3,6 +3,7 @@ package acmeserver
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"maps"
 	"math"
@@ -27,6 +28,7 @@ const (
 	challengePathPrefix = "chall/"
 	certPathPrefix      = "cert/"
 	renewalPathPrefix   = "renewal-info/"
+	profilePathPrefix   = "profiles/"
 )
 
 // Media types the protocol uses.
@@ -35,6 +37,7 @@ const (
 	contentTypeJOSE     = "application/jose+json"
 	contentTypeProblem  = "application/problem+json"
 	contentTypePEMChain = "application/pem-certificate-chain"
+	contentTypeText     = "text/plain; charset=utf-8"
 )
 
 // Serves the ACME resources below Config.BaseURL. Mount it at the base path, for example
@@ -62,6 +65,8 @@ type Server struct {
 	tnAuthList     bool
 	tokenAuthority string
 	renewal        RenewalAdvisor
+	profiles       map[string]Profile
+	defaultProfile string
 	orderLifetime  time.Duration
 	authzLifetime  time.Duration
 	maxIdentifiers int
@@ -106,6 +111,8 @@ func New(cfg Config) (*Server, error) {
 		tnAuthList:     cfg.TNAuthListIdentifiers,
 		tokenAuthority: cfg.TokenAuthority,
 		renewal:        cfg.RenewalInfo,
+		profiles:       make(map[string]Profile, len(cfg.Profiles)),
+		defaultProfile: cfg.DefaultProfile,
 		orderLifetime:  cfg.OrderLifetime,
 		authzLifetime:  cfg.AuthorizationLifetime,
 		maxIdentifiers: cfg.MaxIdentifiers,
@@ -114,9 +121,12 @@ func New(cfg Config) (*Server, error) {
 		wake:           make(chan struct{}, 1),
 	}
 	maps.Copy(s.validators, cfg.Validators)
+	for _, p := range cfg.Profiles {
+		s.profiles[p.Name] = p
+	}
 	s.meta.CAAIdentities = append([]string(nil), cfg.Meta.CAAIdentities...)
 	s.hasMeta = s.meta.TermsOfService != "" || s.meta.Website != "" || len(s.meta.CAAIdentities) > 0 ||
-		s.meta.ExternalAccountRequired
+		s.meta.ExternalAccountRequired || len(s.profiles) > 0
 	if s.clock == nil {
 		s.clock = SystemClock()
 	}
@@ -180,7 +190,7 @@ func (cfg Config) validate() error {
 			return errorf("Config.Validators has the unknown challenge type " + string(typ))
 		}
 	}
-	return nil
+	return validateProfiles(cfg.Profiles, cfg.DefaultProfile)
 }
 
 // Returns the worker configuration with defaults applied.
@@ -254,6 +264,10 @@ func (s *Server) serveResource(w http.ResponseWriter, r *http.Request, rel strin
 	}
 	if kind+"/" == renewalPathPrefix {
 		s.serveRenewalInfo(w, r, rest)
+		return
+	}
+	if kind+"/" == profilePathPrefix {
+		s.serveProfile(w, r, rest)
 		return
 	}
 	id, suffix, _ := strings.Cut(rest, "/")
@@ -335,7 +349,43 @@ func (s *Server) metaObject() map[string]any {
 	if s.meta.ExternalAccountRequired {
 		meta["externalAccountRequired"] = true
 	}
+	if len(s.profiles) > 0 {
+		profiles := make(map[string]string, len(s.profiles))
+		for name, p := range s.profiles {
+			profiles[name] = s.profileURL(p)
+		}
+		meta["profiles"] = profiles
+	}
 	return meta
+}
+
+// Returns the description URL a profile is advertised with.
+func (s *Server) profileURL(p Profile) string {
+	if p.URL != "" {
+		return p.URL
+	}
+	return s.resourceURL(profilePathPrefix + p.Name)
+}
+
+// Writes the plain-text description of a profile the server publishes itself.
+func (s *Server) serveProfile(w http.ResponseWriter, r *http.Request, name string) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		s.writeMethodNotAllowed(r.Context(), w, http.MethodGet, http.MethodHead)
+		return
+	}
+	p, ok := s.profiles[name]
+	if !ok || p.Description == "" {
+		s.writeProblem(r.Context(), w, notFound())
+		return
+	}
+	w.Header().Set("Content-Type", contentTypeText)
+	w.Header().Set("Content-Length", strconv.Itoa(len(p.Description)))
+	w.WriteHeader(http.StatusOK)
+	if r.Method == http.MethodGet {
+		if _, err := io.WriteString(w, p.Description); err != nil {
+			s.log.LogAttrs(r.Context(), slog.LevelWarn, "response writing failed", slog.Any("error", err))
+		}
+	}
 }
 
 // Answers HEAD with 200 and GET with 204, both with a fresh nonce.

@@ -46,6 +46,12 @@ func (s *Server) serveFinalize(w http.ResponseWriter, r *http.Request, id string
 		s.writeProblem(ctx, w, Problemf(ErrorOrderNotReady, "order is %s", string(status)))
 		return
 	}
+	// The draft requires refusing an order whose profile the server stopped offering after the
+	// order was created.
+	if _, ok := s.profiles[order.Profile]; order.Profile != "" && !ok {
+		s.writeProblem(ctx, w, NewProblem(ErrorInvalidProfile, "the server no longer offers the profile of this order"))
+		return
+	}
 	csr, p := checkCSR(der, order, req.Account)
 	if p != nil {
 		s.writeProblem(ctx, w, p)

@@ -19,6 +19,8 @@ type newOrderJSON struct {
 	NotAfter    string       `json:"notAfter"`
 	// The RFC 9773 predecessor, used only when Config.RenewalInfo is set.
 	Replaces string `json:"replaces"`
+	// The certificate profile of draft-ietf-acme-profiles. Empty selects Config.DefaultProfile.
+	Profile string `json:"profile"`
 }
 
 // The authorization update payload of RFC 8555 section 7.5.2.
@@ -121,6 +123,10 @@ func (s *Server) buildOrder(ctx context.Context, account *Account, payload *newO
 	if !notBefore.IsZero() && !notAfter.IsZero() && !notAfter.After(notBefore) {
 		return nil, NewProblem(ErrorMalformed, "notAfter must be later than notBefore")
 	}
+	profile, p := s.selectProfile(payload.Profile)
+	if p != nil {
+		return nil, p
+	}
 	replaces, p := s.checkReplaces(ctx, account, identifiers, payload.Replaces)
 	if p != nil {
 		return nil, p
@@ -139,12 +145,26 @@ func (s *Server) buildOrder(ctx context.Context, account *Account, payload *newO
 		NotBefore:   notBefore,
 		NotAfter:    notAfter,
 		Replaces:    replaces,
+		Profile:     profile,
 		CreatedAt:   now,
 	}
 	if p := s.reviewOrder(ctx, account, order); p != nil {
 		return nil, p
 	}
 	return order, nil
+}
+
+// Returns the profile a new order is issued under: the requested one when the server offers it
+// and the default when the client names none. An unadvertised name is refused rather than
+// replaced by the default, so a client never receives a certificate it did not ask for.
+func (s *Server) selectProfile(requested string) (string, *Problem) {
+	if requested == "" {
+		return s.defaultProfile, nil
+	}
+	if _, ok := s.profiles[requested]; !ok {
+		return "", NewProblem(ErrorInvalidProfile, "the server does not offer the requested profile")
+	}
+	return requested, nil
 }
 
 // Asks the policy about a new order and keeps only its changes to NotBefore and NotAfter. Any

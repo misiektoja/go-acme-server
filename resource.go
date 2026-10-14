@@ -62,7 +62,10 @@ type Order struct {
 	// The RFC 9773 identifier of the certificate this order replaces, set when the client sent
 	// replaces and Config.RenewalInfo is enabled. Stores mark that certificate replaced by this
 	// order when the order is created.
-	Replaces  string
+	Replaces string
+	// The certificate profile selected when the order was created, see draft-ietf-acme-profiles.
+	// It is empty when the server offered no profiles at that time.
+	Profile   string
 	CreatedAt time.Time
 	Revision  uint64
 }

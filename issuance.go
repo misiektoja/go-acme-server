@@ -199,7 +199,7 @@ func (s *Server) issueRequest(order *Order) (IssueRequest, error) {
 		OperationID: state.OperationID, AccountID: order.AccountID, AccountURL: s.accountURL(order.AccountID),
 		OrderID: order.ID, CSR: csr, CSRDER: der, Identifiers: slices.Clone(order.Identifiers),
 		NotBefore: order.NotBefore, NotAfter: issuedNotAfter(order), Validations: slices.Clone(state.Validations),
-		Deadline: state.Deadline, RecoveryOnly: !state.Deadline.After(s.clock.Now()),
+		Deadline: state.Deadline, RecoveryOnly: !state.Deadline.After(s.clock.Now()), Profile: order.Profile,
 	}, nil
 }
 

@@ -33,6 +33,9 @@ type IssueRequest struct {
 	Deadline time.Time
 	// Allows only recovery of an existing result, never a new signing operation.
 	RecoveryOnly bool
+	// The Order.Profile name the certificate is issued under. It is empty when the server offered
+	// no profiles when the order was created.
+	Profile string
 }
 
 // The outcome of an issuance attempt. Exactly one of Chain, Pending and Rejected is set.

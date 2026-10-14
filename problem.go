@@ -15,7 +15,8 @@ const ProblemNamespace = "urn:ietf:params:acme:error:"
 // Names an ACME error without its URN namespace.
 type ErrorType string
 
-// Error types registered by RFC 8555 section 6.7 and RFC 9773 section 5.
+// Error types registered by RFC 8555 section 6.7 and RFC 9773 section 5, plus invalidProfile from
+// draft-ietf-acme-profiles, which the draft asks IANA to register.
 const (
 	ErrorAccountDoesNotExist     ErrorType = "accountDoesNotExist"
 	ErrorAlreadyReplaced         ErrorType = "alreadyReplaced"
@@ -33,6 +34,7 @@ const (
 	ErrorExternalAccountRequired ErrorType = "externalAccountRequired"
 	ErrorIncorrectResponse       ErrorType = "incorrectResponse"
 	ErrorInvalidContact          ErrorType = "invalidContact"
+	ErrorInvalidProfile          ErrorType = "invalidProfile"
 	ErrorMalformed               ErrorType = "malformed"
 	ErrorOrderNotReady           ErrorType = "orderNotReady"
 	ErrorRateLimited             ErrorType = "rateLimited"
@@ -66,6 +68,7 @@ var defaultStatus = map[ErrorType]int{
 	ErrorExternalAccountRequired: http.StatusForbidden,
 	ErrorIncorrectResponse:       http.StatusBadRequest,
 	ErrorInvalidContact:          http.StatusBadRequest,
+	ErrorInvalidProfile:          http.StatusBadRequest,
 	ErrorMalformed:               http.StatusBadRequest,
 	ErrorOrderNotReady:           http.StatusForbidden,
 	ErrorRateLimited:             http.StatusTooManyRequests,
