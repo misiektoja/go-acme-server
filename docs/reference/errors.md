@@ -41,7 +41,7 @@ status. `AsProblem` extracts a problem from an error chain.
 | `invalidProfile` | 400 | A new order names a profile the server does not offer or an order is finalized after its profile was removed from `Config.Profiles` |
 | `malformed` | 400 | The request violates the protocol: wrong content type, bad JSON, wrong key mode, an unknown resource (404), a method the resource does not support (405) or a `replaces` value that names no certificate |
 | `orderNotReady` | 403 | Finalization of an order that is not `ready` |
-| `rateLimited` | 429 | Only from host policy |
+| `rateLimited` | 429 | Only from the host's `Limiter` or policy, normally with `Retry-After` |
 | `rejectedIdentifier` | 400 | An identifier fails syntax checks, has no supported challenge type or is refused by host policy |
 | `serverInternal` | 500 | A store, CA or policy failure, or an issuer result that failed the publication checks |
 | `unauthorized` | 403 | The signed `url` does not match, the account is not valid, the requester may not revoke the certificate, an authorization expired before issuance or `replaces` names another account's certificate |

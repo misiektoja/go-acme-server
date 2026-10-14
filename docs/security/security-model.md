@@ -81,7 +81,7 @@ revocation if the host deduplicates as the contract requires.
 | CA controls | Key protection, serial uniqueness, certificate policy and CRL or OCSP publication behind `Issuer` and `Revoker` |
 | Deduplication | `Issuer` and `Revoker` must deduplicate by `OperationID` |
 | Who may register and order | `Policy`, external account binding keys and terms of service |
-| Rate limits and abuse controls | `Policy` and `IssuancePolicy`. The library has no built-in limits |
+| Rate limits and abuse controls | A `Limiter` for nonces, new accounts and new orders, plus `Policy` and `IssuancePolicy`. The library has no built-in limits |
 | CAA and name policy | `IssuancePolicy` or the CA. The library does not check CAA |
 | Token Authority trust | `challenge.TokenAuthorities` for `tkauth-01` |
 | Network function certificate contents | The `Issuer` builds the subject, `nfTypes` extension and key usages of an `NfInstanceId` order from the granted names and NF type |
@@ -97,7 +97,7 @@ revocation if the host deduplicates as the contract requires.
 | Account takeover through key rollover | The inner JWS must be signed by the new key over the old key and the account URL, and the new key must not own another account |
 | Issuance for a name the client does not control | Fresh authorizations per order, validators that fetch proof from the resolved destination only, CSR identifiers compared with the order |
 | SSRF through validation | Egress policy on every resolved address and every redirect, no proxy use, no destination ports other than 80 and 443 |
-| Resource exhaustion through requests | Body size, JSON depth, identifier count, contact count and DNS or TLS read limits. Rate limiting is the host's |
+| Resource exhaustion through requests | Body size, JSON depth, identifier count, contact count and DNS or TLS read limits. Rate limits come from the host's `Limiter` |
 | Double issuance after a crash | Dispatch decision stored before the CA call, operation ID reuse, fenced task completion |
 | Serving a certificate the CA got wrong | Publication checks, retained unpublished results |
 | Forged Authority Tokens | Signature under a certificate the host's trust source returns, claim checks against the challenge identifier and account key, no fetch of `x5u` |

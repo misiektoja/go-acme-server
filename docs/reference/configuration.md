@@ -37,6 +37,7 @@ problem. Zero values select the defaults below. Negative limits are refused.
 | `MaxIdentifiers` | 100 | Bounds the identifiers of one order |
 | `RevocationReasons` | 0, 1, 3, 4 and 5 | The RFC 5280 reason codes clients may request. May hold 0 to 5, 9 and 10. See [Revocation](../guide/revocation.md#reason-codes) |
 | `Refusals` | none | Learns about `finalize` and `revokeCert` requests the server refuses. See [Recording refusals](../guide/embedding.md#recording-refusals) |
+| `Limits` | none | Limits how often clients may get nonces, create accounts and place orders. See [Rate limits](../guide/accounts-and-policy.md#rate-limits) |
 | `DetachedWriteTimeout` | 30 seconds | Bounds a store write that finishes after the client request ended, such as recording a revocation the CA already carried out |
 | `RenewalInfo` | none | Serves RFC 9773 renewal information and accepts `replaces`. `LifetimeRenewal{}` is the built-in advisor |
 | `Profiles` | none | The certificate profiles advertised in the directory and accepted on new orders. See [Certificate profiles](../guide/certificate-profiles.md) |

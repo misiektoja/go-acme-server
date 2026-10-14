@@ -6,7 +6,7 @@ base URL. Resource IDs are opaque random strings.
 | Path | Methods | Resource |
 | --- | --- | --- |
 | `directory` | GET, HEAD | The directory object with the `meta` member when configured |
-| `new-nonce` | GET, HEAD | A fresh `Replay-Nonce`. HEAD answers 200, GET answers 204 |
+| `new-nonce` | GET, HEAD | A fresh `Replay-Nonce`. HEAD answers 200, GET answers 204. A request the `Limiter` refuses gets its problem and no nonce |
 | `new-account` | POST | Account creation and lookup, signed with an embedded JWK |
 | `new-order` | POST | Order creation |
 | `revoke-cert` | POST | Revocation, signed with an account `kid` or the certificate key as an embedded JWK |

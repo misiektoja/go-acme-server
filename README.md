@@ -82,8 +82,8 @@ signatures in requests and in returned chains itself. Account keys stay classica
 * No alternate chains. The certificate response carries one chain and no `rel="alternate"` link.
 * No `dns-account-01`, short-term automatic renewal, delegation, subdomain authorizations or
   email, onion and device identifiers.
-* No rate limits. `Policy` and `IssuancePolicy` are the places to refuse accounts, orders or
-  issuance.
+* No built-in rate limits. The host supplies a `Limiter` for nonces, new accounts and new
+  orders. `Policy` and `IssuancePolicy` can refuse other work.
 * No TLS termination or CA. The host serves the handler behind its HTTPS origin, signs with its
   own CA and supplies durable storage. `memstore` keeps everything in memory.
 

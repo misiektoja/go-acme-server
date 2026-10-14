@@ -30,11 +30,12 @@ with `unsupportedContact`.
 
 ## Host responsibilities
 
-### No rate limits
+### No built-in rate limits
 
-The library never answers `rateLimited` on its own. `Policy.NewAccount`, `Policy.NewOrder` and
-`IssuancePolicy` are the places to refuse work, and a returned `*Problem` reaches the client
-unchanged.
+The library never answers `rateLimited` on its own. A host sets `Config.Limits` to limit nonces,
+new accounts and new orders. `Policy` and `IssuancePolicy` can refuse other work. See
+[Rate limits](guide/accounts-and-policy.md#rate-limits). The limiter is not asked about other
+requests. An error response to any request carries a fresh nonce.
 
 ### No TLS termination, CA or durable storage
 

@@ -91,8 +91,58 @@ for example to cap the requested validity. Any other change, or a `NotAfter` tha
 `NotBefore`, is logged and answered with `serverInternal`.
 
 A returned `*Problem` is sent to the client. Any other error is logged and answered with
-`serverInternal`. Rate limiting belongs here too. Return a `rateLimited` problem built with
-`WithRetryAfter` and the client backs off.
+`serverInternal`.
+
+## Rate limits
+
+`Config.Limits` takes a `Limiter`, which decides how often clients may get nonces, create accounts
+and place orders. Without one nothing is limited.
+
+```go
+type Limiter interface {
+	Allow(ctx context.Context, req LimitRequest) error
+}
+```
+
+`Allow` is asked once for each of these requests:
+
+| `LimitRequest.Kind` | Asked | Fields set |
+| --- | --- | --- |
+| `LimitNewNonce` | Before a nonce is issued | `Client` |
+| `LimitNewAccount` | After the contacts, terms of service and external account binding were checked, before `Policy.NewAccount`. A request that finds an existing account is not asked about | `Client`, `Account` (not yet stored) |
+| `LimitNewOrder` | After the identifiers, profile and `replaces` were checked, before `Policy.NewOrder` | `Client`, `Account`, `Identifiers` (normalized), `Replaces` |
+
+Count the request when you return nil. To refuse, return a `rateLimited` problem with
+`WithRetryAfter`. The client gets status 429 and a `Retry-After` header in whole seconds, rounded
+up. A refused `newNonce` answer carries no `Replay-Nonce`. Refused `newAccount` and `newOrder`
+answers carry one, like every other error. Any other error is logged and answered with
+`serverInternal`. Return nil on errors instead if clients should keep working while your limit
+store is unavailable. New kinds may be added in later versions, so allow kinds you do not know.
+
+```go
+func (l limits) Allow(ctx context.Context, req acmeserver.LimitRequest) error {
+	if req.Kind != acmeserver.LimitNewOrder || req.Replaces != "" {
+		return nil // renewals that name their predecessor are never held back
+	}
+	wait, err := l.buckets.Take(ctx, "orders:"+req.Account.ID, 300, time.Hour)
+	if err != nil || wait == 0 {
+		return err
+	}
+	return acmeserver.NewProblem(acmeserver.ErrorRateLimited, "too many new orders for this account").
+		WithRetryAfter(wait)
+}
+```
+
+`Client` is the address of the connection from `http.Request.RemoteAddr`, with IPv4-mapped IPv6
+addresses unmapped. It is the zero `netip.Addr` when `RemoteAddr` holds no IP address. Forwarded
+headers such as `X-Forwarded-For` are never read, because any client can set them. Behind a reverse
+proxy every client has the proxy's address. If you trust the proxy, rewrite `RemoteAddr` from its
+header in a middleware before the handler. IPv6 clients usually control a whole /64, so key
+per-address limits on the prefix rather than the full address.
+
+`Replaces` is set only after the server has checked that the replaced certificate belongs to the
+account and shares an identifier with the order, so a client cannot claim to renew someone else's
+certificate to escape a limit.
 
 ## Pre-approved identifiers
 

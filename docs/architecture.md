@@ -134,5 +134,5 @@ so it never overlaps the run of the worker that claims the task next.
 
 The library makes no policy decisions beyond the protocol. It does not choose validity periods,
 key usages, rate limits or which identifiers a CA may issue for. Those belong in `Policy`,
-`IssuancePolicy` and the CA behind `Issuer`. [Security model](security/security-model.md) lists
+`IssuancePolicy`, the `Limiter` and the CA behind `Issuer`. [Security model](security/security-model.md) lists
 the boundaries in detail.
