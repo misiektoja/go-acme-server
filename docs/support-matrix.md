@@ -40,7 +40,7 @@ identifier has no usable challenge type is refused.
 | Use | Accepted |
 | --- | --- |
 | Account key signatures | ES256, ES384, ES512, RS256, EdDSA |
-| External account binding MACs | HS256, HS384, HS512 |
+| External account binding MACs | HS256, HS384, HS512 with a key at least as long as the hash |
 | Account keys | RSA 2048 to 4096 bits, ECDSA P-256, P-384 and P-521, Ed25519 |
 | Account contacts | `mailto` with one bare address, at most ten contacts |
 

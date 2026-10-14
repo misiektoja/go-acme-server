@@ -39,7 +39,11 @@ type ExternalAccountKeys interface {
 
 Implement it over your key registry and set `Config.ExternalAccounts`. Return `ErrNotFound` for an
 unknown identifier, which becomes an `unauthorized` problem. Return any other error for a lookup
-failure. HS256, HS384 and HS512 are accepted. A verified binding stores the key identifier as
+failure. HS256, HS384 and HS512 are accepted. RFC 7518 section 3.2 requires a key at least as long
+as the hash, so a 256-bit key works with HS256 only and a 512-bit key with all three. A binding
+whose algorithm needs a longer key is refused with `badSignatureAlgorithm` listing the algorithms
+the key allows. A key shorter than 256 bits is refused with `unauthorized` and logged. Issue keys of
+at least 512 bits if clients may choose HS512. A verified binding stores the key identifier as
 `Account.ExternalAccountID`, which is available to `Policy.NewAccount` and to your own audit
 queries.
 
