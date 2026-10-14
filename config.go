@@ -94,6 +94,13 @@ type Config struct {
 	Issuer Issuer
 	// Revokes issued certificates.
 	Revoker Revoker
+	// The RFC 5280 reason codes clients may request. Empty allows unspecified (0),
+	// keyCompromise (1), affiliationChanged (3), superseded (4) and cessationOfOperation (5).
+	// Only 0 to 5, 9 and 10 may be listed, because an ACME revocation is final and cannot be a
+	// certificateHold (6).
+	RevocationReasons []int
+	// Learns about authenticated finalize and revokeCert requests the server refuses. Optional.
+	Refusals RefusalRecorder
 	// The challenge types offered to clients. Only configured types appear in authorizations.
 	Validators map[ChallengeType]Validator
 	// Verifies external account bindings. Required when Meta.ExternalAccountRequired is set.

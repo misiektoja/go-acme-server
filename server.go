@@ -75,6 +75,10 @@ type Server struct {
 	maxIdentifiers    int
 	detachedWrite     time.Duration
 	workers           WorkerConfig
+	// The allowed revocation reason codes in ascending order and their names for refusals.
+	revocationReasons []int
+	reasonsText       string
+	refusals          RefusalRecorder
 	// Signals Run that new work was accepted in this process.
 	wake    chan struct{}
 	running atomic.Bool
@@ -104,6 +108,8 @@ func New(cfg Config) (*Server, error) {
 		maxBody:           cfg.MaxRequestBody,
 		issuer:            cfg.Issuer,
 		revoker:           cfg.Revoker,
+		revocationReasons: revocationReasons(cfg.RevocationReasons),
+		refusals:          cfg.Refusals,
 		validators:        make(map[ChallengeType]Validator, len(cfg.Validators)),
 		eabKeys:           cfg.ExternalAccounts,
 		singleUseEAB:      cfg.SingleUseExternalAccounts,
@@ -126,6 +132,7 @@ func New(cfg Config) (*Server, error) {
 		wake:              make(chan struct{}, 1),
 	}
 	maps.Copy(s.validators, cfg.Validators)
+	s.reasonsText = revocationReasonsText(s.revocationReasons)
 	for _, p := range cfg.Profiles {
 		s.profiles[p.Name] = p
 	}
@@ -193,6 +200,9 @@ func (cfg Config) validate() error {
 			typ != ChallengeTKAuth01 {
 			return errorf("Config.Validators has the unknown challenge type " + string(typ))
 		}
+	}
+	if err := validateRevocationReasons(cfg.RevocationReasons); err != nil {
+		return err
 	}
 	return validateProfiles(cfg.Profiles, cfg.DefaultProfile)
 }
