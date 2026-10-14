@@ -61,6 +61,7 @@ import (
 | RFC 8738 IP identifiers | IPv4 and IPv6 identifiers through HTTP-01 and TLS-ALPN-01 | `Config.IPIdentifiers` |
 | RFC 9447 and RFC 9448 | tkauth-01 with TNAuthList identifiers | `Config.TNAuthListIdentifiers` |
 | RFC 9773 | Renewal information and `replaces` | `Config.RenewalInfo` |
+| draft-ietf-acme-profiles | Certificate profiles in the directory and on new orders | `Config.Profiles` |
 
 Account keys may use ES256, ES384, ES512, RS256 or EdDSA. External account bindings use HS256, HS384 or
 HS512. Independent clients verify the behavior, see
@@ -78,9 +79,8 @@ signatures in requests and in returned chains itself. Account keys stay classica
 * No pre-authorization. The directory omits `newAuthz` and every order receives fresh
   authorizations, so clients validate each identifier again for every order.
 * No alternate chains. The certificate response carries one chain and no `rel="alternate"` link.
-* No certificate profiles, `dns-account-01`, short-term automatic renewal, delegation, subdomain
-  authorizations or email, onion and device identifiers. Working group drafts are not exposed in
-  the public API.
+* No `dns-account-01`, short-term automatic renewal, delegation, subdomain authorizations or
+  email, onion and device identifiers.
 * No rate limits. `Policy` and `IssuancePolicy` are the places to refuse accounts, orders or
   issuance.
 * No TLS termination or CA. The host serves the handler behind its HTTPS origin, signs with its
@@ -135,6 +135,7 @@ Full documentation is at
 * [Accounts and policy](https://misiektoja.github.io/go-acme-server/guide/accounts-and-policy/)
 * [Authority Token challenges](https://misiektoja.github.io/go-acme-server/guide/authority-tokens/)
 * [Renewal information](https://misiektoja.github.io/go-acme-server/guide/renewal-information/)
+* [Certificate profiles](https://misiektoja.github.io/go-acme-server/guide/certificate-profiles/)
 * [Configuration](https://misiektoja.github.io/go-acme-server/reference/configuration/)
 * [Deployment](https://misiektoja.github.io/go-acme-server/operations/deployment/)
 * [Troubleshooting](https://misiektoja.github.io/go-acme-server/operations/troubleshooting/)

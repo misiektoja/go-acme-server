@@ -37,6 +37,7 @@ Composite ML-DSA certificate requests are accepted too. The server checks both c
 | `Validations` | How each identifier was validated: challenge type, time and any CA grant, or `PreApproved` when the policy approved it in advance |
 | `Deadline` | After this time no new signing may start |
 | `RecoveryOnly` | Set once the deadline has passed. Only an existing result may be returned |
+| `Profile` | The [certificate profile](certificate-profiles.md) of the order. Empty when the server offered no profiles when the order was created |
 
 ## The result
 

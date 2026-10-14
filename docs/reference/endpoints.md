@@ -19,6 +19,7 @@ base URL. Resource IDs are opaque random strings.
 | `chall/<id>` | POST | Challenge status and the client's response |
 | `cert/<id>` | POST | The certificate chain as `application/pem-certificate-chain` |
 | `renewal-info/<id>` | GET, HEAD | RFC 9773 renewal information, only with `Config.RenewalInfo` |
+| `profiles/<name>` | GET, HEAD | The plain-text description of a profile configured with a `Description` |
 
 Any other path below the base URL and any path outside it is answered with a `404` `malformed`
 problem. A method the resource does not support is answered with `405` and an `Allow` header.
@@ -33,8 +34,8 @@ problems built with `WithRetryAfter`. Renewal information responses carry the ad
 `Retry-After`.
 
 Request bodies must be `application/jose+json` and at most `Config.MaxRequestBody` bytes.
-Responses are `application/json`, `application/problem+json` or
-`application/pem-certificate-chain`.
+Responses are `application/json`, `application/problem+json`,
+`application/pem-certificate-chain` or, for profile descriptions, `text/plain; charset=utf-8`.
 
 ## What the handler expects from the host
 

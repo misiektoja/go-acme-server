@@ -1,7 +1,7 @@
 # Errors
 
-Clients receive problem documents of RFC 7807 with the ACME error types of RFC 8555 section 6.7
-and RFC 9773. This page lists each type, its default HTTP status and what causes the server to
+Clients receive problem documents of RFC 7807 with the ACME error types of RFC 8555 section 6.7,
+RFC 9773 and draft-ietf-acme-profiles. This page lists each type, its default HTTP status and what causes the server to
 send it, so an operator can read a client log and know which side to look at.
 
 ## Building problems in host code
@@ -38,6 +38,7 @@ status. `AsProblem` extracts a problem from an error chain.
 | `externalAccountRequired` | 403 | `Meta.ExternalAccountRequired` is set and the request had no binding |
 | `incorrectResponse` | 400 | The challenge proof did not match or the target refused. Final for that authorization |
 | `invalidContact` | 400 | A contact is not a single bare `mailto` address |
+| `invalidProfile` | 400 | A new order names a profile the server does not offer or an order is finalized after its profile was removed from `Config.Profiles` |
 | `malformed` | 400 | The request violates the protocol: wrong content type, bad JSON, wrong key mode, an unknown resource (404), a method the resource does not support (405) or a `replaces` value that names no certificate |
 | `orderNotReady` | 403 | Finalization of an order that is not `ready` |
 | `rateLimited` | 429 | Only from host policy |

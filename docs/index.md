@@ -55,6 +55,7 @@ implementation by following the integration guide.
 | Restrict who may register or order | [Accounts and policy](guide/accounts-and-policy.md) |
 | Issue STIR certificates with Authority Tokens | [Authority Token challenges](guide/authority-tokens.md) |
 | Tell clients when to renew | [Renewal information](guide/renewal-information.md) |
+| Offer several kinds of certificate | [Certificate profiles](guide/certificate-profiles.md) |
 | Look up every configuration field | [Configuration](reference/configuration.md) |
 | Configure a reverse proxy or health checks | [Deployment](operations/deployment.md) |
 | Fix something that does not work | [Troubleshooting](operations/troubleshooting.md) |

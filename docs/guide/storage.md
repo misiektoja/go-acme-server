@@ -69,7 +69,7 @@ and hold no lease past it, which `Ready` uses to detect that no worker is active
 
 | Method | Writes in one transaction |
 | --- | --- |
-| `CreateOrder` | The order, its authorizations, its challenges and, when `order.Replaces` is set, the `ReplacedByOrderID` of the predecessor certificate |
+| `CreateOrder` | The order including its `Profile`, its authorizations, its challenges and, when `order.Replaces` is set, the `ReplacedByOrderID` of the predecessor certificate |
 | `AcceptChallenge` | The challenge at its revision and the new validation task |
 | `FinalizeOrder` | The order at its revision and the new issuance task |
 | `BeginIssuance` | `order.Issuance` after checking the task fence and the revision and status of the order, the account and every authorization |

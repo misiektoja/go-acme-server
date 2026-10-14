@@ -85,6 +85,13 @@ Another order already named this certificate in `replaces` and is not invalid ye
 lego and acmez retry without `replaces`. If the earlier order belongs to a crashed client, it frees
 the claim when it expires after `Config.OrderLifetime`.
 
+## An order is refused with `invalidProfile`
+
+The client named a profile that `Config.Profiles` does not list. The server may also have no
+profiles at all. Names are compared exactly, including case. Compare the client setting with the
+`profiles` member of the directory `meta`. At finalization the error means the profile was removed
+after the order was created. The client has to order again.
+
 ## Revocation returns serverInternal
 
 The `Revoker` returned an error that is not a `*Problem`. The log line `revocation failed` carries

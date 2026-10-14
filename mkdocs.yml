@@ -61,6 +61,7 @@ nav:
       - Accounts and policy: guide/accounts-and-policy.md
       - Authority Token challenges: guide/authority-tokens.md
       - Renewal information: guide/renewal-information.md
+      - Certificate profiles: guide/certificate-profiles.md
   - Reference:
       - Configuration: reference/configuration.md
       - Endpoints: reference/endpoints.md

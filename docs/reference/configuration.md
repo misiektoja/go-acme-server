@@ -36,6 +36,8 @@ problem. Zero values select the defaults below. Negative limits are refused.
 | `MaxIdentifiers` | 100 | Bounds the identifiers of one order |
 | `DetachedWriteTimeout` | 30 seconds | Bounds a store write that finishes after the client request ended, such as recording a revocation the CA already carried out |
 | `RenewalInfo` | none | Serves RFC 9773 renewal information and accepts `replaces`. `LifetimeRenewal{}` is the built-in advisor |
+| `Profiles` | none | The certificate profiles advertised in the directory and accepted on new orders. See [Certificate profiles](../guide/certificate-profiles.md) |
+| `DefaultProfile` | empty | The profile of an order that names none. Required with `Profiles` and must be one of them |
 | `Workers` | see below | Tunes `Run` and `Ready` |
 
 ## `DirectoryMeta`
@@ -47,7 +49,16 @@ problem. Zero values select the defaults below. Negative limits are refused.
 | `CAAIdentities` | `caaIdentities` | Informational. CAA is not checked by the library |
 | `ExternalAccountRequired` | `externalAccountRequired` | Refuses accounts without a binding |
 
-The `meta` object is omitted from the directory when every field is empty.
+The `meta` object is omitted from the directory when every field is empty and no profiles are
+configured. Configured profiles appear in it as `profiles`.
+
+## `Profile`
+
+| Field | Purpose |
+| --- | --- |
+| `Name` | The name clients send. 1 to 64 ASCII letters, digits, dots, underscores or hyphens, starting with a letter or digit |
+| `Description` | Plain text the server publishes at `<BaseURL>profiles/<Name>` |
+| `URL` | An absolute `https` URL of a description published elsewhere. Set exactly one of `Description` and `URL` |
 
 ## `WorkerConfig`
 
@@ -88,4 +99,7 @@ field:
 * `RequireTermsOfServiceAgreed` without `Meta.TermsOfService`
 * `TNAuthListIdentifiers` without a `tkauth-01` validator
 * a `TokenAuthority` that is not an absolute `https` URL
+* an invalid or repeated profile name, a profile without exactly one of `Description` and `URL`, a
+  profile `URL` that is not an absolute `https` URL or a `Description` that is not valid UTF-8
+* `DefaultProfile` without `Profiles` or a `DefaultProfile` that names none of them
 * a negative limit or worker value

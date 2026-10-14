@@ -20,6 +20,7 @@ What the library implements, what a configuration field turns on and what is out
 | RFC 9447 and RFC 9448 | `tkauth-01` with TNAuthList identifiers, CA certificates and token-bounded validity | Implemented, Interoperability tested with a go-jose client | `Config.TNAuthListIdentifiers` and a `ChallengeTKAuth01` validator |
 | RFC 9773 | Renewal information and `replaces` on new orders | Implemented, Interoperability tested | `Config.RenewalInfo` |
 | RFC 7638 | Account key thumbprints | Implemented, Interoperability tested | Always |
+| draft-ietf-acme-profiles-02 | Profiles in the directory, `profile` on new orders, `invalidProfile` | Implemented, Interoperability tested | `Config.Profiles` |
 
 ## Challenges and identifiers
 
@@ -66,7 +67,7 @@ Issuer chains may use composite ML-DSA signatures.
 | --- | --- |
 | Pre-authorization (`newAuthz`) and authorization reuse across orders | Unsupported |
 | Alternate certificate chains | Unsupported |
-| Certificate profiles, `dns-account-01`, short-term automatic renewal, delegation, subdomain authorizations | Unsupported, working group drafts are not exposed |
+| `dns-account-01`, short-term automatic renewal, delegation, subdomain authorizations | Unsupported |
 | `email`, `onion` and device identifiers | Unsupported |
 | Rate limits | Unsupported, refuse in `Policy` or `IssuancePolicy` |
 | TLS termination, a CA or durable storage | Provided by the host |

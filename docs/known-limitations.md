@@ -17,11 +17,11 @@ with this library.
 The certificate response carries a single chain and no `rel="alternate"` link. A CA with several
 roots picks one chain in its `Issuer` and clients cannot ask for another.
 
-### Working group drafts are not exposed
+### Other ACME extensions are not implemented
 
-Certificate profiles, `dns-account-01`, short-term automatic renewal, delegation, subdomain
-authorizations and `email`, `onion` or device identifiers are not implemented. Unknown identifier
-types are refused with `unsupportedIdentifier` and unknown directory or order members are ignored.
+`dns-account-01`, short-term automatic renewal, delegation, subdomain authorizations and `email`,
+`onion` or device identifiers are not implemented. Unknown identifier types are refused with
+`unsupportedIdentifier` and unknown directory or order members are ignored.
 
 ### Contacts are mailto only
 
