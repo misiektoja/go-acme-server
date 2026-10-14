@@ -61,6 +61,28 @@ func TestNewValidatesConfig(t *testing.T) {
 		"negative lifetime":    func(c *Config) { c.OrderLifetime = -1 },
 		"negative workers":     func(c *Config) { c.Workers.Concurrency = -1 },
 		"negative detached":    func(c *Config) { c.DetachedWriteTimeout = -1 },
+		"default no profiles":  func(c *Config) { c.DefaultProfile = "classic" },
+		"profiles no default":  func(c *Config) { c.Profiles = []Profile{{Name: "classic", Description: "x"}} },
+		"unknown default": func(c *Config) {
+			c.Profiles, c.DefaultProfile = []Profile{{Name: "classic", Description: "x"}}, "other"
+		},
+		"duplicate profile": func(c *Config) {
+			c.Profiles = []Profile{{Name: "classic", Description: "x"}, {Name: "classic", Description: "y"}}
+			c.DefaultProfile = "classic"
+		},
+		"profile without description": func(c *Config) {
+			c.Profiles, c.DefaultProfile = []Profile{{Name: "classic"}}, "classic"
+		},
+		"profile with both descriptions": func(c *Config) {
+			c.Profiles = []Profile{{Name: "classic", Description: "x", URL: "https://acme.example/classic"}}
+			c.DefaultProfile = "classic"
+		},
+		"http profile url": func(c *Config) {
+			c.Profiles, c.DefaultProfile = []Profile{{Name: "classic", URL: "http://acme.example/classic"}}, "classic"
+		},
+		"invalid utf-8 description": func(c *Config) {
+			c.Profiles, c.DefaultProfile = []Profile{{Name: "classic", Description: "\xff"}}, "classic"
+		},
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -88,6 +110,19 @@ func TestNewValidatesConfig(t *testing.T) {
 	cfg.BaseURL, cfg.AllowInsecureBaseURL = "http://localhost:8080/", true
 	if _, err := New(cfg); err != nil {
 		t.Fatalf("New with AllowInsecureBaseURL: %v", err)
+	}
+}
+
+// Accepts profile names that stay safe in URLs and loosely parsed directories.
+func TestValidProfileName(t *testing.T) {
+	for name, want := range map[string]bool{
+		"classic": true, "tls-server": true, "short.lived_2": true, "7d": true, strings.Repeat("a", 64): true,
+		"": false, "-lead": false, ".lead": false, "has space": false, "a/b": false, "a,b": false, `a"b`: false,
+		"caf\u00e9": false, strings.Repeat("a", 65): false,
+	} {
+		if got := validProfileName(name); got != want {
+			t.Errorf("validProfileName(%q) = %v, want %v", name, got, want)
+		}
 	}
 }
 

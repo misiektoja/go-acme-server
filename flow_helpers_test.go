@@ -289,6 +289,7 @@ type orderBody struct {
 	Authorizations []string                `json:"authorizations"`
 	Finalize       string                  `json:"finalize"`
 	Certificate    string                  `json:"certificate"`
+	Profile        string                  `json:"profile"`
 }
 
 type authzBody struct {

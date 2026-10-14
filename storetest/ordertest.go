@@ -65,6 +65,7 @@ func seedOrder(t *testing.T, store acmeserver.Store) (*acmeserver.Order, []*acme
 		t.Fatalf("CreateAccount: %v", err)
 	}
 	order, authzs, challenges := NewOrder(t, account.ID, "order-1", "a.example", "b.example")
+	order.Profile = "tls-server"
 	if err := store.CreateOrder(ctx, order, authzs, challenges); err != nil {
 		t.Fatalf("CreateOrder: %v", err)
 	}
@@ -589,7 +590,7 @@ func assertOrderEqual(t *testing.T, got, want *acmeserver.Order) {
 	if got.ID != want.ID || got.AccountID != want.AccountID || got.Status != want.Status ||
 		!got.Expires.Equal(want.Expires) || !got.CreatedAt.Equal(want.CreatedAt) || got.Revision != want.Revision ||
 		fmt.Sprint(got.Identifiers) != fmt.Sprint(want.Identifiers) ||
-		fmt.Sprint(got.AuthorizationIDs) != fmt.Sprint(want.AuthorizationIDs) {
+		fmt.Sprint(got.AuthorizationIDs) != fmt.Sprint(want.AuthorizationIDs) || got.Profile != want.Profile {
 		t.Fatalf("order mismatch\n got: %+v\nwant: %+v", got, want)
 	}
 }

@@ -120,6 +120,8 @@ type harnessOptions struct {
 	ipIdentifiers bool
 	// Issues from a composite ML-DSA CA of this algorithm. HTTPS keeps the classical root.
 	compositeIssuer compositemldsa.Algorithm
+	// Offers the interopProfiles certificate profiles.
+	profiles bool
 }
 
 // Returns the MAC key for a configured external account identifier.
@@ -247,6 +249,9 @@ func configuredServer(t *testing.T, baseURL string, options harnessOptions, stor
 		config.TokenAuthority = tokenAuthorityURL
 	}
 	config.IPIdentifiers = options.ipIdentifiers
+	if options.profiles {
+		config.Profiles, config.DefaultProfile = interopProfiles, interopDefaultProfile
+	}
 	server, err := acmeserver.New(config)
 	if err != nil {
 		t.Fatal(err)
