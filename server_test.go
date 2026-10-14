@@ -64,6 +64,7 @@ func TestNewValidatesConfig(t *testing.T) {
 		"default no profiles":  func(c *Config) { c.DefaultProfile = "classic" },
 		"tnauthlist no tkauth": func(c *Config) { c.TNAuthListIdentifiers = true },
 		"nf ids no tkauth":     func(c *Config) { c.NfInstanceIDIdentifiers = true },
+		"outlive no tnauth":    func(c *Config) { c.TNAuthListCertificatesOutliveTokens = true },
 		"profiles no default":  func(c *Config) { c.Profiles = []Profile{{Name: "classic", Description: "x"}} },
 		"unknown default": func(c *Config) {
 			c.Profiles, c.DefaultProfile = []Profile{{Name: "classic", Description: "x"}}, "other"
