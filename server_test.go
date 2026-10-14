@@ -62,6 +62,8 @@ func TestNewValidatesConfig(t *testing.T) {
 		"negative workers":     func(c *Config) { c.Workers.Concurrency = -1 },
 		"negative detached":    func(c *Config) { c.DetachedWriteTimeout = -1 },
 		"default no profiles":  func(c *Config) { c.DefaultProfile = "classic" },
+		"tnauthlist no tkauth": func(c *Config) { c.TNAuthListIdentifiers = true },
+		"nf ids no tkauth":     func(c *Config) { c.NfInstanceIDIdentifiers = true },
 		"profiles no default":  func(c *Config) { c.Profiles = []Profile{{Name: "classic", Description: "x"}} },
 		"unknown default": func(c *Config) {
 			c.Profiles, c.DefaultProfile = []Profile{{Name: "classic", Description: "x"}}, "other"

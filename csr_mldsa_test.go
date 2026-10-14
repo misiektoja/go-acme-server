@@ -26,17 +26,17 @@ func TestMLDSACSR(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, problem := checkCSR(der, order, account); problem != nil {
+		if _, problem := checkCSR(der, order, account, nil); problem != nil {
 			t.Fatal(problem)
 		}
-		if _, problem := checkCSR(der, &Order{Identifiers: []Identifier{{Type: IdentifierDNS, Value: "other.example.test"}}}, account); problem == nil {
+		if _, problem := checkCSR(der, &Order{Identifiers: []Identifier{{Type: IdentifierDNS, Value: "other.example.test"}}}, account, nil); problem == nil {
 			t.Fatal("mismatched identity accepted")
 		}
-		if _, problem := checkCSR(der, order, &Account{Key: key.Public()}); problem == nil {
+		if _, problem := checkCSR(der, order, &Account{Key: key.Public()}, nil); problem == nil {
 			t.Fatal("account key reused as certificate key")
 		}
 		der[len(der)-1] ^= 1
-		if _, problem := checkCSR(der, order, account); problem == nil {
+		if _, problem := checkCSR(der, order, account, nil); problem == nil {
 			t.Fatal("invalid proof accepted")
 		}
 	}

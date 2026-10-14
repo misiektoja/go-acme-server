@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -377,6 +378,8 @@ func testCompleteValidation(t *testing.T, store acmeserver.Store) {
 	authz.Status = acmeserver.AuthorizationValid
 	authz.CACertificate = true
 	authz.GrantExpires = testNow.Add(time.Hour)
+	authz.GrantNames = []acmeserver.Identifier{{Type: acmeserver.IdentifierURI, Value: "https://nf.example.test/api"}}
+	authz.GrantNFType = "AMF"
 	if err := store.CompleteValidation(ctx, task, challenge, authz, order); err != nil {
 		t.Fatalf("CompleteValidation: %v", err)
 	}
@@ -389,7 +392,8 @@ func testCompleteValidation(t *testing.T, store acmeserver.Store) {
 	}
 	gotAuthz, err := store.Authorization(ctx, authz.ID)
 	if err != nil || gotAuthz.Status != acmeserver.AuthorizationValid || !gotAuthz.CACertificate ||
-		!gotAuthz.GrantExpires.Equal(authz.GrantExpires) {
+		!gotAuthz.GrantExpires.Equal(authz.GrantExpires) || !slices.Equal(gotAuthz.GrantNames, authz.GrantNames) ||
+		gotAuthz.GrantNFType != "AMF" {
 		t.Fatalf("Authorization after completion = %+v, %v", gotAuthz, err)
 	}
 	_, err = store.ClaimTask(ctx, testNow.Add(time.Hour), testNow.Add(2*time.Hour))
@@ -464,7 +468,8 @@ func testFinalizeAndIssue(t *testing.T, store acmeserver.Store) {
 		NotBefore: testNow,
 		NotAfter:  testNow.Add(90 * 24 * time.Hour),
 		Validations: []acmeserver.Validation{
-			{Identifier: order.Identifiers[0], Type: acmeserver.ChallengeHTTP01, Validated: testNow},
+			{Identifier: order.Identifiers[0], Type: acmeserver.ChallengeHTTP01, Validated: testNow,
+				Names: []acmeserver.Identifier{{Type: acmeserver.IdentifierDNS, Value: "granted.test"}}, NFType: "SMF"},
 		},
 		CreatedAt: testNow,
 	}
@@ -480,12 +485,14 @@ func testFinalizeAndIssue(t *testing.T, store acmeserver.Store) {
 	if err != nil {
 		t.Fatalf("Certificate: %v", err)
 	}
-	if len(gotCert.Chain) != 2 || gotCert.OrderID != order.ID || len(gotCert.Validations) != 1 {
+	if len(gotCert.Chain) != 2 || gotCert.OrderID != order.ID || len(gotCert.Validations) != 1 ||
+		!slices.Equal(gotCert.Validations[0].Names, cert.Validations[0].Names) || gotCert.Validations[0].NFType != "SMF" {
 		t.Fatalf("Certificate = %+v", gotCert)
 	}
 	gotCert.Chain[0][0] = 0xff
+	gotCert.Validations[0].Names[0].Value = "changed.test"
 	again, _ := store.Certificate(ctx, cert.ID)
-	if again.Chain[0][0] != 0x30 {
+	if again.Chain[0][0] != 0x30 || again.Validations[0].Names[0].Value != "granted.test" {
 		t.Fatal("stored certificate changed through a returned copy")
 	}
 	gotOrder, _ := store.Order(ctx, order.ID)

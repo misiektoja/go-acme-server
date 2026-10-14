@@ -102,9 +102,11 @@ func TestChainChecksCompleteIdentityAndValidity(t *testing.T) {
 	}
 }
 
-// Exempts the common name only when an authority list is the certificate's only identity.
+// Exempts the common name when an authority list is the certificate's only identity or the
+// certificate names a network function instance.
 func TestCertificateIdentifiersCommonName(t *testing.T) {
 	list := pkix.Extension{Id: tnAuthListOID, Value: authorityList(spcEntry("1234"))}
+	instance := &url.URL{Scheme: "urn", Opaque: "uuid:4ace9d34-2c69-4f99-92d5-a73a3fe8e23b"}
 	for _, test := range []struct {
 		name string
 		leaf x509.Certificate
@@ -118,6 +120,10 @@ func TestCertificateIdentifiersCommonName(t *testing.T) {
 		{"SAN name on a mixed certificate", x509.Certificate{
 			Subject: pkix.Name{CommonName: "a.test"}, DNSNames: []string{"a.test"},
 			Extensions: []pkix.Extension{list}}, true},
+		{"any name on a network function certificate", x509.Certificate{
+			Subject: pkix.Name{CommonName: "AMF 1"}, DNSNames: []string{"a.test"}, URIs: []*url.URL{instance}}, true},
+		{"unsupported URI name", x509.Certificate{
+			URIs: []*url.URL{{Scheme: "urn", Opaque: "isbn:0451450523"}}}, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			if _, err := certificateIdentifiers(&test.leaf); (err == nil) != test.ok {
@@ -156,12 +162,40 @@ func TestRevocationIdentifiersCoverTheCommonName(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			ids, err := revocationIdentifiers(&test.leaf)
-			if err != nil || !sameIdentifiers(ids, test.want) {
+			if err != nil || !coversIdentifiers(ids, test.want, nil) {
 				t.Fatalf("revocationIdentifiers = %v, %v, want %v", ids, err, test.want)
 			}
 			if _, err := certificateIdentifiers(&test.leaf); (err == nil) != test.published {
 				t.Fatalf("certificateIdentifiers = %v, published = %v", err, test.published)
 			}
 		})
+	}
+}
+
+// Requires every order identifier and allows only granted names beyond them.
+func TestCoversIdentifiers(t *testing.T) {
+	instance := Identifier{Type: IdentifierNfInstanceID, Value: "4ace9d34-2c69-4f99-92d5-a73a3fe8e23b"}
+	root := Identifier{Type: IdentifierURI, Value: "https://a.test/api"}
+	name := Identifier{Type: IdentifierDNS, Value: "a.test"}
+	order := []Identifier{instance}
+	granted := []Identifier{root, name}
+	for _, test := range []struct {
+		name  string
+		names []Identifier
+		want  bool
+	}{
+		{"order alone", []Identifier{instance}, true},
+		{"every granted name", []Identifier{root, instance, name}, true},
+		{"order identifier missing", []Identifier{root, name}, false},
+		{"name not granted", []Identifier{instance, {Type: IdentifierDNS, Value: "b.test"}}, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := coversIdentifiers(test.names, order, granted); got != test.want {
+				t.Fatalf("coversIdentifiers = %v, want %v", got, test.want)
+			}
+		})
+	}
+	if coversIdentifiers([]Identifier{instance, name}, order, nil) {
+		t.Fatal("a name was accepted without a grant")
 	}
 }

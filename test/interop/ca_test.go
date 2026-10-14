@@ -19,6 +19,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -245,7 +246,7 @@ func (ca *durableCA) Issue(ctx context.Context, req acmeserver.IssueRequest) (ac
 // The id-pe-TNAuthList certificate extension of RFC 8226 section 9.
 var tnAuthListOID = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 1, 26}
 
-// Issues only the identifiers and validity accepted by the server.
+// Issues only the identifiers, granted names and validity accepted by the server.
 func (ca *durableCA) sign(req acmeserver.IssueRequest) ([]byte, error) {
 	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	if err != nil {
@@ -260,7 +261,11 @@ func (ca *durableCA) sign(req acmeserver.IssueRequest) ([]byte, error) {
 	if !req.NotAfter.IsZero() {
 		leaf.NotAfter = req.NotAfter
 	}
-	for _, id := range req.Identifiers {
+	names := slices.Clone(req.Identifiers)
+	for _, validation := range req.Validations {
+		names = append(names, validation.Names...)
+	}
+	for _, id := range names {
 		switch id.Type {
 		case acmeserver.IdentifierDNS:
 			leaf.DNSNames = append(leaf.DNSNames, id.Value)
@@ -272,6 +277,14 @@ func (ca *durableCA) sign(req acmeserver.IssueRequest) ([]byte, error) {
 				return nil, err
 			}
 			leaf.ExtraExtensions = append(leaf.ExtraExtensions, pkix.Extension{Id: tnAuthListOID, Value: value})
+		case acmeserver.IdentifierNfInstanceID, acmeserver.IdentifierURI:
+			uri, err := url.Parse(id.URI())
+			if err != nil {
+				return nil, err
+			}
+			leaf.URIs = append(leaf.URIs, uri)
+		default:
+			return nil, errors.New("unsupported identifier type " + string(id.Type))
 		}
 	}
 	// crypto/x509 leaves CSR.PublicKey nil for a composite ML-DSA key.

@@ -31,6 +31,13 @@ func TestRequestValidationBeforeNetwork(t *testing.T) {
 		func(r *acmeserver.ValidationRequest) { r.Challenge.Token = "../other" },
 		func(r *acmeserver.ValidationRequest) { r.AccountKeyThumbprint = "" },
 		func(r *acmeserver.ValidationRequest) { r.KeyAuthorization += "x" },
+		func(r *acmeserver.ValidationRequest) {
+			r.Identifier = acmeserver.Identifier{Type: acmeserver.IdentifierNfInstanceID,
+				Value: "4ace9d34-2c69-4f99-92d5-a73a3fe8e23b"}
+		},
+		func(r *acmeserver.ValidationRequest) {
+			r.Identifier = acmeserver.Identifier{Type: acmeserver.IdentifierURI, Value: "https://a.test/"}
+		},
 	} {
 		request := proofRequest(acmeserver.ChallengeHTTP01, "a.test")
 		mutate(&request)

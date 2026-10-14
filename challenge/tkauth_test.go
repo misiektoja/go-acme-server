@@ -14,6 +14,8 @@ import (
 	"encoding/json"
 	"errors"
 	"math/big"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -335,6 +337,9 @@ func TestTKAuth01RequestScope(t *testing.T) {
 		"dns identifier": func(req *acmeserver.ValidationRequest) {
 			req.Identifier = acmeserver.Identifier{Type: acmeserver.IdentifierDNS, Value: "a.test"}
 		},
+		"uri identifier": func(req *acmeserver.ValidationRequest) {
+			req.Identifier = acmeserver.Identifier{Type: acmeserver.IdentifierURI, Value: "https://a.test/"}
+		},
 		"another challenge type": func(req *acmeserver.ValidationRequest) {
 			req.Challenge.Type = acmeserver.ChallengeDNS01
 		},
@@ -365,5 +370,120 @@ func TestNewTKAuth01Rejects(t *testing.T) {
 	}
 	if _, err := NewTKAuth01(TKAuthOptions{Authorities: failingAuthorities{}, ClockSkew: -time.Second}); err == nil {
 		t.Fatal("a negative clock skew was accepted")
+	}
+}
+
+// The NF instance the NF token tests authorize.
+const testNfInstance = "4ace9d34-2c69-4f99-92d5-a73a3fe8e23b"
+
+// Returns a tkauth-01 request for the test NF instance carrying the token.
+func nfRequest(token string) acmeserver.ValidationRequest {
+	request := tokenRequest(token)
+	request.Identifier = acmeserver.Identifier{Type: acmeserver.IdentifierNfInstanceID, Value: testNfInstance}
+	return request
+}
+
+// Returns the claim set of an NF Certificate Authority Token that should validate, after the
+// example of 3GPP TS 33.310 clause J.3.3.3.
+func nfClaims() map[string]any {
+	return map[string]any{
+		"exp": time.Now().Add(time.Hour).Unix(),
+		"jti": "id6098364921",
+		"atc": map[string]any{"tktype": "NfInstanceId", "tkvalue": testNfInstance,
+			"fingerprint": strings.Repeat("A", 43), "nftype": "AMF", "sans": []string{"amf1234.example.test"}},
+	}
+}
+
+// Accepts an NF token and reports the NF type and the names it grants.
+func TestTKAuth01AcceptsNfInstance(t *testing.T) {
+	now := time.Now()
+	a := newAuthority(t, now.Add(-time.Hour), now.Add(time.Hour))
+	validator := tokenValidator(t, a)
+	dns := func(value string) acmeserver.Identifier {
+		return acmeserver.Identifier{Type: acmeserver.IdentifierDNS, Value: value}
+	}
+	cases := map[string]struct {
+		mutate func(atc map[string]any)
+		names  []acmeserver.Identifier
+		nfType string
+	}{
+		"specification example": {mutate: func(map[string]any) {},
+			names: []acmeserver.Identifier{dns("amf1234.example.test")}, nfType: "AMF"},
+		"upper-case instance": {mutate: func(atc map[string]any) {
+			atc["tkvalue"] = strings.ToUpper(testNfInstance)
+		}, names: []acmeserver.Identifier{dns("amf1234.example.test")}, nfType: "AMF"},
+		"every name kind": {mutate: func(atc map[string]any) {
+			atc["sans"] = []string{"AMF1.Example.test", "192.0.2.10", "2001:db8::10",
+				"HTTPS://Amf1.Example.test/api", "urn:uuid:" + strings.ToUpper(testNfInstance), "amf1.example.test"}
+		}, names: []acmeserver.Identifier{
+			dns("amf1.example.test"),
+			{Type: acmeserver.IdentifierIP, Value: "192.0.2.10"},
+			{Type: acmeserver.IdentifierIP, Value: "2001:db8::10"},
+			{Type: acmeserver.IdentifierURI, Value: "https://amf1.example.test/api"},
+		}, nfType: "AMF"},
+		"wildcard left to the host": {mutate: func(atc map[string]any) {
+			atc["sans"] = []string{"*.amf.example.test"}
+		}, names: []acmeserver.Identifier{dns("*.amf.example.test")}, nfType: "AMF"},
+		"no profile parameters": {mutate: func(atc map[string]any) {
+			delete(atc, "nftype")
+			delete(atc, "sans")
+		}},
+		"ca member ignored": {mutate: func(atc map[string]any) {
+			atc["ca"] = true
+			delete(atc, "sans")
+		}, nfType: "AMF"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			claims := nfClaims()
+			tc.mutate(claims["atc"].(map[string]any))
+			grant, err := validator.ValidateGrant(t.Context(), nfRequest(a.sign(t, authorityHeader(), claims)))
+			if err != nil {
+				t.Fatalf("ValidateGrant: %v", err)
+			}
+			if !slices.Equal(grant.Names, tc.names) || grant.NFType != tc.nfType || grant.CACertificate {
+				t.Fatalf("grant = %+v, want names %v and NF type %q", grant, tc.names, tc.nfType)
+			}
+			if exp, _ := claims["exp"].(int64); !grant.Expires.Equal(time.Unix(exp, 0)) {
+				t.Fatalf("Expires = %v, want the exp claim %d", grant.Expires, exp)
+			}
+		})
+	}
+}
+
+// Refuses NF tokens that fail a check of 3GPP TS 33.310 clause J.3.3.4 or carry unusable names.
+func TestTKAuth01RefusesNfInstance(t *testing.T) {
+	now := time.Now()
+	a := newAuthority(t, now.Add(-time.Hour), now.Add(time.Hour))
+	validator := tokenValidator(t, a)
+	tooMany := make([]string, maxTokenNames+1)
+	for i := range tooMany {
+		tooMany[i] = "nf" + strconv.Itoa(i) + ".example.test"
+	}
+	cases := map[string]func(claims, atc map[string]any){
+		"another instance":      func(_, atc map[string]any) { atc["tkvalue"] = "5bce9d34-2c69-4f99-92d5-a73a3fe8e23b" },
+		"TNAuthList token type": func(_, atc map[string]any) { atc["tktype"] = "TNAuthList" },
+		"another account key":   func(_, atc map[string]any) { atc["fingerprint"] = strings.Repeat("C", 43) },
+		"expired token":         func(claims, _ map[string]any) { claims["exp"] = now.Add(-2 * time.Minute).Unix() },
+		"empty nftype":          func(_, atc map[string]any) { atc["nftype"] = "" },
+		"nftype with a space":   func(_, atc map[string]any) { atc["nftype"] = "A MF" },
+		"nftype too long":       func(_, atc map[string]any) { atc["nftype"] = strings.Repeat("A", 33) },
+		"nftype not a string":   func(_, atc map[string]any) { atc["nftype"] = 7 },
+		"sans not a list":       func(_, atc map[string]any) { atc["sans"] = "amf1.example.test" },
+		"too many sans":         func(_, atc map[string]any) { atc["sans"] = tooMany },
+		"another instance URN":  func(_, atc map[string]any) { atc["sans"] = []string{"urn:uuid:5bce9d34-2c69-4f99-92d5-a73a3fe8e23b"} },
+		"http URI":              func(_, atc map[string]any) { atc["sans"] = []string{"http://amf1.example.test/api"} },
+		"URI with user info":    func(_, atc map[string]any) { atc["sans"] = []string{"https://user@amf1.example.test/"} },
+		"invalid DNS name":      func(_, atc map[string]any) { atc["sans"] = []string{"amf_1.example.test"} },
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			claims := nfClaims()
+			mutate(claims, claims["atc"].(map[string]any))
+			_, err := validator.ValidateGrant(t.Context(), nfRequest(a.sign(t, authorityHeader(), claims)))
+			if p, terminal := acmeserver.AsProblem(err); !terminal || p.Type != acmeserver.ErrorIncorrectResponse {
+				t.Fatalf("error = %v, want an incorrectResponse problem", err)
+			}
+		})
 	}
 }

@@ -76,6 +76,12 @@ func (a *tokenAuthority) tokenUntil(t *testing.T, thumbprint string, list []byte
 	if ca {
 		atc["ca"] = true
 	}
+	return a.sign(t, atc, exp)
+}
+
+// Returns a compact Authority Token that carries the atc claim and expires at exp.
+func (a *tokenAuthority) sign(t *testing.T, atc map[string]any, exp time.Time) string {
+	t.Helper()
 	header, err := json.Marshal(map[string]any{"typ": "JWT", "alg": "ES256", "x5u": authorityCertURL})
 	if err != nil {
 		t.Fatal(err)
@@ -110,6 +116,13 @@ func newTKAuthFlow(t *testing.T) (*flow, *tokenAuthority) {
 // Builds a tkauth-01 flow whose server and validator read clock, or the system clock when it is nil.
 func newTKAuthFlowAt(t *testing.T, clock *flowClock) (*flow, *tokenAuthority) {
 	t.Helper()
+	return newTokenFlow(t, clock, func(cfg *acmeserver.Config) { cfg.TNAuthListIdentifiers = true })
+}
+
+// Builds a flow with a tkauth-01 validator that trusts a new Token Authority. The validator and
+// server read clock, or the system clock when it is nil, and enable reports the token identifiers.
+func newTokenFlow(t *testing.T, clock *flowClock, enable func(*acmeserver.Config)) (*flow, *tokenAuthority) {
+	t.Helper()
 	a := newTokenAuthority(t)
 	options := challenge.TKAuthOptions{
 		Authorities: challenge.StaticTokenAuthorities{
@@ -125,7 +138,7 @@ func newTKAuthFlowAt(t *testing.T, clock *flowClock) (*flow, *tokenAuthority) {
 	}
 	f := newFlow(t, func(cfg *acmeserver.Config) {
 		cfg.Validators[acmeserver.ChallengeTKAuth01] = validator
-		cfg.TNAuthListIdentifiers = true
+		enable(cfg)
 		cfg.TokenAuthority = tokenAuthorityURL
 		if clock != nil {
 			cfg.Clock = clock
