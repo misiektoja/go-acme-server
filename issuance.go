@@ -168,6 +168,10 @@ func (s *Server) issuanceAuthorization(ctx context.Context, operationID string, 
 func (s *Server) validationEvidence(ctx context.Context, a *Authorization) (Validation, error) {
 	v := Validation{Identifier: a.Identifier, CACertificate: a.CACertificate, GrantExpires: a.GrantExpires,
 		Names: slices.Clone(a.GrantNames), NFType: a.GrantNFType}
+	// The authorization keeps the token expiry, which still ends the signing deadline above.
+	if s.tnAuthListOutlive && a.Identifier.Type == IdentifierTNAuthList {
+		v.GrantExpires = time.Time{}
+	}
 	if a.Wildcard {
 		v.Identifier.Value = "*." + v.Identifier.Value
 	}

@@ -63,16 +63,18 @@ type Server struct {
 	requireTOS     bool
 	ipIdentifiers  bool
 	tnAuthList     bool
-	nfInstanceIDs  bool
-	tokenAuthority string
-	renewal        RenewalAdvisor
-	profiles       map[string]Profile
-	defaultProfile string
-	orderLifetime  time.Duration
-	authzLifetime  time.Duration
-	maxIdentifiers int
-	detachedWrite  time.Duration
-	workers        WorkerConfig
+	// Certificates for TNAuthList identifiers keep their own validity, see Config.
+	tnAuthListOutlive bool
+	nfInstanceIDs     bool
+	tokenAuthority    string
+	renewal           RenewalAdvisor
+	profiles          map[string]Profile
+	defaultProfile    string
+	orderLifetime     time.Duration
+	authzLifetime     time.Duration
+	maxIdentifiers    int
+	detachedWrite     time.Duration
+	workers           WorkerConfig
 	// Signals Run that new work was accepted in this process.
 	wake    chan struct{}
 	running atomic.Bool
@@ -92,35 +94,36 @@ func New(cfg Config) (*Server, error) {
 		return nil, err
 	}
 	s := &Server{
-		baseURL:        base.String(),
-		basePath:       base.Path,
-		store:          cfg.Store,
-		nonces:         cfg.Nonces,
-		clock:          cfg.Clock,
-		log:            cfg.Logger,
-		meta:           cfg.Meta,
-		maxBody:        cfg.MaxRequestBody,
-		issuer:         cfg.Issuer,
-		revoker:        cfg.Revoker,
-		validators:     make(map[ChallengeType]Validator, len(cfg.Validators)),
-		eabKeys:        cfg.ExternalAccounts,
-		singleUseEAB:   cfg.SingleUseExternalAccounts,
-		policy:         cfg.Policy,
-		issuancePolicy: cfg.IssuancePolicy,
-		requireTOS:     cfg.RequireTermsOfServiceAgreed,
-		ipIdentifiers:  cfg.IPIdentifiers,
-		tnAuthList:     cfg.TNAuthListIdentifiers,
-		nfInstanceIDs:  cfg.NfInstanceIDIdentifiers,
-		tokenAuthority: cfg.TokenAuthority,
-		renewal:        cfg.RenewalInfo,
-		profiles:       make(map[string]Profile, len(cfg.Profiles)),
-		defaultProfile: cfg.DefaultProfile,
-		orderLifetime:  cfg.OrderLifetime,
-		authzLifetime:  cfg.AuthorizationLifetime,
-		maxIdentifiers: cfg.MaxIdentifiers,
-		detachedWrite:  cfg.DetachedWriteTimeout,
-		workers:        workers,
-		wake:           make(chan struct{}, 1),
+		baseURL:           base.String(),
+		basePath:          base.Path,
+		store:             cfg.Store,
+		nonces:            cfg.Nonces,
+		clock:             cfg.Clock,
+		log:               cfg.Logger,
+		meta:              cfg.Meta,
+		maxBody:           cfg.MaxRequestBody,
+		issuer:            cfg.Issuer,
+		revoker:           cfg.Revoker,
+		validators:        make(map[ChallengeType]Validator, len(cfg.Validators)),
+		eabKeys:           cfg.ExternalAccounts,
+		singleUseEAB:      cfg.SingleUseExternalAccounts,
+		policy:            cfg.Policy,
+		issuancePolicy:    cfg.IssuancePolicy,
+		requireTOS:        cfg.RequireTermsOfServiceAgreed,
+		ipIdentifiers:     cfg.IPIdentifiers,
+		tnAuthList:        cfg.TNAuthListIdentifiers,
+		tnAuthListOutlive: cfg.TNAuthListCertificatesOutliveTokens,
+		nfInstanceIDs:     cfg.NfInstanceIDIdentifiers,
+		tokenAuthority:    cfg.TokenAuthority,
+		renewal:           cfg.RenewalInfo,
+		profiles:          make(map[string]Profile, len(cfg.Profiles)),
+		defaultProfile:    cfg.DefaultProfile,
+		orderLifetime:     cfg.OrderLifetime,
+		authzLifetime:     cfg.AuthorizationLifetime,
+		maxIdentifiers:    cfg.MaxIdentifiers,
+		detachedWrite:     cfg.DetachedWriteTimeout,
+		workers:           workers,
+		wake:              make(chan struct{}, 1),
 	}
 	maps.Copy(s.validators, cfg.Validators)
 	for _, p := range cfg.Profiles {
@@ -175,15 +178,12 @@ func (cfg Config) validate() error {
 		return errorf("Config.SingleUseExternalAccounts needs Config.ExternalAccounts")
 	case cfg.RequireTermsOfServiceAgreed && cfg.Meta.TermsOfService == "":
 		return errorf("Config.RequireTermsOfServiceAgreed needs Meta.TermsOfService")
-	case cfg.TNAuthListIdentifiers && cfg.Validators[ChallengeTKAuth01] == nil:
-		return errorf("Config.TNAuthListIdentifiers needs a " + string(ChallengeTKAuth01) + " validator")
-	case cfg.NfInstanceIDIdentifiers && cfg.Validators[ChallengeTKAuth01] == nil:
-		return errorf("Config.NfInstanceIDIdentifiers needs a " + string(ChallengeTKAuth01) + " validator")
-	case cfg.TokenAuthority != "" && !isHTTPSURL(cfg.TokenAuthority):
-		return errorf("Config.TokenAuthority must be an absolute https URL")
 	case cfg.MaxRequestBody < 0 || cfg.OrderLifetime < 0 || cfg.AuthorizationLifetime < 0 ||
 		cfg.MaxIdentifiers < 0 || cfg.DetachedWriteTimeout < 0:
 		return errorf("Config limits must not be negative")
+	}
+	if err := cfg.validateAuthorityTokens(); err != nil {
+		return err
 	}
 	for typ, v := range cfg.Validators {
 		if v == nil {
@@ -195,6 +195,22 @@ func (cfg Config) validate() error {
 		}
 	}
 	return validateProfiles(cfg.Profiles, cfg.DefaultProfile)
+}
+
+// Checks that the Authority Token identifiers have a tkauth-01 validator and a usable token
+// authority URL.
+func (cfg Config) validateAuthorityTokens() error {
+	switch {
+	case cfg.TNAuthListIdentifiers && cfg.Validators[ChallengeTKAuth01] == nil:
+		return errorf("Config.TNAuthListIdentifiers needs a " + string(ChallengeTKAuth01) + " validator")
+	case cfg.TNAuthListCertificatesOutliveTokens && !cfg.TNAuthListIdentifiers:
+		return errorf("Config.TNAuthListCertificatesOutliveTokens needs Config.TNAuthListIdentifiers")
+	case cfg.NfInstanceIDIdentifiers && cfg.Validators[ChallengeTKAuth01] == nil:
+		return errorf("Config.NfInstanceIDIdentifiers needs a " + string(ChallengeTKAuth01) + " validator")
+	case cfg.TokenAuthority != "" && !isHTTPSURL(cfg.TokenAuthority):
+		return errorf("Config.TokenAuthority must be an absolute https URL")
+	}
+	return nil
 }
 
 // Returns the worker configuration with defaults applied.

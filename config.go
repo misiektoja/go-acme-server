@@ -111,6 +111,11 @@ type Config struct {
 	IPIdentifiers bool
 	// Accepts TNAuthList identifiers as specified in RFC 9448. It needs a tkauth-01 validator.
 	TNAuthListIdentifiers bool
+	// Lets a certificate issued for a TNAuthList identifier outlive the Authority Token, as
+	// ATIS-1000080 clause 6.3.8 specifies for STIR/SHAKEN. The token must still be valid when
+	// signing starts. By default the token expiry bounds the certificate, as RFC 9447 section 7
+	// recommends.
+	TNAuthListCertificatesOutliveTokens bool
 	// Accepts NfInstanceId identifiers of 5G network functions as described in 3GPP TS 33.310
 	// Annex J. It needs a tkauth-01 validator.
 	NfInstanceIDIdentifiers bool

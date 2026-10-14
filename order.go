@@ -29,9 +29,19 @@ type authorizationUpdateJSON struct {
 }
 
 // The challenge response payload. RFC 8555 section 7.5.1 sends an empty object and RFC 9448
-// section 4 adds the Authority Token for tkauth-01.
+// section 4 adds the Authority Token for tkauth-01. ATIS-1000080 clause 6.3.5.2 puts the same
+// token in an atc field, which SHAKEN clients send, so both names are read.
 type challengeResponseJSON struct {
 	TKAuth string `json:"tkauth"`
+	ATC    string `json:"atc"`
+}
+
+// Returns the Authority Token of a response, from whichever field carries it.
+func (p challengeResponseJSON) authorityToken() string {
+	if p.TKAuth != "" {
+		return p.TKAuth
+	}
+	return p.ATC
 }
 
 // Bounds the Authority Token a client may present.
@@ -337,15 +347,17 @@ func (s *Server) challengeTypesFor(id Identifier) []ChallengeType {
 // Checks a challenge response payload against what the challenge type expects.
 func checkChallengeResponse(typ ChallengeType, payload challengeResponseJSON) *Problem {
 	if typ != ChallengeTKAuth01 {
-		if payload.TKAuth != "" {
+		if payload.authorityToken() != "" {
 			return Problemf(ErrorMalformed, "a %s response does not carry an authority token", string(typ))
 		}
 		return nil
 	}
 	switch {
-	case payload.TKAuth == "":
-		return NewProblem(ErrorMalformed, "a tkauth-01 response needs the tkauth authority token")
-	case len(payload.TKAuth) > maxAuthorityTokenLength:
+	case payload.authorityToken() == "":
+		return NewProblem(ErrorMalformed, "a tkauth-01 response needs the authority token in tkauth or atc")
+	case payload.TKAuth != "" && payload.ATC != "" && payload.TKAuth != payload.ATC:
+		return NewProblem(ErrorMalformed, "the tkauth and atc fields carry different authority tokens")
+	case len(payload.authorityToken()) > maxAuthorityTokenLength:
 		return Problemf(ErrorMalformed, "the authority token exceeds %d characters", maxAuthorityTokenLength)
 	}
 	return nil
@@ -547,7 +559,7 @@ func (s *Server) acceptChallenge(ctx context.Context, ch *Challenge, account *Ac
 	}
 	ch.Status = ChallengeProcessing
 	ch.KeyThumbprint = account.KeyThumbprint
-	ch.AuthorityToken = payload.TKAuth
+	ch.AuthorityToken = payload.authorityToken()
 	task := &Task{ID: taskID, Kind: TaskValidate, TargetID: ch.ID, AccountID: account.ID, RunAt: now, CreatedAt: now}
 	err = s.store.AcceptChallenge(ctx, ch, task)
 	switch {
