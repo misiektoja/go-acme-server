@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -86,6 +87,11 @@ func TestNewValidatesConfig(t *testing.T) {
 		"invalid utf-8 description": func(c *Config) {
 			c.Profiles, c.DefaultProfile = []Profile{{Name: "classic", Description: "\xff"}}, "classic"
 		},
+		"certificate hold reason": func(c *Config) { c.RevocationReasons = []int{0, 6} },
+		"unassigned reason":       func(c *Config) { c.RevocationReasons = []int{7} },
+		"remove from CRL reason":  func(c *Config) { c.RevocationReasons = []int{8} },
+		"unknown reason":          func(c *Config) { c.RevocationReasons = []int{11} },
+		"negative reason":         func(c *Config) { c.RevocationReasons = []int{-1} },
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -108,6 +114,14 @@ func TestNewValidatesConfig(t *testing.T) {
 	if s.orderLifetime != DefaultOrderLifetime || s.authzLifetime != DefaultAuthorizationLifetime ||
 		s.maxIdentifiers != DefaultMaxIdentifiers || s.workers.Concurrency != 4 || s.workers.MaxAttempts != 5 {
 		t.Fatalf("limit defaults not applied: %+v", s)
+	}
+	if !slices.Equal(s.revocationReasons, []int{0, 1, 3, 4, 5}) {
+		t.Fatalf("default revocation reasons = %v", s.revocationReasons)
+	}
+	cfg = valid()
+	cfg.RevocationReasons = []int{9, 0, 9, 1}
+	if s, err = New(cfg); err != nil || !slices.Equal(s.revocationReasons, []int{0, 1, 9}) {
+		t.Fatalf("configured revocation reasons = %v, %v", s, err)
 	}
 	cfg = valid()
 	cfg.BaseURL, cfg.AllowInsecureBaseURL = "http://localhost:8080/", true
