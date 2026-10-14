@@ -18,6 +18,7 @@ What the library implements, what a configuration field turns on and what is out
 | RFC 8737 TLS-ALPN-01 | Challenge validation | Implemented, Interoperability tested | A `ChallengeTLSALPN01` validator |
 | RFC 8738 IP identifiers | IPv4 and IPv6 identifiers through HTTP-01 and TLS-ALPN-01 | Implemented, Interoperability tested | `Config.IPIdentifiers` |
 | RFC 9447 and RFC 9448 | `tkauth-01` with TNAuthList identifiers, CA certificates and token-bounded validity | Implemented, Interoperability tested with a go-jose client | `Config.TNAuthListIdentifiers` and a `ChallengeTKAuth01` validator |
+| 3GPP TS 33.310 Annex J | `tkauth-01` with `NfInstanceId` identifiers for 5G network function certificates, with the NF type and extra names a token grants | Implemented, Interoperability tested with a go-jose client | `Config.NfInstanceIDIdentifiers` and a `ChallengeTKAuth01` validator |
 | RFC 9773 | Renewal information and `replaces` on new orders | Implemented, Interoperability tested | `Config.RenewalInfo` |
 | RFC 7638 | Account key thumbprints | Implemented, Interoperability tested | Always |
 | draft-ietf-acme-profiles-02 | Profiles in the directory, `profile` on new orders, `invalidProfile` | Implemented, Interoperability tested | `Config.Profiles` |
@@ -29,6 +30,7 @@ What the library implements, what a configuration field turns on and what is out
 | `dns` | `http-01`, `dns-01`, `tls-alpn-01` from the configured validators | A wildcard name is offered `dns-01` alone |
 | `ip` | `http-01` and `tls-alpn-01` from the configured validators | Needs `Config.IPIdentifiers`. Never `dns-01` |
 | `TNAuthList` | `tkauth-01` alone | Needs `Config.TNAuthListIdentifiers`. One per order |
+| `NfInstanceId` | `tkauth-01` alone | Needs `Config.NfInstanceIDIdentifiers`. One per order and never with `TNAuthList` |
 
 Only challenge types with a configured validator appear in authorizations. An order whose
 identifier has no usable challenge type is refused.

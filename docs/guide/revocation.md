@@ -23,6 +23,10 @@ the wildcard name. The account has to prove the names through ordinary orders fi
 is no pre-authorization. Names a policy pre-approved for the account do not count, see
 [Pre-approved identifiers](accounts-and-policy.md#pre-approved-identifiers).
 
+A network function certificate, one that carries an `NfInstanceId` URN, is never revoked this third
+way. 3GPP TS 33.310 clause J.4 limits its revocation to the enrolling account and the holder of the
+certificate key, see [Authority Token challenges](authority-tokens.md#network-function-certificates).
+
 A certificate the server did not issue is refused with a `404` `malformed` problem. Reason codes
 follow RFC 5280. `unspecified`, `keyCompromise`, `affiliationChanged`, `superseded` and
 `cessationOfOperation` are accepted. `certificateHold` and the CA reasons are refused with

@@ -46,7 +46,7 @@ status. `AsProblem` extracts a problem from an error chain.
 | `serverInternal` | 500 | A store, CA or policy failure, or an issuer result that failed the publication checks |
 | `unauthorized` | 403 | The signed `url` does not match, the account is not valid, the requester may not revoke the certificate, an authorization expired before issuance or `replaces` names another account's certificate |
 | `unsupportedContact` | 400 | A contact scheme other than `mailto` |
-| `unsupportedIdentifier` | 400 | An `ip` or `TNAuthList` identifier while that feature is off, or an unknown identifier type |
+| `unsupportedIdentifier` | 400 | An `ip`, `TNAuthList` or `NfInstanceId` identifier while that feature is off, a `uri` identifier or an unknown identifier type |
 | `userActionRequired` | 403 | The terms of service were not agreed |
 
 `caa`, `connection`, `dnssec` and `tls` are defined for host validators and are not sent by the

@@ -60,6 +60,7 @@ import (
 | RFC 8737 TLS-ALPN-01 | Challenge validation | A `ChallengeTLSALPN01` validator |
 | RFC 8738 IP identifiers | IPv4 and IPv6 identifiers through HTTP-01 and TLS-ALPN-01 | `Config.IPIdentifiers` |
 | RFC 9447 and RFC 9448 | tkauth-01 with TNAuthList identifiers | `Config.TNAuthListIdentifiers` |
+| 3GPP TS 33.310 Annex J | tkauth-01 with NfInstanceId identifiers for 5G network functions | `Config.NfInstanceIDIdentifiers` |
 | RFC 9773 | Renewal information and `replaces` | `Config.RenewalInfo` |
 | draft-ietf-acme-profiles | Certificate profiles in the directory and on new orders | `Config.Profiles` |
 

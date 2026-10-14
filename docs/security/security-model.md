@@ -84,6 +84,7 @@ revocation if the host deduplicates as the contract requires.
 | Rate limits and abuse controls | `Policy` and `IssuancePolicy`. The library has no built-in limits |
 | CAA and name policy | `IssuancePolicy` or the CA. The library does not check CAA |
 | Token Authority trust | `challenge.TokenAuthorities` for `tkauth-01` |
+| Network function certificate contents | The `Issuer` builds the subject, `nfTypes` extension and key usages of an `NfInstanceId` order from the granted names and NF type |
 | Unpublished result reconciliation | Query orders with `UnpublishedResult` and act in the CA |
 | Nonce coordination | A shared `NonceManager` when several replicas serve one origin |
 | Retention and audit | Reading and pruning the store |

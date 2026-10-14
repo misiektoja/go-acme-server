@@ -145,8 +145,8 @@ authorization, the account key thumbprint captured when the client responded and
 * keep fetched content out of error details
 
 A validator that also authorizes something beyond control of the identifier, such as a CA
-certificate or a validity bound, implements `GrantingValidator`. The `tkauth-01` validator is the
-example.
+certificate, a validity bound or extra certificate names, implements `GrantingValidator`. The
+`tkauth-01` validator is the example.
 
 ## Checklist
 
