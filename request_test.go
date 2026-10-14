@@ -388,6 +388,19 @@ func TestReadSignedRequestStoreFailure(t *testing.T) {
 	assertProblemType(t, p, ErrorServerInternal, http.StatusInternalServerError)
 }
 
+// acme.sh 3.1.6 retries a bad nonce only when the detail contains Let's Encrypt's wording.
+func TestBadNonceDetailMatchesClientRetries(t *testing.T) {
+	s, store, _ := newTestServer(t, DirectoryMeta{})
+	sig := newSigner(t, "ES256")
+	seedAccount(t, store, sig, AccountValid)
+	body := sig.sign(t, accountHeader(s, "new-order", "bm90LWlzc3VlZA"), []byte(`{}`))
+	_, p := s.readSignedRequest(postJOSE(s.resourceURL("new-order"), body), "new-order", keyModeAccount)
+	assertProblemType(t, p, ErrorBadNonce, http.StatusBadRequest)
+	if !strings.Contains(p.Detail, "JWS has an invalid anti-replay nonce") {
+		t.Fatalf("bad nonce detail = %q, want the wording acme.sh retries on", p.Detail)
+	}
+}
+
 func TestReadSignedRequestNonceFailure(t *testing.T) {
 	s, store, _ := newTestServer(t, DirectoryMeta{})
 	sig := newSigner(t, "ES256")
