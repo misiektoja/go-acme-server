@@ -119,8 +119,24 @@ func TestRenewalInfoWindow(t *testing.T) {
 		t.Fatalf("revoke = %d %s", rec.Code, rec.Body.String())
 	}
 	decode(t, f.renewalInfo(ariID(t, leaf)), &info)
-	if !info.SuggestedWindow.End.Before(time.Now().Add(2*time.Minute)) || !info.SuggestedWindow.End.After(info.SuggestedWindow.Start) {
+	if info.SuggestedWindow.End.After(time.Now()) || !info.SuggestedWindow.End.After(info.SuggestedWindow.Start) {
 		t.Fatalf("window after revocation = %+v", info)
+	}
+}
+
+// Checks that an immediate window ends at the request time whatever the revocation time.
+func TestImmediateRenewal(t *testing.T) {
+	now := time.Date(2026, 10, 13, 12, 0, 30, 500, time.UTC)
+	start, end := acmeserver.ImmediateRenewal(now.Add(-10*time.Second), now)
+	if !start.Equal(now.Add(-10*time.Second).Truncate(time.Second)) || !end.Equal(now.Truncate(time.Second)) {
+		t.Fatalf("window = %s to %s, want the revocation to now", start, end)
+	}
+	// A revocation within the same second, or dated after the request, still gives a past window.
+	for _, since := range []time.Time{now, now.Add(time.Hour)} {
+		start, end := acmeserver.ImmediateRenewal(since, now)
+		if !end.Equal(now.Truncate(time.Second)) || end.Sub(start) != time.Minute {
+			t.Fatalf("window for %s = %s to %s, want the minute before now", since, start, end)
+		}
 	}
 }
 
