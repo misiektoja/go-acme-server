@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"net/netip"
 	"reflect"
 	"slices"
 	"strings"
@@ -61,7 +62,7 @@ func (s *Server) serveNewOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := s.clock.Now()
-	order, p := s.buildOrder(ctx, req.Account, &payload, now)
+	order, p := s.buildOrder(ctx, req.Account, &payload, now, clientAddr(r))
 	if p != nil {
 		s.writeProblem(ctx, w, p)
 		return
@@ -89,8 +90,7 @@ func (s *Server) serveNewOrder(w http.ResponseWriter, r *http.Request) {
 }
 
 // Validates a newOrder payload and returns the order to store, without authorizations.
-func (s *Server) buildOrder(ctx context.Context, account *Account, payload *newOrderJSON,
-	now time.Time) (*Order, *Problem) {
+func (s *Server) buildOrder(ctx context.Context, account *Account, payload *newOrderJSON, now time.Time, client netip.Addr) (*Order, *Problem) {
 	if len(payload.Identifiers) == 0 {
 		return nil, NewProblem(ErrorMalformed, "an order needs at least one identifier")
 	}
@@ -174,6 +174,16 @@ func (s *Server) buildOrder(ctx context.Context, account *Account, payload *newO
 		Replaces:    replaces,
 		Profile:     profile,
 		CreatedAt:   now,
+	}
+	limit := LimitRequest{
+		Kind:        LimitNewOrder,
+		Client:      client,
+		Account:     account,
+		Identifiers: identifiers,
+		Replaces:    replaces,
+	}
+	if p := s.checkLimit(ctx, limit); p != nil {
+		return nil, p
 	}
 	if p := s.reviewOrder(ctx, account, order); p != nil {
 		return nil, p

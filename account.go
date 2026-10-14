@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/mail"
+	"net/netip"
 	"net/url"
 	"strings"
 
@@ -72,7 +73,7 @@ func (s *Server) serveNewAccount(w http.ResponseWriter, r *http.Request) {
 		s.writeProblem(ctx, w, NewProblem(ErrorAccountDoesNotExist, "no account owns this key"))
 		return
 	}
-	account, p := s.buildAccount(ctx, req, thumbprint, &payload)
+	account, p := s.buildAccount(ctx, req, thumbprint, &payload, clientAddr(r))
 	if p != nil {
 		s.writeProblem(ctx, w, p)
 		return
@@ -111,8 +112,7 @@ func (s *Server) writeExistingAccount(ctx context.Context, w http.ResponseWriter
 }
 
 // Validates a newAccount payload and returns the account to store.
-func (s *Server) buildAccount(ctx context.Context, req *signedRequest, thumbprint string,
-	payload *newAccountJSON) (*Account, *Problem) {
+func (s *Server) buildAccount(ctx context.Context, req *signedRequest, thumbprint string, payload *newAccountJSON, client netip.Addr) (*Account, *Problem) {
 	if p := validateContacts(payload.Contact); p != nil {
 		return nil, p
 	}
@@ -147,6 +147,9 @@ func (s *Server) buildAccount(ctx context.Context, req *signedRequest, thumbprin
 	}
 	if s.singleUseEAB {
 		account.ExternalAccountClaim = externalID
+	}
+	if p := s.checkLimit(ctx, LimitRequest{Kind: LimitNewAccount, Client: client, Account: account}); p != nil {
+		return nil, p
 	}
 	if p := s.hostProblem(ctx, s.policy.NewAccount(ctx, account), "account policy"); p != nil {
 		return nil, p

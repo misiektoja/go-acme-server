@@ -79,6 +79,7 @@ type Server struct {
 	revocationReasons []int
 	reasonsText       string
 	refusals          RefusalRecorder
+	limits            Limiter
 	// Signals Run that new work was accepted in this process.
 	wake    chan struct{}
 	running atomic.Bool
@@ -110,6 +111,7 @@ func New(cfg Config) (*Server, error) {
 		revoker:           cfg.Revoker,
 		revocationReasons: revocationReasons(cfg.RevocationReasons),
 		refusals:          cfg.Refusals,
+		limits:            cfg.Limits,
 		validators:        make(map[ChallengeType]Validator, len(cfg.Validators)),
 		eabKeys:           cfg.ExternalAccounts,
 		singleUseEAB:      cfg.SingleUseExternalAccounts,
@@ -426,6 +428,11 @@ func (s *Server) serveNewNonce(w http.ResponseWriter, r *http.Request) {
 		s.writeMethodNotAllowed(r.Context(), w, http.MethodGet, http.MethodHead)
 		return
 	}
+	// A refused request gets no nonce, because the nonce is what the client came for.
+	if p := s.checkLimit(r.Context(), LimitRequest{Kind: LimitNewNonce, Client: clientAddr(r)}); p != nil {
+		s.writeProblemWithoutNonce(w, p)
+		return
+	}
 	nonce, err := s.nonces.Issue(r.Context())
 	if err != nil {
 		s.logError(r.Context(), "nonce issuance failed", err)
@@ -449,8 +456,13 @@ func (s *Server) writeMethodNotAllowed(ctx context.Context, w http.ResponseWrite
 
 // Writes a problem document with a fresh nonce and the index link.
 func (s *Server) writeProblem(ctx context.Context, w http.ResponseWriter, p *Problem) {
-	s.setCommonHeaders(w)
 	s.addNonce(ctx, w)
+	s.writeProblemWithoutNonce(w, p)
+}
+
+// Writes a problem document with the index link and no nonce, for a refused newNonce request.
+func (s *Server) writeProblemWithoutNonce(w http.ResponseWriter, p *Problem) {
+	s.setCommonHeaders(w)
 	if p.RetryAfter > 0 {
 		w.Header().Set("Retry-After", strconv.FormatInt(int64(math.Ceil(p.RetryAfter.Seconds())), 10))
 	}

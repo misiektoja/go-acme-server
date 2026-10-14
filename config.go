@@ -101,6 +101,9 @@ type Config struct {
 	RevocationReasons []int
 	// Learns about authenticated finalize and revokeCert requests the server refuses. Optional.
 	Refusals RefusalRecorder
+	// Limits how often clients may get nonces, create accounts and place orders. Optional. Without
+	// it nothing is limited.
+	Limits Limiter
 	// The challenge types offered to clients. Only configured types appear in authorizations.
 	Validators map[ChallengeType]Validator
 	// Verifies external account bindings. Required when Meta.ExternalAccountRequired is set.
