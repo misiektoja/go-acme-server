@@ -504,6 +504,28 @@ func (s *Store) RescheduleTask(ctx context.Context, task *acmeserver.Task) error
 	return nil
 }
 
+// Stores the challenge of a validation attempt that will be retried and releases the lease together.
+func (s *Store) RetryValidation(ctx context.Context, task *acmeserver.Task, challenge *acmeserver.Challenge) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	stored, err := s.checkTask(task)
+	if err != nil {
+		return err
+	}
+	if err := s.checkChallenge(challenge); err != nil {
+		return err
+	}
+	challenge.Revision++
+	s.challenges[challenge.ID] = cloneChallenge(challenge)
+	stored.RunAt = task.RunAt
+	stored.LeaseUntil = time.Time{}
+	task.LeaseUntil = time.Time{}
+	return nil
+}
+
 // Removes the task.
 func (s *Store) FinishTask(ctx context.Context, task *acmeserver.Task) error {
 	if err := ctx.Err(); err != nil {

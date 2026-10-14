@@ -90,6 +90,10 @@ type WorkStore interface {
 	ClaimTask(ctx context.Context, now, leaseUntil time.Time) (*Task, error)
 	// Releases the lease and stores task.RunAt for a later claim.
 	RescheduleTask(ctx context.Context, task *Task) error
+	// Stores the challenge when its revision matches and releases the lease with task.RunAt for
+	// a later claim, all in one operation. It records the error of a validation attempt that
+	// will be retried.
+	RetryValidation(ctx context.Context, task *Task, challenge *Challenge) error
 	// Removes the task without touching any resource.
 	FinishTask(ctx context.Context, task *Task) error
 	// Stores the challenge, authorization and order when every revision matches and removes the

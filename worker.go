@@ -170,14 +170,12 @@ func (s *Server) runValidation(base context.Context, task *Task) {
 		if task.Attempts < s.workers.MaxAttempts && authz.Expires.After(now) {
 			s.log.LogAttrs(base, slog.LevelWarn, "validation will be retried", slog.String("challenge", ch.ID),
 				slog.Int("attempt", task.Attempts), slog.Any("error", err))
-			s.reschedule(base, task, now)
+			ch.Error = retryProblem(err, "validation attempt failed and will be retried")
+			s.retryValidation(base, task, ch, now)
 			return
 		}
 		s.logError(base, "validation gave up", err, slog.String("challenge", ch.ID), slog.Int("attempts", task.Attempts))
-		p = NewProblem(ErrorServerInternal, "validation could not be completed")
-		if retryable, ok := errors.AsType[*RetryableError](err); ok && retryable.Problem != nil {
-			p = retryable.Problem
-		}
+		p = retryProblem(err, "validation could not be completed")
 	}
 	ch.Status = ChallengeInvalid
 	ch.Error = p
@@ -338,14 +336,45 @@ func (s *Server) deriveOrderStatus(ctx context.Context, order *Order, updated *A
 	return OrderPending, nil
 }
 
+// Returns the problem a client sees for a validation failure that may clear on a later attempt.
+// A RetryableError names it, any other error is reported with the fallback detail.
+func retryProblem(err error, fallback string) *Problem {
+	if retryable, ok := errors.AsType[*RetryableError](err); ok && retryable.Problem != nil {
+		return retryable.Problem
+	}
+	return NewProblem(ErrorServerInternal, fallback)
+}
+
+// Stores the error of a failed attempt on the processing challenge and releases the task for a
+// later attempt, because RFC 8555 section 8.2 requires an error entry after each failed attempt.
+// A challenge that changed meanwhile is left alone and the next claim reloads it.
+func (s *Server) retryValidation(base context.Context, task *Task, ch *Challenge, now time.Time) {
+	task.RunAt = now.Add(s.retryDelay(task))
+	ctx, cancel := s.taskPhase(base)
+	defer cancel()
+	err := s.store.RetryValidation(ctx, task, ch)
+	switch {
+	case err == nil:
+	case errors.Is(err, ErrRevisionMismatch):
+		s.storeReschedule(base, task)
+	default:
+		s.logError(base, "validation retry could not be stored", err, slog.String("challenge", ch.ID))
+	}
+}
+
 // Releases the task for a later attempt with exponential backoff.
 func (s *Server) reschedule(base context.Context, task *Task, now time.Time) {
+	task.RunAt = now.Add(s.retryDelay(task))
+	s.storeReschedule(base, task)
+}
+
+// Returns the exponential backoff before the next attempt of a task.
+func (s *Server) retryDelay(task *Task) time.Duration {
 	delay := s.workers.RetryDelay
 	for i := 1; i < task.Attempts && delay < 32*s.workers.RetryDelay; i++ {
 		delay *= 2
 	}
-	task.RunAt = now.Add(delay)
-	s.storeReschedule(base, task)
+	return delay
 }
 
 // Stores a rescheduled task and logs failures.
