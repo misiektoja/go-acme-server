@@ -4,6 +4,8 @@ import (
 	"net/netip"
 	"net/url"
 	"strings"
+
+	"golang.org/x/net/idna"
 )
 
 // Names the kind of subject an order or authorization refers to.
@@ -214,7 +216,8 @@ func normalizeDNS(value string) (Identifier, error) {
 	return Identifier{Type: IdentifierDNS, Value: name}, nil
 }
 
-// Returns why a lowercase label is not a valid host name label, or an empty string.
+// Returns why a lowercase label is not a valid host name label, or an empty string. A label
+// starting with xn-- must be a properly encoded A-label, as RFC 8555 section 7.1.4 requires.
 func checkDNSLabel(label string) string {
 	if label == "" {
 		return "dns identifier contains an empty label"
@@ -231,7 +234,22 @@ func checkDNSLabel(label string) string {
 			return "dns identifier contains a character outside letters, digits and hyphens"
 		}
 	}
+	if strings.HasPrefix(label, "xn--") && !validALabel(label) {
+		return "dns identifier label " + label + " is not a valid A-label"
+	}
 	return ""
+}
+
+// Reports whether a label decodes as Punycode to a name the IDNA2008 registration rules allow
+// and encodes back to the same label. The registration profile of golang.org/x/net/idna follows
+// UTS 46, which also accepts a few symbols IDNA2008 itself disallows, such as emoji.
+func validALabel(label string) bool {
+	uLabel, err := idna.Registration.ToUnicode(label)
+	if err != nil {
+		return false
+	}
+	aLabel, err := idna.Registration.ToASCII(uLabel)
+	return err == nil && aLabel == label
 }
 
 // Parses an IP address and returns its RFC 5952 textual form.

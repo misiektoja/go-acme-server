@@ -6,3 +6,5 @@ require (
 	github.com/misiektoja/go-composite-mldsa v0.2.1
 	golang.org/x/net v0.59.0
 )
+
+require golang.org/x/text v0.42.0 // indirect
