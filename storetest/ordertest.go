@@ -255,6 +255,55 @@ func testAcceptChallenge(t *testing.T, store acmeserver.Store) {
 	}
 }
 
+// Checks that a retried validation stores the challenge error and releases the lease atomically.
+func testRetryValidation(t *testing.T, store acmeserver.Store) {
+	ctx := context.Background()
+	_, _, challenges := seedOrder(t, store)
+	challenge := challenges[0]
+	challenge.Status = acmeserver.ChallengeProcessing
+	task := newTask("task-1", acmeserver.TaskValidate, challenge.ID, testNow)
+	if err := store.AcceptChallenge(ctx, challenge, task); err != nil {
+		t.Fatalf("AcceptChallenge: %v", err)
+	}
+	lease := testNow.Add(time.Minute)
+	claimed, err := store.ClaimTask(ctx, testNow, lease)
+	if err != nil {
+		t.Fatalf("ClaimTask: %v", err)
+	}
+	stale := *challenge
+	challenge.Error = acmeserver.NewProblem(acmeserver.ErrorConnection, "connection refused")
+	claimed.RunAt = testNow.Add(10 * time.Second)
+	if err := store.RetryValidation(ctx, claimed, challenge); err != nil {
+		t.Fatalf("RetryValidation: %v", err)
+	}
+	if challenge.Revision != 3 || !claimed.LeaseUntil.IsZero() {
+		t.Fatalf("RetryValidation left Revision %d and lease %v, want 3 and no lease", challenge.Revision, claimed.LeaseUntil)
+	}
+	got, err := store.Challenge(ctx, challenge.ID)
+	if err != nil || got.Status != acmeserver.ChallengeProcessing || got.Error == nil ||
+		got.Error.Type != acmeserver.ErrorConnection || got.Error.Detail != "connection refused" {
+		t.Fatalf("Challenge after RetryValidation = %+v, %v", got, err)
+	}
+	if _, err := store.ClaimTask(ctx, testNow.Add(5*time.Second), lease); !errors.Is(err, acmeserver.ErrNotFound) {
+		t.Fatalf("ClaimTask(before RunAt) error = %v, want ErrNotFound", err)
+	}
+	again, err := store.ClaimTask(ctx, testNow.Add(10*time.Second), testNow.Add(2*time.Minute))
+	if err != nil || again.Fence != 2 {
+		t.Fatalf("ClaimTask(at RunAt) = %+v, %v", again, err)
+	}
+	stale.Error = acmeserver.NewProblem(acmeserver.ErrorDNS, "no answer")
+	if err := store.RetryValidation(ctx, again, &stale); !errors.Is(err, acmeserver.ErrRevisionMismatch) {
+		t.Fatalf("RetryValidation(stale challenge) error = %v, want ErrRevisionMismatch", err)
+	}
+	if err := store.RetryValidation(ctx, claimed, challenge); !errors.Is(err, acmeserver.ErrRevisionMismatch) {
+		t.Fatalf("RetryValidation(stale fence) error = %v, want ErrRevisionMismatch", err)
+	}
+	got, err = store.Challenge(ctx, challenge.ID)
+	if err != nil || got.Revision != 3 || got.Error.Type != acmeserver.ErrorConnection {
+		t.Fatalf("refused retries changed the challenge: %+v, %v", got, err)
+	}
+}
+
 // Checks claim ordering, leases, fences and rescheduling.
 func testClaimTask(t *testing.T, store acmeserver.Store) {
 	ctx := context.Background()
