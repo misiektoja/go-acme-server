@@ -1,7 +1,7 @@
 # Interoperability tests
 
 This separate module tests go-acme-server with acmez v3.1.7, Certbot 5.8.0, lego v4.35.2, the Go
-crypto/acme client v0.57.0 and go-jose v4.1.5.
+crypto/acme client v0.58.0 and go-jose v4.1.5.
 Clients reach the server over HTTPS and trust a generated root explicitly. Tests check the issued
 key, exact identifiers, validity, chain and stored resource state. An incorrect proof of any
 challenge type must leave the order invalid without any CA issuance.
