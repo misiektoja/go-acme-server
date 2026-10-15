@@ -57,10 +57,13 @@ Issuer chains may use composite ML-DSA signatures.
 | `Issuer` and `Revoker` | Yes | None, they call your CA |
 | `Validator` | At least one | `challenge.HTTP01`, `challenge.DNS01`, `challenge.TLSALPN01`, `challenge.TKAuth01` |
 | `Policy` | No | `AllowAll` |
+| `PreApprover` and `ProfileChooser` on the `Policy` | No | None |
 | `IssuancePolicy` | No | None |
 | `ExternalAccountKeys` | With external account binding | None |
 | `RenewalAdvisor` | No | `LifetimeRenewal` |
 | `challenge.TokenAuthorities` | With `tkauth-01` | `challenge.StaticTokenAuthorities` |
+| `Limiter` | No | None |
+| `RefusalRecorder` | No | None |
 | `Clock` | No | `SystemClock` |
 
 ## Not supported
@@ -71,7 +74,7 @@ Issuer chains may use composite ML-DSA signatures.
 | Alternate certificate chains | Unsupported |
 | `dns-account-01`, short-term automatic renewal, delegation, subdomain authorizations | Unsupported |
 | `email`, `onion` and device identifiers | Unsupported |
-| Rate limits | Unsupported, refuse in `Policy` or `IssuancePolicy` |
+| Rate limits other than nonces, new accounts and new orders | Unsupported, refuse in `Policy` or `IssuancePolicy` |
 | TLS termination, a CA or durable storage | Provided by the host |
 
 ## Compatibility

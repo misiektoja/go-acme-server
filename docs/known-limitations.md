@@ -10,7 +10,8 @@ means for clients or the host.
 The directory omits `newAuthz` and every order receives fresh pending authorizations. A client that
 renews the same name every week validates it again every week. Clients handle this without
 configuration, but a CA that promised subscribers long-lived authorizations cannot keep that promise
-with this library.
+with this library. A host can skip validation for names it approved in advance with a
+[`PreApprover`](guide/accounts-and-policy.md#pre-approved-identifiers).
 
 ### One chain per certificate
 
