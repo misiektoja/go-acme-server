@@ -154,6 +154,15 @@ type PreApprover interface {
 	PreApprove(ctx context.Context, account *Account, order *Order) ([]Identifier, error)
 }
 
+// An optional extension of Policy that picks the profile of a new order whose client named none,
+// for example the profile an account's external account binding allows. Policy.NewOrder sees the
+// chosen profile. An empty answer keeps Config.DefaultProfile. A returned *Problem refuses the
+// order. Any other error, or a profile the server does not offer, is reported as serverInternal.
+type ProfileChooser interface {
+	// Returns the profile for an order whose client named none, or "" for the default.
+	DefaultProfile(ctx context.Context, account *Account) (string, error)
+}
+
 // A Policy that accepts every request.
 type AllowAll struct{}
 

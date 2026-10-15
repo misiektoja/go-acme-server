@@ -150,7 +150,7 @@ func (s *Server) buildOrder(ctx context.Context, account *Account, payload *newO
 	if !notBefore.IsZero() && !notAfter.IsZero() && !notAfter.After(notBefore) {
 		return nil, NewProblem(ErrorMalformed, "notAfter must be later than notBefore")
 	}
-	profile, p := s.selectProfile(payload.Profile)
+	profile, p := s.selectProfile(ctx, account, payload.Profile)
 	if p != nil {
 		return nil, p
 	}
@@ -191,17 +191,33 @@ func (s *Server) buildOrder(ctx context.Context, account *Account, payload *newO
 	return order, nil
 }
 
-// Returns the profile a new order is issued under: the requested one when the server offers it
-// and the default when the client names none. An unadvertised name is refused rather than
-// replaced by the default, so a client never receives a certificate it did not ask for.
-func (s *Server) selectProfile(requested string) (string, *Problem) {
-	if requested == "" {
+// Returns the profile a new order is issued under: the requested one when the server offers it.
+// When the client names none, a ProfileChooser policy picks one or the default applies. An
+// unadvertised name is refused rather than replaced, so a client never receives a certificate
+// it did not ask for.
+func (s *Server) selectProfile(ctx context.Context, account *Account, requested string) (string, *Problem) {
+	if requested != "" {
+		if _, ok := s.profiles[requested]; !ok {
+			return "", NewProblem(ErrorInvalidProfile, "the server does not offer the requested profile")
+		}
+		return requested, nil
+	}
+	chooser, ok := s.policy.(ProfileChooser)
+	if !ok {
 		return s.defaultProfile, nil
 	}
-	if _, ok := s.profiles[requested]; !ok {
-		return "", NewProblem(ErrorInvalidProfile, "the server does not offer the requested profile")
+	const what = "profile choice"
+	chosen, err := chooser.DefaultProfile(ctx, account)
+	if p := s.hostProblem(ctx, err, what); p != nil {
+		return "", p
 	}
-	return requested, nil
+	if chosen == "" {
+		return s.defaultProfile, nil
+	}
+	if _, ok := s.profiles[chosen]; !ok {
+		return "", s.hostProblem(ctx, errors.New("the policy chose a profile the server does not offer"), what)
+	}
+	return chosen, nil
 }
 
 // Asks the policy about a new order and keeps only its changes to NotBefore and NotAfter. Any
