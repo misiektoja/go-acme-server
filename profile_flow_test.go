@@ -1,6 +1,7 @@
 package acmeserver_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -168,4 +169,56 @@ func TestFinalizeRefusesWithdrawnProfile(t *testing.T) {
 	if f.ca.callCount() != 0 {
 		t.Fatalf("issuer called %d times for a withdrawn profile", f.ca.callCount())
 	}
+}
+
+// A Policy that picks the profile of orders without one from a scripted answer and records the
+// profile NewOrder sees.
+type profileChoosingPolicy struct {
+	acmeserver.AllowAll
+	answer func() (string, error)
+	seen   *string
+}
+
+// Returns the scripted profile.
+func (p profileChoosingPolicy) DefaultProfile(context.Context, *acmeserver.Account) (string, error) {
+	return p.answer()
+}
+
+// Records the profile of the order.
+func (p profileChoosingPolicy) NewOrder(_ context.Context, _ *acmeserver.Account, order *acmeserver.Order) error {
+	*p.seen = order.Profile
+	return nil
+}
+
+// Lets a ProfileChooser pick the profile when the client names none, keeps a requested profile
+// and reports a choice the server does not offer as a server fault.
+func TestProfileChooser(t *testing.T) {
+	var answer, seen string
+	var failure error
+	f := newFlow(t, func(c *acmeserver.Config) {
+		withProfiles(c)
+		c.Policy = profileChoosingPolicy{answer: func() (string, error) { return answer, failure }, seen: &seen}
+	})
+	c := f.newClient()
+	c.register()
+	for _, tc := range []struct{ name, requested, answer, want string }{
+		{"chosen.test", "", "tls-client", "tls-client"},
+		{"default.test", "", "", "tls-server-client"},
+		{"requested.test", "short-lived", "tls-client", "short-lived"},
+	} {
+		answer = tc.answer
+		rec := c.newOrderWithProfile(tc.name, tc.requested)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("new-order %s = %d %s", tc.name, rec.Code, rec.Body.String())
+		}
+		var order orderBody
+		decode(t, rec, &order)
+		if order.Profile != tc.want || seen != tc.want {
+			t.Fatalf("%s: order profile %q and NewOrder saw %q, want %q", tc.name, order.Profile, seen, tc.want)
+		}
+	}
+	answer = "classic"
+	assertProblem(t, c.newOrderWithProfile("unknown.test", ""), http.StatusInternalServerError, acmeserver.ErrorServerInternal)
+	answer, failure = "", acmeserver.NewProblem(acmeserver.ErrorUnauthorized, "no profile for this account")
+	assertProblem(t, c.newOrderWithProfile("refused.test", ""), http.StatusForbidden, acmeserver.ErrorUnauthorized)
 }
