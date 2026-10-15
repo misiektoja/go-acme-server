@@ -41,7 +41,7 @@ problem. Zero values select the defaults below. Negative limits are refused.
 | `DetachedWriteTimeout` | 30 seconds | Bounds a store write that finishes after the client request ended, such as recording a revocation the CA already carried out |
 | `RenewalInfo` | none | Serves RFC 9773 renewal information and accepts `replaces`. `LifetimeRenewal{}` is the built-in advisor |
 | `Profiles` | none | The certificate profiles advertised in the directory and accepted on new orders. See [Certificate profiles](../guide/certificate-profiles.md) |
-| `DefaultProfile` | empty | The profile of an order that names none. Required with `Profiles` and must be one of them |
+| `DefaultProfile` | empty | The profile of an order that names none, unless a `ProfileChooser` policy picks another. Required with `Profiles` and must be one of them |
 | `Workers` | see below | Tunes `Run` and `Ready` |
 
 ## `DirectoryMeta`
