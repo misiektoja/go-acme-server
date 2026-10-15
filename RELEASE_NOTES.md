@@ -25,11 +25,11 @@ Adds certificate profiles, 5G network function certificates and hooks that let t
 * **`IssueRequest.Profile`** and **`ValidationGrant.Names` and `NFType`** pass the order profile and the token grants to the CA.
 * **New helpers.** `Retryable` marks a custom validator failure for retry. `ImmediateRenewal` serves custom `RenewalAdvisor` implementations. `noncetest` checks a custom `NonceManager`, including replicas that share nonces.
 * **Custom stores must be updated.** Persist `Authorization.PreApproved`, `GrantNames` and `GrantNFType`, `Validation.Names` and `NFType` and `Order.Profile`. Leave pre-approved authorizations out of `AuthorizedFor`. Implement `WorkStore.RetryValidation`. Then run `storetest`.
-* **golang.org/x/text** is a new indirect dependency, used for the A-label checks.
+* **Dependencies.** golang.org/x/net v0.61.0 is now the minimum. It clears five HTTP/2 advisories against v0.59.0 that the library does not reach but dependency scanners report. golang.org/x/text is a new indirect dependency, used for the A-label checks.
 
 ### Verification
 
-* **Tested clients:** acmez v3.1.7, Certbot 5.8.0, lego v4.35.2 and Go crypto/acme v0.57.0.
+* **Tested clients:** acmez v3.1.7, Certbot 5.8.0, lego v4.35.2 and Go crypto/acme v0.58.0.
 
 ## [0.5.0] - 11 Oct 2026
 
