@@ -637,6 +637,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/certificate-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Certificate profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1601,7 +1629,8 @@ nothing.</p>
 another, so a client whose requests land on different replicas gets <code>badNonce</code> and retries. Clients
 handle <code>badNonce</code> by retrying with the nonce in the response, so a small number of replicas works
 without coordination. For predictable behavior implement <code>NonceManager</code> over a shared store such as
-Redis or use session affinity at the load balancer. A nonce must be valid exactly once.</p>
+Redis or the database behind your <code>Store</code>, or use session affinity at the load balancer. A nonce
+must be valid exactly once. Check a shared manager with <code>noncetest.Run</code> and <code>noncetest.RunShared</code>.</p>
 <p><strong>Store connections.</strong> Every replica needs its own connection to the same database. The store
 contract already handles concurrency.</p>
 <h2 id="health-checks">Health checks<a class="headerlink" href="#health-checks" title="Permanent link">&para;</a></h2>
@@ -1673,9 +1702,12 @@ should keep:</p>
 <ul>
 <li>certificates for as long as revocation and renewal information must work</li>
 <li>orders with an unpublished result until they are reconciled</li>
+<li>authorizations until their <code>Expires</code>, because <code>AuthorizedFor</code> lets an account revoke another
+  account's certificate with a valid authorization for its names</li>
 <li>accounts for as long as their certificates exist</li>
 </ul>
-<p>Everything else can go once its order has expired.</p>
+<p>Delete an order together with its authorizations and challenges once the order and all of its
+authorizations have expired. Authorizations are never shared between orders.</p>
 
 
 

@@ -637,6 +637,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/certificate-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Certificate profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1512,7 +1540,7 @@ what it proves.</p>
 directory. The root package tests drive complete flows through the handler with <code>memstore</code>, a test
 CA and test validators, including account, order, renewal, revocation, timeout, recovery and
 <code>tkauth-01</code> scenarios. The <code>challenge</code> tests check proof and egress rules against local servers.
-<code>memstore</code> runs the <code>storetest</code> suite.</p>
+<code>memstore</code> runs the <code>storetest</code> suite and <code>nonce</code> runs the <code>noncetest</code> suite.</p>
 <h2 id="fuzzing">Fuzzing<a class="headerlink" href="#fuzzing" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code>make<span class="w"> </span>fuzz
 make<span class="w"> </span>fuzz<span class="w"> </span><span class="nv">FUZZ_TIME</span><span class="o">=</span>2m

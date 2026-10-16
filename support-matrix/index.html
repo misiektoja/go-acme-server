@@ -761,6 +761,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/certificate-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Certificate profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1577,9 +1605,15 @@
 </tr>
 <tr>
 <td>RFC 9447 and RFC 9448</td>
-<td><code>tkauth-01</code> with TNAuthList identifiers, CA certificates and token-bounded validity</td>
+<td><code>tkauth-01</code> with TNAuthList identifiers, CA certificates and token-bounded validity. The ATIS-1000080 <code>atc</code> response field and its validity rule for STIR/SHAKEN</td>
 <td>Implemented, Interoperability tested with a go-jose client</td>
 <td><code>Config.TNAuthListIdentifiers</code> and a <code>ChallengeTKAuth01</code> validator</td>
+</tr>
+<tr>
+<td>3GPP TS 33.310 Annex J</td>
+<td><code>tkauth-01</code> with <code>NfInstanceId</code> identifiers for 5G network function certificates, with the NF type and extra names a token grants</td>
+<td>Implemented, Interoperability tested with a go-jose client</td>
+<td><code>Config.NfInstanceIDIdentifiers</code> and a <code>ChallengeTKAuth01</code> validator</td>
 </tr>
 <tr>
 <td>RFC 9773</td>
@@ -1592,6 +1626,12 @@
 <td>Account key thumbprints</td>
 <td>Implemented, Interoperability tested</td>
 <td>Always</td>
+</tr>
+<tr>
+<td>draft-ietf-acme-profiles-02</td>
+<td>Profiles in the directory, <code>profile</code> on new orders, <code>invalidProfile</code></td>
+<td>Implemented, Interoperability tested</td>
+<td><code>Config.Profiles</code></td>
 </tr>
 </tbody>
 </table>
@@ -1608,7 +1648,7 @@
 <tr>
 <td><code>dns</code></td>
 <td><code>http-01</code>, <code>dns-01</code>, <code>tls-alpn-01</code> from the configured validators</td>
-<td>A wildcard name is offered <code>dns-01</code> alone</td>
+<td>A wildcard name is offered <code>dns-01</code> alone. Internationalized names must be valid A-labels (<code>xn--</code>)</td>
 </tr>
 <tr>
 <td><code>ip</code></td>
@@ -1619,6 +1659,11 @@
 <td><code>TNAuthList</code></td>
 <td><code>tkauth-01</code> alone</td>
 <td>Needs <code>Config.TNAuthListIdentifiers</code>. One per order</td>
+</tr>
+<tr>
+<td><code>NfInstanceId</code></td>
+<td><code>tkauth-01</code> alone</td>
+<td>Needs <code>Config.NfInstanceIDIdentifiers</code>. One per order and never with <code>TNAuthList</code></td>
 </tr>
 </tbody>
 </table>
@@ -1639,7 +1684,7 @@ identifier has no usable challenge type is refused.</p>
 </tr>
 <tr>
 <td>External account binding MACs</td>
-<td>HS256, HS384, HS512</td>
+<td>HS256, HS384, HS512 with a key at least as long as the hash</td>
 </tr>
 <tr>
 <td>Account keys</td>
@@ -1671,7 +1716,7 @@ identifier has no usable challenge type is refused.</p>
 <tr>
 <td><code>NonceManager</code></td>
 <td>Yes</td>
-<td><code>nonce</code> for a single process</td>
+<td><code>nonce</code> for a single process, <code>noncetest</code> contract suite for a shared manager</td>
 </tr>
 <tr>
 <td><code>Issuer</code> and <code>Revoker</code></td>
@@ -1687,6 +1732,11 @@ identifier has no usable challenge type is refused.</p>
 <td><code>Policy</code></td>
 <td>No</td>
 <td><code>AllowAll</code></td>
+</tr>
+<tr>
+<td><code>PreApprover</code> and <code>ProfileChooser</code> on the <code>Policy</code></td>
+<td>No</td>
+<td>None</td>
 </tr>
 <tr>
 <td><code>IssuancePolicy</code></td>
@@ -1707,6 +1757,16 @@ identifier has no usable challenge type is refused.</p>
 <td><code>challenge.TokenAuthorities</code></td>
 <td>With <code>tkauth-01</code></td>
 <td><code>challenge.StaticTokenAuthorities</code></td>
+</tr>
+<tr>
+<td><code>Limiter</code></td>
+<td>No</td>
+<td>None</td>
+</tr>
+<tr>
+<td><code>RefusalRecorder</code></td>
+<td>No</td>
+<td>None</td>
 </tr>
 <tr>
 <td><code>Clock</code></td>
@@ -1733,15 +1793,15 @@ identifier has no usable challenge type is refused.</p>
 <td>Unsupported</td>
 </tr>
 <tr>
-<td>Certificate profiles, <code>dns-account-01</code>, short-term automatic renewal, delegation, subdomain authorizations</td>
-<td>Unsupported, working group drafts are not exposed</td>
+<td><code>dns-account-01</code>, short-term automatic renewal, delegation, subdomain authorizations</td>
+<td>Unsupported</td>
 </tr>
 <tr>
 <td><code>email</code>, <code>onion</code> and device identifiers</td>
 <td>Unsupported</td>
 </tr>
 <tr>
-<td>Rate limits</td>
+<td>Rate limits other than nonces, new accounts and new orders</td>
 <td>Unsupported, refuse in <code>Policy</code> or <code>IssuancePolicy</code></td>
 </tr>
 <tr>

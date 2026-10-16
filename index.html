@@ -748,6 +748,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="guide/certificate-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Certificate profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1525,7 +1553,7 @@ what is covered.</p>
 </code></pre></div>
 <p>The module needs Go 1.27.2 or newer. The root package is imported as <code>acmeserver</code>. The bundled
 validators are in <code>challenge</code>, the in-memory store in <code>memstore</code>, the single-process nonce manager
-in <code>nonce</code> and the store contract suite in <code>storetest</code>.</p>
+in <code>nonce</code> and the contract suites for stores and nonce managers in <code>storetest</code> and <code>noncetest</code>.</p>
 <h2 id="start-here">Start here<a class="headerlink" href="#start-here" title="Permanent link">&para;</a></h2>
 <p><strong><a href="getting-started/">Getting started</a></strong> builds a complete local ACME server in one Go file and
 issues a certificate with lego. The program is in the repository under <code>examples/quickstart</code>. Read it first, then replace each placeholder piece with your own
@@ -1574,6 +1602,10 @@ implementation by following the integration guide.</p>
 <tr>
 <td>Tell clients when to renew</td>
 <td><a href="guide/renewal-information/">Renewal information</a></td>
+</tr>
+<tr>
+<td>Offer several kinds of certificate</td>
+<td><a href="guide/certificate-profiles/">Certificate profiles</a></td>
 </tr>
 <tr>
 <td>Look up every configuration field</td>

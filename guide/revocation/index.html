@@ -577,6 +577,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#reason-codes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reason codes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-request" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -728,6 +739,34 @@
     
   
     Renewal information
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../certificate-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Certificate profiles
   
 
     
@@ -1416,6 +1455,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#reason-codes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reason codes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-request" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1491,16 +1541,26 @@ revoke and makes the operation durable. The CA publishes it through its CRL or O
 <ul>
 <li>the account that ordered the certificate</li>
 <li>the certificate's own private key, with the request signed by the certificate key as an embedded JWK</li>
-<li>another valid account that holds a valid authorization for every identity the certificate asserts</li>
+<li>another valid account that holds a valid authorization proved by a challenge for every identity the certificate asserts</li>
 </ul>
 <p>For the third case the server collects every SAN and adds a common name the SANs do not already
 cover, then asks the store's <code>AuthorizedFor</code> for the whole set. A wildcard authorization covers
 the wildcard name. The account has to prove the names through ordinary orders first, since there
-is no pre-authorization.</p>
-<p>A certificate the server did not issue is refused with a <code>404</code> <code>malformed</code> problem. Reason codes
-follow RFC 5280. <code>unspecified</code>, <code>keyCompromise</code>, <code>affiliationChanged</code>, <code>superseded</code> and
-<code>cessationOfOperation</code> are accepted. <code>certificateHold</code> and the CA reasons are refused with
-<code>badRevocationReason</code>.</p>
+is no pre-authorization. Names a policy pre-approved for the account do not count, see
+<a href="../accounts-and-policy/#pre-approved-identifiers">Pre-approved identifiers</a>.</p>
+<p>A network function certificate, one that carries an <code>NfInstanceId</code> URN, is never revoked this third
+way. 3GPP TS 33.310 clause J.4 limits its revocation to the enrolling account and the holder of the
+certificate key, see <a href="../authority-tokens/#network-function-certificates">Authority Token challenges</a>.</p>
+<p>A certificate the server did not issue is refused with a <code>404</code> <code>malformed</code> problem.</p>
+<h2 id="reason-codes">Reason codes<a class="headerlink" href="#reason-codes" title="Permanent link">&para;</a></h2>
+<p>Reason codes follow RFC 5280. By default <code>unspecified</code> (0), <code>keyCompromise</code> (1),
+<code>affiliationChanged</code> (3), <code>superseded</code> (4) and <code>cessationOfOperation</code> (5) are accepted.
+<code>Config.RevocationReasons</code> replaces that list. It may also hold <code>cACompromise</code> (2),
+<code>privilegeWithdrawn</code> (9) and <code>aACompromise</code> (10). <code>certificateHold</code> (6) is never accepted, because
+an ACME revocation is final and the certificate cannot be released again. Any other code is
+refused with <code>badRevocationReason</code>, whose detail names the allowed reasons.</p>
+<p>A refused revocation is reported to <code>Config.Refusals</code> when it is set, see
+<a href="../embedding/#recording-refusals">Recording refusals</a>.</p>
 <h2 id="the-request">The request<a class="headerlink" href="#the-request" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -1552,7 +1612,8 @@ code carries it.</p>
 <h2 id="after-revocation">After revocation<a class="headerlink" href="#after-revocation" title="Permanent link">&para;</a></h2>
 <p><code>Certificate.Revoked</code> and <code>RevokedAt</code> are visible to the host through the store. With
 <a href="../renewal-information/">Renewal information</a> enabled, <code>LifetimeRenewal</code> answers a revoked
-certificate with a window that opened at the revocation time, which tells clients to renew at once.</p>
+certificate with a window from the revocation time to the time of the request, which tells clients
+to renew at once.</p>
 <p>A replacement certificate goes through a new order with fresh authorizations, as every order does.</p>
 
 

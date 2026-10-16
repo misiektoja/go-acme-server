@@ -666,6 +666,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#rate-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate limits
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pre-approved-identifiers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pre-approved identifiers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#accounts-over-their-lifetime" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -739,6 +761,34 @@
     
   
     Renewal information
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../certificate-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Certificate profiles
   
 
     
@@ -1460,6 +1510,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#rate-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate limits
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pre-approved-identifiers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pre-approved identifiers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#accounts-over-their-lifetime" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1530,7 +1602,11 @@ issued out of band under a key identifier.</p>
 </code></pre></div>
 <p>Implement it over your key registry and set <code>Config.ExternalAccounts</code>. Return <code>ErrNotFound</code> for an
 unknown identifier, which becomes an <code>unauthorized</code> problem. Return any other error for a lookup
-failure. HS256, HS384 and HS512 are accepted. A verified binding stores the key identifier as
+failure. HS256, HS384 and HS512 are accepted. RFC 7518 section 3.2 requires a key at least as long
+as the hash, so a 256-bit key works with HS256 only and a 512-bit key with all three. A binding
+whose algorithm needs a longer key is refused with <code>badSignatureAlgorithm</code> listing the algorithms
+the key allows. A key shorter than 256 bits is refused with <code>unauthorized</code> and logged. Issue keys of
+at least 512 bits if clients may choose HS512. A verified binding stores the key identifier as
 <code>Account.ExternalAccountID</code>, which is available to <code>Policy.NewAccount</code> and to your own audit
 queries.</p>
 <p><code>Meta.ExternalAccountRequired</code> advertises the requirement and refuses accounts without a binding
@@ -1568,8 +1644,91 @@ normalization and before any authorization is created. It may change <code>NotBe
 for example to cap the requested validity. Any other change, or a <code>NotAfter</code> that is not later than
 <code>NotBefore</code>, is logged and answered with <code>serverInternal</code>.</p>
 <p>A returned <code>*Problem</code> is sent to the client. Any other error is logged and answered with
-<code>serverInternal</code>. Rate limiting belongs here too. Return a <code>rateLimited</code> problem built with
-<code>WithRetryAfter</code> and the client backs off.</p>
+<code>serverInternal</code>.</p>
+<h2 id="rate-limits">Rate limits<a class="headerlink" href="#rate-limits" title="Permanent link">&para;</a></h2>
+<p><code>Config.Limits</code> takes a <code>Limiter</code>, which decides how often clients may get nonces, create accounts
+and place orders. Without one nothing is limited.</p>
+<div class="highlight"><pre><span></span><code><span class="kd">type</span><span class="w"> </span><span class="nx">Limiter</span><span class="w"> </span><span class="kd">interface</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">Allow</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="w"> </span><span class="nx">LimitRequest</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span>
+<span class="p">}</span>
+</code></pre></div>
+<p><code>Allow</code> is asked once for each of these requests:</p>
+<table>
+<thead>
+<tr>
+<th><code>LimitRequest.Kind</code></th>
+<th>Asked</th>
+<th>Fields set</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>LimitNewNonce</code></td>
+<td>Before a nonce is issued</td>
+<td><code>Client</code></td>
+</tr>
+<tr>
+<td><code>LimitNewAccount</code></td>
+<td>After the contacts, terms of service and external account binding were checked, before <code>Policy.NewAccount</code>. A request that finds an existing account is not asked about</td>
+<td><code>Client</code>, <code>Account</code> (not yet stored)</td>
+</tr>
+<tr>
+<td><code>LimitNewOrder</code></td>
+<td>After the identifiers, profile and <code>replaces</code> were checked, before <code>Policy.NewOrder</code></td>
+<td><code>Client</code>, <code>Account</code>, <code>Identifiers</code> (normalized), <code>Replaces</code></td>
+</tr>
+</tbody>
+</table>
+<p>Count the request when you return nil. To refuse, return a <code>rateLimited</code> problem with
+<code>WithRetryAfter</code>. The client gets status 429 and a <code>Retry-After</code> header in whole seconds, rounded
+up. A refused <code>newNonce</code> answer carries no <code>Replay-Nonce</code>. Refused <code>newAccount</code> and <code>newOrder</code>
+answers carry one, like every other error. Any other error is logged and answered with
+<code>serverInternal</code>. Return nil on errors instead if clients should keep working while your limit
+store is unavailable. New kinds may be added in later versions, so allow kinds you do not know.</p>
+<div class="highlight"><pre><span></span><code><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">l</span><span class="w"> </span><span class="nx">limits</span><span class="p">)</span><span class="w"> </span><span class="nx">Allow</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="w"> </span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">LimitRequest</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">Kind</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">LimitNewOrder</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">Replaces</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="s">""</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="c1">// renewals that name their predecessor are never held back</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="nx">wait</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">l</span><span class="p">.</span><span class="nx">buckets</span><span class="p">.</span><span class="nx">Take</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="s">"orders:"</span><span class="o">+</span><span class="nx">req</span><span class="p">.</span><span class="nx">Account</span><span class="p">.</span><span class="nx">ID</span><span class="p">,</span><span class="w"> </span><span class="mi">300</span><span class="p">,</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Hour</span><span class="p">)</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nx">wait</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nx">err</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">NewProblem</span><span class="p">(</span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">ErrorRateLimited</span><span class="p">,</span><span class="w"> </span><span class="s">"too many new orders for this account"</span><span class="p">).</span>
+<span class="w">        </span><span class="nx">WithRetryAfter</span><span class="p">(</span><span class="nx">wait</span><span class="p">)</span>
+<span class="p">}</span>
+</code></pre></div>
+<p><code>Client</code> is the address of the connection from <code>http.Request.RemoteAddr</code>, with IPv4-mapped IPv6
+addresses unmapped. It is the zero <code>netip.Addr</code> when <code>RemoteAddr</code> holds no IP address. Forwarded
+headers such as <code>X-Forwarded-For</code> are never read, because any client can set them. Behind a reverse
+proxy every client has the proxy's address. If you trust the proxy, rewrite <code>RemoteAddr</code> from its
+header in a middleware before the handler. IPv6 clients usually control a whole /64, so key
+per-address limits on the prefix rather than the full address.</p>
+<p><code>Replaces</code> is set only after the server has checked that the replaced certificate belongs to the
+account and shares an identifier with the order, so a client cannot claim to renew someone else's
+certificate to escape a limit.</p>
+<h2 id="pre-approved-identifiers">Pre-approved identifiers<a class="headerlink" href="#pre-approved-identifiers" title="Permanent link">&para;</a></h2>
+<p>Some CAs let an administrator approve names in advance for an external account binding, because
+the CA cannot reach internal hosts and the team cannot publish DNS records. A policy that also
+implements <code>PreApprover</code> names the identifiers of a new order that need no challenge:</p>
+<div class="highlight"><pre><span></span><code><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">p</span><span class="w"> </span><span class="nx">customerPolicy</span><span class="p">)</span><span class="w"> </span><span class="nx">PreApprove</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">account</span><span class="w"> </span><span class="o">*</span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">Account</span><span class="p">,</span><span class="w"> </span><span class="nx">order</span><span class="w"> </span><span class="o">*</span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">Order</span><span class="p">)</span><span class="w"> </span><span class="p">([]</span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">Identifier</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">var</span><span class="w"> </span><span class="nx">approved</span><span class="w"> </span><span class="p">[]</span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">Identifier</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="nx">_</span><span class="p">,</span><span class="w"> </span><span class="nx">id</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="k">range</span><span class="w"> </span><span class="nx">order</span><span class="p">.</span><span class="nx">Identifiers</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="nx">p</span><span class="p">.</span><span class="nx">customers</span><span class="p">.</span><span class="nx">Approved</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">account</span><span class="p">.</span><span class="nx">ExternalAccountID</span><span class="p">,</span><span class="w"> </span><span class="nx">id</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nx">approved</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">append</span><span class="p">(</span><span class="nx">approved</span><span class="p">,</span><span class="w"> </span><span class="nx">id</span><span class="p">)</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">approved</span><span class="p">,</span><span class="w"> </span><span class="kc">nil</span>
+<span class="p">}</span>
+</code></pre></div>
+<p><code>PreApprove</code> runs after <code>NewOrder</code> has accepted the order and must not change it. Each returned
+identifier must be one of <code>order.Identifiers</code>, wildcard names included. Its authorization starts
+<code>valid</code> with no challenges and expires with the order. An order whose identifiers are all
+pre-approved starts <code>ready</code>, so the client can finalize at once. The issuer sees <code>PreApproved</code> set
+on those entries of <code>IssueRequest.Validations</code>.</p>
+<p>A pre-approved authorization never lets the account revoke a certificate another account
+ordered, because it proves nothing about control of the name. A returned <code>*Problem</code> refuses the
+order. Any other error, or an identifier the order does not contain, is answered with
+<code>serverInternal</code>.</p>
 <h2 id="accounts-over-their-lifetime">Accounts over their lifetime<a class="headerlink" href="#accounts-over-their-lifetime" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Registration</strong> returns the existing account when the key is already known, so a client that lost its account URL recovers it with <code>onlyReturnExisting</code>.</li>

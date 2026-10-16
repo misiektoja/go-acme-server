@@ -774,6 +774,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../certificate-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Certificate profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1592,7 +1620,9 @@ CNAMEs only from the answer owner and bounds the lookup time, the CNAME chain, t
 the record count. The defaults are ten seconds, eight hops, 16 KiB and 64 records.
 Servers are tried in order. Each attempt receives an equal share of the time remaining for the
 untried servers, so a silent endpoint leaves time for a fallback. All attempts and CNAME hops
-share the lookup deadline. A terminal DNS error ends the lookup without trying another server.</p>
+share the lookup deadline. A terminal DNS error ends the lookup without trying another server.
+A name that does not exist (NXDOMAIN) is not terminal. The next server is asked and the validation
+is retried, because a record the client has just added may not have reached every resolver yet.</p>
 <p>A custom <code>IPResolver</code> or <code>TXTResolver</code> may replace it, for example a resolver that consults an
 internal zone during tests. It must honor context cancellation and bound its own work, because the
 validator's timeout is the only thing standing between a slow resolver and a stuck worker slot.</p>
@@ -1664,15 +1694,21 @@ happens next:</p>
 <td>Final. Challenge and authorization become invalid, the problem is shown to the client</td>
 </tr>
 <tr>
+<td><code>*acmeserver.RetryableError</code></td>
+<td>A failure that may clear, such as a refused connection</td>
+<td>Retried like any other error. Once the attempts run out, its <code>Problem</code> becomes the challenge error</td>
+</tr>
+<tr>
 <td>Any other error</td>
 <td>A transport failure</td>
-<td>Retried with exponential backoff until <code>WorkerConfig.MaxAttempts</code> or the authorization expiry</td>
+<td>Retried with exponential backoff until <code>WorkerConfig.MaxAttempts</code> or the authorization expiry, then reported as <code>serverInternal</code></td>
 </tr>
 </tbody>
 </table>
-<p>The bundled validators return <code>incorrectResponse</code> for a wrong proof, <code>dns</code> for a resolver failure
-that is unlikely to change and a plain error for connection failures. They never include fetched
-content in the problem detail.</p>
+<p>The bundled validators return <code>incorrectResponse</code> for a wrong proof and <code>dns</code> for a malformed or
+contradictory DNS answer. Failures that may clear are retryable and are reported as <code>dns</code> when a
+name cannot be resolved, <code>connection</code> when the destination cannot be reached or does not answer
+and <code>tls</code> when the TLS handshake fails. They never include fetched content in the problem detail.</p>
 <h2 id="writing-a-validator">Writing a validator<a class="headerlink" href="#writing-a-validator" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><span class="kd">type</span><span class="w"> </span><span class="nx">Validator</span><span class="w"> </span><span class="kd">interface</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="nx">Validate</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="w"> </span><span class="nx">ValidationRequest</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span>
@@ -1683,13 +1719,13 @@ authorization, the account key thumbprint captured when the client responded and
 <code>tkauth-01</code>, the Authority Token. A custom validator should:</p>
 <ul>
 <li>check that <code>req.Challenge.Type</code> is the type it handles and that the identifier type is one it can prove</li>
-<li>return <code>*acmeserver.Problem</code> for a definitive failure and any other error for one worth retrying</li>
+<li>return <code>*acmeserver.Problem</code> for a definitive failure and <code>acmeserver.Retryable</code> or any other error for one worth retrying</li>
 <li>finish within the context deadline and never follow untrusted redirects or resolve names without a policy</li>
 <li>keep fetched content out of error details</li>
 </ul>
 <p>A validator that also authorizes something beyond control of the identifier, such as a CA
-certificate or a validity bound, implements <code>GrantingValidator</code>. The <code>tkauth-01</code> validator is the
-example.</p>
+certificate, a validity bound or extra certificate names, implements <code>GrantingValidator</code>. The
+<code>tkauth-01</code> validator is the example.</p>
 <h2 id="checklist">Checklist<a class="headerlink" href="#checklist" title="Permanent link">&para;</a></h2>
 <ul>
 <li><code>ResolverOptions.Servers</code> names your recursive resolvers.</li>

@@ -796,6 +796,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../certificate-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Certificate profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1633,7 +1661,7 @@ database.</p>
 </tr>
 <tr>
 <td><code>WorkStore</code></td>
-<td><code>AcceptChallenge</code>, <code>FinalizeOrder</code>, <code>BeginIssuance</code>, <code>ClaimTask</code>, <code>RescheduleTask</code>, <code>FinishTask</code>, <code>CompleteValidation</code>, <code>CompleteIssuance</code>, <code>PendingTasks</code></td>
+<td><code>AcceptChallenge</code>, <code>FinalizeOrder</code>, <code>BeginIssuance</code>, <code>ClaimTask</code>, <code>RescheduleTask</code>, <code>RetryValidation</code>, <code>FinishTask</code>, <code>CompleteValidation</code>, <code>CompleteIssuance</code>, <code>PendingTasks</code></td>
 <td>Combines resource updates with task changes in one transaction</td>
 </tr>
 </tbody>
@@ -1675,7 +1703,7 @@ and hold no lease past it, which <code>Ready</code> uses to detect that no worke
 <tbody>
 <tr>
 <td><code>CreateOrder</code></td>
-<td>The order, its authorizations, its challenges and, when <code>order.Replaces</code> is set, the <code>ReplacedByOrderID</code> of the predecessor certificate</td>
+<td>The order including its <code>Profile</code>, its authorizations, its challenges and, when <code>order.Replaces</code> is set, the <code>ReplacedByOrderID</code> of the predecessor certificate</td>
 </tr>
 <tr>
 <td><code>AcceptChallenge</code></td>
@@ -1712,7 +1740,7 @@ inside the transaction.</p>
 <h2 id="authorization-lookup">Authorization lookup<a class="headerlink" href="#authorization-lookup" title="Permanent link">&para;</a></h2>
 <p><code>AuthorizedFor</code> reports whether an account holds a valid unexpired authorization for every
 identifier in the list, read in one consistent snapshot. Revocation by an account other than the
-issuer relies on it. A wildcard authorization covers the wildcard identifier and is stored with
+issuer relies on it, so an authorization with <code>PreApproved</code> set never counts. A wildcard authorization covers the wildcard identifier and is stored with
 <code>Wildcard</code> set and the base name in <code>Identifier</code>, so index authorizations by account, identifier
 type, value and wildcard flag.</p>
 <h2 id="serialization">Serialization<a class="headerlink" href="#serialization" title="Permanent link">&para;</a></h2>

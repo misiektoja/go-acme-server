@@ -637,6 +637,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/certificate-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Certificate profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1436,8 +1464,8 @@
 
 
 <h1 id="errors">Errors<a class="headerlink" href="#errors" title="Permanent link">&para;</a></h1>
-<p>Clients receive problem documents of RFC 7807 with the ACME error types of RFC 8555 section 6.7
-and RFC 9773. This page lists each type, its default HTTP status and what causes the server to
+<p>Clients receive problem documents of RFC 7807 with the ACME error types of RFC 8555 section 6.7,
+RFC 9773 and draft-ietf-acme-profiles. This page lists each type, its default HTTP status and what causes the server to
 send it, so an operator can read a client log and know which side to look at.</p>
 <h2 id="building-problems-in-host-code">Building problems in host code<a class="headerlink" href="#building-problems-in-host-code" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">NewProblem</span><span class="p">(</span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">ErrorRejectedIdentifier</span><span class="p">,</span><span class="w"> </span><span class="s">"not authorized for this name"</span><span class="p">).</span>
@@ -1495,7 +1523,7 @@ status. <code>AsProblem</code> extracts a problem from an error chain.</p>
 <tr>
 <td><code>badRevocationReason</code></td>
 <td>400</td>
-<td>The reason code is <code>certificateHold</code> or a CA reason</td>
+<td>The reason code is not in <code>Config.RevocationReasons</code>. The detail names the allowed reasons</td>
 </tr>
 <tr>
 <td><code>badSignatureAlgorithm</code></td>
@@ -1528,6 +1556,11 @@ status. <code>AsProblem</code> extracts a problem from an error chain.</p>
 <td>A contact is not a single bare <code>mailto</code> address</td>
 </tr>
 <tr>
+<td><code>invalidProfile</code></td>
+<td>400</td>
+<td>A new order names a profile the server does not offer or an order is finalized after its profile was removed from <code>Config.Profiles</code></td>
+</tr>
+<tr>
 <td><code>malformed</code></td>
 <td>400</td>
 <td>The request violates the protocol: wrong content type, bad JSON, wrong key mode, an unknown resource (404), a method the resource does not support (405) or a <code>replaces</code> value that names no certificate</td>
@@ -1540,7 +1573,7 @@ status. <code>AsProblem</code> extracts a problem from an error chain.</p>
 <tr>
 <td><code>rateLimited</code></td>
 <td>429</td>
-<td>Only from host policy</td>
+<td>Only from the host's <code>Limiter</code> or policy, normally with <code>Retry-After</code></td>
 </tr>
 <tr>
 <td><code>rejectedIdentifier</code></td>
@@ -1565,7 +1598,7 @@ status. <code>AsProblem</code> extracts a problem from an error chain.</p>
 <tr>
 <td><code>unsupportedIdentifier</code></td>
 <td>400</td>
-<td>An <code>ip</code> or <code>TNAuthList</code> identifier while that feature is off, or an unknown identifier type</td>
+<td>An <code>ip</code>, <code>TNAuthList</code> or <code>NfInstanceId</code> identifier while that feature is off, a <code>uri</code> identifier or an unknown identifier type</td>
 </tr>
 <tr>
 <td><code>userActionRequired</code></td>

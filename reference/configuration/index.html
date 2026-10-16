@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://misiektoja.github.io/go-acme-server/reference/configuration/">
       
       
-        <link rel="prev" href="../../guide/renewal-information/">
+        <link rel="prev" href="../../guide/certificate-profiles/">
       
       
         <link rel="next" href="../endpoints/">
@@ -637,6 +637,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/certificate-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Certificate profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -791,6 +819,17 @@
     <span class="md-ellipsis">
       
         DirectoryMeta
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Profile
       
     </span>
   </a>
@@ -1449,6 +1488,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Profile
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#workerconfig" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1617,6 +1667,11 @@ problem. Zero values select the defaults below. Negative limits are refused.</p>
 <td>Accepts RFC 9448 TNAuthList identifiers. Needs a <code>ChallengeTKAuth01</code> validator</td>
 </tr>
 <tr>
+<td><code>TNAuthListCertificatesOutliveTokens</code></td>
+<td><code>false</code></td>
+<td>Lets a TNAuthList certificate keep its own validity after the token expires, as ATIS-1000080 clause 6.3.8 specifies for STIR/SHAKEN. Needs <code>TNAuthListIdentifiers</code></td>
+</tr>
+<tr>
 <td><code>TokenAuthority</code></td>
 <td>empty</td>
 <td>The <code>https</code> URL advertised as <code>token-authority</code> on <code>tkauth-01</code> challenges</td>
@@ -1637,6 +1692,21 @@ problem. Zero values select the defaults below. Negative limits are refused.</p>
 <td>Bounds the identifiers of one order</td>
 </tr>
 <tr>
+<td><code>RevocationReasons</code></td>
+<td>0, 1, 3, 4 and 5</td>
+<td>The RFC 5280 reason codes clients may request. May hold 0 to 5, 9 and 10. See <a href="../../guide/revocation/#reason-codes">Revocation</a></td>
+</tr>
+<tr>
+<td><code>Refusals</code></td>
+<td>none</td>
+<td>Learns about <code>finalize</code> and <code>revokeCert</code> requests the server refuses. See <a href="../../guide/embedding/#recording-refusals">Recording refusals</a></td>
+</tr>
+<tr>
+<td><code>Limits</code></td>
+<td>none</td>
+<td>Limits how often clients may get nonces, create accounts and place orders. See <a href="../../guide/accounts-and-policy/#rate-limits">Rate limits</a></td>
+</tr>
+<tr>
 <td><code>DetachedWriteTimeout</code></td>
 <td>30 seconds</td>
 <td>Bounds a store write that finishes after the client request ended, such as recording a revocation the CA already carried out</td>
@@ -1645,6 +1715,16 @@ problem. Zero values select the defaults below. Negative limits are refused.</p>
 <td><code>RenewalInfo</code></td>
 <td>none</td>
 <td>Serves RFC 9773 renewal information and accepts <code>replaces</code>. <code>LifetimeRenewal{}</code> is the built-in advisor</td>
+</tr>
+<tr>
+<td><code>Profiles</code></td>
+<td>none</td>
+<td>The certificate profiles advertised in the directory and accepted on new orders. See <a href="../../guide/certificate-profiles/">Certificate profiles</a></td>
+</tr>
+<tr>
+<td><code>DefaultProfile</code></td>
+<td>empty</td>
+<td>The profile of an order that names none, unless a <code>ProfileChooser</code> policy picks another. Required with <code>Profiles</code> and must be one of them</td>
 </tr>
 <tr>
 <td><code>Workers</code></td>
@@ -1685,7 +1765,31 @@ problem. Zero values select the defaults below. Negative limits are refused.</p>
 </tr>
 </tbody>
 </table>
-<p>The <code>meta</code> object is omitted from the directory when every field is empty.</p>
+<p>The <code>meta</code> object is omitted from the directory when every field is empty and no profiles are
+configured. Configured profiles appear in it as <code>profiles</code>.</p>
+<h2 id="profile"><code>Profile</code><a class="headerlink" href="#profile" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Name</code></td>
+<td>The name clients send. 1 to 64 ASCII letters, digits, dots, underscores or hyphens, starting with a letter or digit</td>
+</tr>
+<tr>
+<td><code>Description</code></td>
+<td>Plain text the server publishes at <code>&lt;BaseURL&gt;profiles/&lt;Name&gt;</code></td>
+</tr>
+<tr>
+<td><code>URL</code></td>
+<td>An absolute <code>https</code> URL of a description published elsewhere. Set exactly one of <code>Description</code> and <code>URL</code></td>
+</tr>
+</tbody>
+</table>
 <h2 id="workerconfig"><code>WorkerConfig</code><a class="headerlink" href="#workerconfig" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -1774,8 +1878,8 @@ field:</p>
 <td>1 hour, 100000</td>
 </tr>
 <tr>
-<td><code>LifetimeRenewal.Start</code>, <code>End</code>, <code>RetryAfter</code></td>
-<td>2/3, 5/6, 6 hours</td>
+<td><code>LifetimeRenewal.Start</code>, <code>End</code>, <code>RetryAfter</code>, <code>Clock</code></td>
+<td>2/3, 5/6, 6 hours, system clock</td>
 </tr>
 </tbody>
 </table>
@@ -1788,7 +1892,12 @@ field:</p>
 <li><code>Meta.ExternalAccountRequired</code> or <code>SingleUseExternalAccounts</code> without <code>ExternalAccounts</code></li>
 <li><code>RequireTermsOfServiceAgreed</code> without <code>Meta.TermsOfService</code></li>
 <li><code>TNAuthListIdentifiers</code> without a <code>tkauth-01</code> validator</li>
+<li><code>TNAuthListCertificatesOutliveTokens</code> without <code>TNAuthListIdentifiers</code></li>
 <li>a <code>TokenAuthority</code> that is not an absolute <code>https</code> URL</li>
+<li>an invalid or repeated profile name, a profile without exactly one of <code>Description</code> and <code>URL</code>, a
+  profile <code>URL</code> that is not an absolute <code>https</code> URL or a <code>Description</code> that is not valid UTF-8</li>
+<li><code>DefaultProfile</code> without <code>Profiles</code> or a <code>DefaultProfile</code> that names none of them</li>
+<li>a <code>RevocationReasons</code> code other than 0 to 5, 9 and 10</li>
 <li>a negative limit or worker value</li>
 </ul>
 

@@ -694,6 +694,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#network-function-certificates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Network function certificates
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#testing" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -728,6 +739,34 @@
     
   
     Renewal information
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../certificate-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Certificate profiles
   
 
     
@@ -1449,6 +1488,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#network-function-certificates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Network function certificates
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#testing" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1480,10 +1530,16 @@
 
 
 <h1 id="authority-token-challenges">Authority Token challenges<a class="headerlink" href="#authority-token-challenges" title="Permanent link">&para;</a></h1>
-<p>The <code>tkauth-01</code> challenge of RFC 9447 proves authority over a set of telephone numbers instead of
-control of a network resource. It is how STIR certificates are issued to service providers under
-RFC 9448. The client presents an Authority Token issued by a Token Authority the CA trusts. The
-token names the TNAuthList the certificate may carry.</p>
+<p>The <code>tkauth-01</code> challenge of RFC 9447 proves authority through a token instead of control of a
+network resource. The client presents an Authority Token issued by a Token Authority the CA trusts.
+The server supports two uses:</p>
+<ul>
+<li>STIR certificates for telephone service providers under RFC 9448. The token names the
+  TNAuthList the certificate may carry.</li>
+<li>5G network function certificates under 3GPP TS 33.310 Annex J. The operator's management system
+  (OAM) issues a token for one network function instance, and the token may add the instance's NF
+  type and further names. See <a href="#network-function-certificates">Network function certificates</a>.</li>
+</ul>
 <h2 id="enable-it">Enable it<a class="headerlink" href="#enable-it" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><span class="nx">tkauth</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">challenge</span><span class="p">.</span><span class="nx">NewTKAuth01</span><span class="p">(</span><span class="nx">challenge</span><span class="p">.</span><span class="nx">TKAuthOptions</span><span class="p">{</span>
 <span class="w">    </span><span class="nx">Authorities</span><span class="p">:</span><span class="w"> </span><span class="nx">challenge</span><span class="p">.</span><span class="nx">StaticTokenAuthorities</span><span class="p">{</span>
@@ -1503,7 +1559,8 @@ token names the TNAuthList the certificate may carry.</p>
 <span class="p">}</span>
 </code></pre></div>
 <p><code>Config.TNAuthListIdentifiers</code> accepts orders with an identifier of type <code>TNAuthList</code> and requires a
-<code>ChallengeTKAuth01</code> validator. <code>Config.TokenAuthority</code> is the optional <code>token-authority</code> URL
+<code>ChallengeTKAuth01</code> validator. <code>Config.NfInstanceIDIdentifiers</code> does the same for <code>NfInstanceId</code>
+identifiers. The two can be enabled together. <code>Config.TokenAuthority</code> is the optional <code>token-authority</code> URL
 advertised on each challenge, which tells clients where to obtain a token. Clients fall back to
 their own configuration when it is empty.</p>
 <h2 id="what-an-order-looks-like">What an order looks like<a class="headerlink" href="#what-an-order-looks-like" title="Permanent link">&para;</a></h2>
@@ -1511,8 +1568,10 @@ their own configuration when it is empty.</p>
 a DER <code>TNAuthorizationList</code> from RFC 8226. That identifier receives a single <code>tkauth-01</code> challenge
 with <code>tkauth-type</code> set to <code>atc</code>. Any DNS or IP identifiers in the same order keep their network
 challenges.</p>
-<p>The client answers the challenge with a payload of the form <code>{"tkauth": "&lt;token&gt;"}</code>. The server
-stores the token on the challenge and hands it to the validator.</p>
+<p>The client answers the challenge with a payload of the form <code>{"tkauth": "&lt;token&gt;"}</code>. STIR/SHAKEN
+clients built to ATIS-1000080 clause 6.3.5.2 send <code>{"atc": "&lt;token&gt;"}</code> instead, and the server
+accepts either. A payload that carries both with different tokens is refused as <code>malformed</code>. The
+server stores the token on the challenge and hands it to the validator.</p>
 <h2 id="what-the-validator-checks">What the validator checks<a class="headerlink" href="#what-the-validator-checks" title="Permanent link">&para;</a></h2>
 <p>The validator performs steps 1 to 8 of RFC 9448 section 6:</p>
 <ol>
@@ -1520,8 +1579,8 @@ stores the token on the challenge and hands it to the validator.</p>
 <li>The header names a Token Authority either by an <code>https</code> <code>x5u</code> URL or by an <code>x5c</code> chain.</li>
 <li><code>TokenAuthorities.AuthorityCertificate</code> returns the certificate that must have signed the token. The certificate must be within its validity period.</li>
 <li>The token signature verifies under that certificate's key.</li>
-<li><code>tktype</code> equals <code>TNAuthList</code>, compared without regard to case because RFC 9447 and RFC 9448 spell it differently.</li>
-<li><code>tkvalue</code> decodes to the same authority list as the challenge identifier. Padded and unpadded base64 are both accepted.</li>
+<li><code>tktype</code> equals the identifier type, compared without regard to case because RFC 9447 and RFC 9448 spell <code>TNAuthList</code> differently.</li>
+<li><code>tkvalue</code> decodes to the same authority list as the challenge identifier. Padded and unpadded base64 are both accepted. For an <code>NfInstanceId</code>, <code>tkvalue</code> names the same UUID in any case.</li>
 <li><code>exp</code> and <code>nbf</code> hold, with <code>ClockSkew</code> tolerance, one minute by default.</li>
 <li><code>fingerprint</code> identifies the responding account key, either as the RFC 7638 thumbprint or as <code>SHA256</code> followed by the colon-separated hex form of the same digest.</li>
 </ol>
@@ -1533,8 +1592,9 @@ the reference goes to your <code>TokenAuthorities</code> implementation. <code>S
 fixed trust list indexed by exact URL and by <code>x5c</code> leaf certificate. A host whose ecosystem
 publishes a trust list implements the interface itself. Returning a <code>*Problem</code> fails the challenge
 and any other error is retried, which suits a lookup that could not be completed.</p>
-<p>A successful validation records two grants on the authorization: whether the token's <code>atc.ca</code>
-claim authorizes a CA certificate and the token expiry as the latest acceptable certificate expiry.</p>
+<p>A successful validation records grants on the authorization: whether the token's <code>atc.ca</code> claim
+authorizes a CA certificate and the token expiry as the latest acceptable certificate expiry. An NF
+token also grants its NF type and extra names, see below.</p>
 <h2 id="finalization-and-issuance">Finalization and issuance<a class="headerlink" href="#finalization-and-issuance" title="Permanent link">&para;</a></h2>
 <p>The certificate request must carry the same authority list in its <code>id-pe-TNAuthList</code> extension
 request. The subject common name normally counts as a requested identifier and must match one of
@@ -1549,13 +1609,48 @@ finalize a CA certificate.</p>
 earlier time. The expiry also bounds <code>IssueRequest.Deadline</code>. If the token expires before the worker
 dispatches the order, the order becomes invalid with <code>authority token expired before issuance
 dispatch</code> and the CA is not called. A leaf valid past the token expiry fails the publication check and is retained as an
-unpublished result, see <a href="../issuance/#unpublished-results">Unpublished results</a>. The issuer recognizes a STIR order by the
+unpublished result, see <a href="../issuance/#unpublished-results">Unpublished results</a>.</p>
+<p>STIR/SHAKEN works differently. ATIS-1000080 clause 6.3.8 says a certificate stays valid for its
+own lifetime after the Service Provider Code token expires. Set
+<code>Config.TNAuthListCertificatesOutliveTokens</code> for that rule. The issuer then gets the order's
+<code>NotAfter</code>, or zero, and the TNAuthList <code>Validation.GrantExpires</code> is zero. The token must still be
+valid when signing starts, so <code>IssueRequest.Deadline</code> and the dispatch check keep the token
+expiry. The issuer recognizes a STIR order by the
 <code>TNAuthList</code> identifier in <code>req.Identifiers</code> and copies the list from the CSR extension into the
 certificate.</p>
+<h2 id="network-function-certificates">Network function certificates<a class="headerlink" href="#network-function-certificates" title="Permanent link">&para;</a></h2>
+<p>3GPP TS 33.310 Annex J lets a 5G network function (NF) enroll its own certificate. The NF is the
+ACME client and orders one identifier of the form
+<code>{"type": "NfInstanceId", "value": "4ace9d34-2c69-4f99-92d5-a73a3fe8e23b"}</code>. The value is the NF
+instance UUID. It is lowercased and the nil UUID is refused. An order names at most one instance and
+never combines it with a <code>TNAuthList</code>. DNS and IP identifiers in the same order keep their network
+challenges.</p>
+<p>The token is an NF Certificate Authority Token. Its <code>atc</code> claim has <code>tktype</code> <code>NfInstanceId</code>, the
+UUID as <code>tkvalue</code> and the account <code>fingerprint</code>. Two optional members are checked as well:</p>
+<ul>
+<li><code>nftype</code> must be an RFC 9310 NF type: 1 to 32 printable ASCII characters without spaces, such as <code>AMF</code>. It is not compared with a list, because 3GPP keeps adding types.</li>
+<li><code>sans</code> lists further names for the certificate, at most 100. An entry starting with <code>urn:uuid:</code> must name the token's own instance. An entry containing <code>://</code> must be an <code>https</code> URI, such as an API root. An IP address is an <code>ip</code> name. Anything else must be a valid DNS name. Wildcard names are accepted and left to your policy.</li>
+</ul>
+<p>These grants reach the issuer as <code>IssueRequest.Validations[].NFType</code> and <code>Names</code>. URIs appear as
+identifiers of type <code>uri</code>, which only a token can grant. An order that names a <code>uri</code> identifier is
+refused. A custom <code>GrantingValidator</code> may grant only <code>dns</code>, <code>ip</code> and <code>uri</code> names. Any other grant fails
+the challenge with <code>serverInternal</code>.</p>
+<p>The certificate request must include the instance as the URI name <code>urn:uuid:&lt;value&gt;</code>. It may add
+any granted name and nothing else. The common name is not treated as an identifier, because the CA
+sets the subject of an NF certificate. The leaf the issuer returns is checked the same way.</p>
+<p>The issuer recognizes an NF order by the <code>NfInstanceId</code> identifier in <code>req.Identifiers</code>. It decides
+the profile of TS 33.310 clause 6.1.3c.3 itself: the subject, the <code>nfTypes</code> extension from the
+granted NF type, which granted names to include, key usages and validity. The token expiry bounds
+<code>NotAfter</code> as for STIR orders, so a short token lifetime also limits the certificate lifetime.</p>
+<p>The server does not track <code>jti</code> values here either, so one token answers further challenges for the
+same instance and account until it expires. Clause J.4 limits revocation of an NF certificate to the
+enrolling account and the holder of the certificate key. Another account is refused even when it
+holds a valid authorization for the instance.</p>
 <h2 id="testing">Testing<a class="headerlink" href="#testing" title="Permanent link">&para;</a></h2>
 <p>No independent ACME client speaks <code>tkauth-01</code>. The interoperability module drives the flow with a
 raw go-jose client and a local Token Authority, including a token issued to another account key that
-must leave the order invalid without issuance. See <a href="../../interoperability/tested-clients/">Tested clients</a>.</p>
+must leave the order invalid without issuance and an <code>NfInstanceId</code> order with granted names. See
+<a href="../../interoperability/tested-clients/">Tested clients</a>.</p>
 
 
 

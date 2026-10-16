@@ -16,7 +16,7 @@
         <link rel="prev" href="../authority-tokens/">
       
       
-        <link rel="next" href="../../reference/configuration/">
+        <link rel="next" href="../certificate-profiles/">
       
       
         
@@ -714,6 +714,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../certificate-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Certificate profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -1450,8 +1478,10 @@ unauthenticated GET and new orders may carry <code>replaces</code>. Without it, 
 </code></pre></div>
 <p><code>LifetimeRenewal</code> is the built-in advisor. It opens the window at two thirds of the certificate
 lifetime and closes it at five sixths. For a 90-day certificate that is days 60 to 75. A revoked
-certificate gets a window that opened at its revocation time, so clients renew at once. The
-fractions, an explanation URL and the <code>Retry-After</code> are fields on the struct:</p>
+certificate gets a window from its revocation time to the time of the request, so clients renew
+at once. Clients pick a random time inside a window, so a window that reached into the future
+would let some of them wait. <code>LifetimeRenewal.Clock</code> dates that window and defaults to the system
+clock. The fractions, an explanation URL and the <code>Retry-After</code> are fields on the struct:</p>
 <div class="highlight"><pre><span></span><code><span class="nx">RenewalInfo</span><span class="p">:</span><span class="w"> </span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">LifetimeRenewal</span><span class="p">{</span>
 <span class="w">    </span><span class="nx">Start</span><span class="p">:</span><span class="w">          </span><span class="mf">0.5</span><span class="p">,</span>
 <span class="w">    </span><span class="nx">End</span><span class="p">:</span><span class="w">            </span><span class="mf">0.75</span><span class="p">,</span>
@@ -1460,8 +1490,9 @@ fractions, an explanation URL and the <code>Retry-After</code> are fields on the
 <span class="p">},</span>
 </code></pre></div>
 <p>Implement <code>RenewalAdvisor</code> for other schedules, for example to move every window forward when a
-CA incident requires mass renewal. The <code>End</code> must be later than the <code>Start</code>. <code>RetryAfter</code> defaults
-to six hours and tells clients how long to wait before asking again.</p>
+CA incident requires mass renewal. <code>ImmediateRenewal(since, now)</code> returns the window that asks for
+renewal at once. The <code>End</code> must be later than the <code>Start</code>. <code>RetryAfter</code> defaults to six hours and
+tells clients how long to wait before asking again.</p>
 <h2 id="the-certificate-identifier">The certificate identifier<a class="headerlink" href="#the-certificate-identifier" title="Permanent link">&para;</a></h2>
 <p>Clients address renewal information by the certificate identifier of RFC 9773 section 4.1: the
 base64url authority key identifier and the base64url serial number joined by a dot. The server

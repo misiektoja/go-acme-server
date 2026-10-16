@@ -635,6 +635,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/certificate-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Certificate profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1346,10 +1374,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#working-group-drafts-are-not-exposed" class="md-nav__link">
+  <a href="#other-acme-extensions-are-not-implemented" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Working group drafts are not exposed
+        Other ACME extensions are not implemented
       
     </span>
   </a>
@@ -1385,10 +1413,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#no-rate-limits" class="md-nav__link">
+  <a href="#no-built-in-rate-limits" class="md-nav__link">
     <span class="md-ellipsis">
       
-        No rate limits
+        No built-in rate limits
       
     </span>
   </a>
@@ -1502,10 +1530,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#working-group-drafts-are-not-exposed" class="md-nav__link">
+  <a href="#other-acme-extensions-are-not-implemented" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Working group drafts are not exposed
+        Other ACME extensions are not implemented
       
     </span>
   </a>
@@ -1541,10 +1569,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#no-rate-limits" class="md-nav__link">
+  <a href="#no-built-in-rate-limits" class="md-nav__link">
     <span class="md-ellipsis">
       
-        No rate limits
+        No built-in rate limits
       
     </span>
   </a>
@@ -1617,22 +1645,24 @@ means for clients or the host.</p>
 <p>The directory omits <code>newAuthz</code> and every order receives fresh pending authorizations. A client that
 renews the same name every week validates it again every week. Clients handle this without
 configuration, but a CA that promised subscribers long-lived authorizations cannot keep that promise
-with this library.</p>
+with this library. A host can skip validation for names it approved in advance with a
+<a href="../guide/accounts-and-policy/#pre-approved-identifiers"><code>PreApprover</code></a>.</p>
 <h3 id="one-chain-per-certificate">One chain per certificate<a class="headerlink" href="#one-chain-per-certificate" title="Permanent link">&para;</a></h3>
 <p>The certificate response carries a single chain and no <code>rel="alternate"</code> link. A CA with several
 roots picks one chain in its <code>Issuer</code> and clients cannot ask for another.</p>
-<h3 id="working-group-drafts-are-not-exposed">Working group drafts are not exposed<a class="headerlink" href="#working-group-drafts-are-not-exposed" title="Permanent link">&para;</a></h3>
-<p>Certificate profiles, <code>dns-account-01</code>, short-term automatic renewal, delegation, subdomain
-authorizations and <code>email</code>, <code>onion</code> or device identifiers are not implemented. Unknown identifier
-types are refused with <code>unsupportedIdentifier</code> and unknown directory or order members are ignored.</p>
+<h3 id="other-acme-extensions-are-not-implemented">Other ACME extensions are not implemented<a class="headerlink" href="#other-acme-extensions-are-not-implemented" title="Permanent link">&para;</a></h3>
+<p><code>dns-account-01</code>, short-term automatic renewal, delegation, subdomain authorizations and <code>email</code>,
+<code>onion</code> or device identifiers are not implemented. Unknown identifier types are refused with
+<code>unsupportedIdentifier</code> and unknown directory or order members are ignored.</p>
 <h3 id="contacts-are-mailto-only">Contacts are mailto only<a class="headerlink" href="#contacts-are-mailto-only" title="Permanent link">&para;</a></h3>
 <p>An account contact must be a single <code>mailto</code> address without parameters. Other schemes are refused
 with <code>unsupportedContact</code>.</p>
 <h2 id="host-responsibilities">Host responsibilities<a class="headerlink" href="#host-responsibilities" title="Permanent link">&para;</a></h2>
-<h3 id="no-rate-limits">No rate limits<a class="headerlink" href="#no-rate-limits" title="Permanent link">&para;</a></h3>
-<p>The library never answers <code>rateLimited</code> on its own. <code>Policy.NewAccount</code>, <code>Policy.NewOrder</code> and
-<code>IssuancePolicy</code> are the places to refuse work, and a returned <code>*Problem</code> reaches the client
-unchanged.</p>
+<h3 id="no-built-in-rate-limits">No built-in rate limits<a class="headerlink" href="#no-built-in-rate-limits" title="Permanent link">&para;</a></h3>
+<p>The library never answers <code>rateLimited</code> on its own. A host sets <code>Config.Limits</code> to limit nonces,
+new accounts and new orders. <code>Policy</code> and <code>IssuancePolicy</code> can refuse other work. See
+<a href="../guide/accounts-and-policy/#rate-limits">Rate limits</a>. The limiter is not asked about other
+requests. An error response to any request carries a fresh nonce.</p>
 <h3 id="no-tls-termination-ca-or-durable-storage">No TLS termination, CA or durable storage<a class="headerlink" href="#no-tls-termination-ca-or-durable-storage" title="Permanent link">&para;</a></h3>
 <p>The host serves the handler behind its HTTPS origin, signs with its own CA and supplies durable
 storage. <code>memstore</code> keeps everything in memory and forgets it on restart. The <code>nonce</code> package

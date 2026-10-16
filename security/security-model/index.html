@@ -637,6 +637,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/certificate-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Certificate profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1568,7 +1596,7 @@ revocation if the host deduplicates as the contract requires.</p>
 </tr>
 <tr>
 <td>Rate limits and abuse controls</td>
-<td><code>Policy</code> and <code>IssuancePolicy</code>. The library has no built-in limits</td>
+<td>A <code>Limiter</code> for nonces, new accounts and new orders, plus <code>Policy</code> and <code>IssuancePolicy</code>. The library has no built-in limits</td>
 </tr>
 <tr>
 <td>CAA and name policy</td>
@@ -1577,6 +1605,10 @@ revocation if the host deduplicates as the contract requires.</p>
 <tr>
 <td>Token Authority trust</td>
 <td><code>challenge.TokenAuthorities</code> for <code>tkauth-01</code></td>
+</tr>
+<tr>
+<td>Network function certificate contents</td>
+<td>The <code>Issuer</code> builds the subject, <code>nfTypes</code> extension and key usages of an <code>NfInstanceId</code> order from the granted names and NF type</td>
 </tr>
 <tr>
 <td>Unpublished result reconciliation</td>
@@ -1619,7 +1651,7 @@ revocation if the host deduplicates as the contract requires.</p>
 </tr>
 <tr>
 <td>Resource exhaustion through requests</td>
-<td>Body size, JSON depth, identifier count, contact count and DNS or TLS read limits. Rate limiting is the host's</td>
+<td>Body size, JSON depth, identifier count, contact count and DNS or TLS read limits. Rate limits come from the host's <code>Limiter</code></td>
 </tr>
 <tr>
 <td>Double issuance after a crash</td>

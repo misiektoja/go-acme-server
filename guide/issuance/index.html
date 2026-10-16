@@ -774,6 +774,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../certificate-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Certificate profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1590,11 +1618,11 @@ attempt, a retry after a timeout or a recovery from another worker after a crash
 </tr>
 <tr>
 <td><code>NotBefore</code>, <code>NotAfter</code></td>
-<td>The requested validity. Zero means the CA decides. An authority token expiry narrows <code>NotAfter</code></td>
+<td>The requested validity. Zero means the CA decides. An authority token expiry narrows <code>NotAfter</code>, except for TNAuthList with <code>Config.TNAuthListCertificatesOutliveTokens</code></td>
 </tr>
 <tr>
 <td><code>Validations</code></td>
-<td>How each identifier was validated: challenge type, time and any CA grant</td>
+<td>How each identifier was validated: challenge type, time and any CA grant, or <code>PreApproved</code> when the policy approved it in advance. An NF token adds the <code>Names</code> and <code>NFType</code> it granted, see <a href="../authority-tokens/#network-function-certificates">Network function certificates</a></td>
 </tr>
 <tr>
 <td><code>Deadline</code></td>
@@ -1603,6 +1631,10 @@ attempt, a retry after a timeout or a recovery from another worker after a crash
 <tr>
 <td><code>RecoveryOnly</code></td>
 <td>Set once the deadline has passed. Only an existing result may be returned</td>
+</tr>
+<tr>
+<td><code>Profile</code></td>
+<td>The <a href="../certificate-profiles/">certificate profile</a> of the order. Empty when the server offered no profiles when the order was created</td>
 </tr>
 </tbody>
 </table>
@@ -1682,7 +1714,7 @@ The server checks those signatures itself because <code>crypto/x509</code> canno
 <li>the leaf public key equals the CSR public key</li>
 <li>the leaf is valid now and its <code>NotAfter</code> is after its <code>NotBefore</code></li>
 <li>the leaf <code>NotBefore</code> is not earlier than the accepted order value and not in the future unless the order asked for it</li>
-<li>the leaf <code>NotAfter</code> does not exceed the requested value or the authority token expiry</li>
+<li>the leaf <code>NotAfter</code> does not exceed the requested value or the authority token expiry, unless <code>Config.TNAuthListCertificatesOutliveTokens</code> releases a TNAuthList certificate from the token expiry</li>
 <li>the leaf's SANs and, unless an authority list is the only identity, its common name equal the order identifiers</li>
 <li>the leaf's CA basic constraint matches what the authorizations granted, which is never for DNS and IP orders</li>
 <li>every chain element is signed by the following one</li>

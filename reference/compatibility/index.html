@@ -637,6 +637,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/certificate-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Certificate profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1459,8 +1487,8 @@
 
 <h1 id="compatibility-policy">Compatibility policy<a class="headerlink" href="#compatibility-policy" title="Permanent link">&para;</a></h1>
 <p>The module uses semantic versioning. The public API is every exported identifier of the root
-package and of <code>challenge</code>, <code>memstore</code>, <code>nonce</code> and <code>storetest</code>. The <code>internal</code> packages and the
-<code>test/interop</code> module are not part of it.</p>
+package and of <code>challenge</code>, <code>memstore</code>, <code>nonce</code>, <code>noncetest</code> and <code>storetest</code>. The <code>internal</code>
+packages and the <code>test/interop</code> module are not part of it.</p>
 <h2 id="before-v100">Before v1.0.0<a class="headerlink" href="#before-v100" title="Permanent link">&para;</a></h2>
 <p>A minor release may change the public API. The release notes name every such change and the
 reason. Patch releases keep the API.</p>
@@ -1475,7 +1503,7 @@ reason. Patch releases keep the API.</p>
 <ol>
 <li>Read the release notes section for the new version.</li>
 <li>Run <code>go get github.com/misiektoja/go-acme-server@vX.Y.Z</code> and build. A new interface method is a compile error that names what to implement.</li>
-<li>Run your <code>storetest</code> suite.</li>
+<li>Run your <code>storetest</code> suite and, for a custom nonce manager, <code>noncetest</code>.</li>
 <li>Run your own integration tests against the ACME clients you support. <a href="../../interoperability/tested-clients/">Tested clients</a> names the versions each release was verified with.</li>
 </ol>
 <h2 id="go-version">Go version<a class="headerlink" href="#go-version" title="Permanent link">&para;</a></h2>

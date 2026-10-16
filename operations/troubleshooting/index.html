@@ -637,6 +637,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/certificate-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Certificate profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1161,6 +1189,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#an-order-is-refused-with-invalidprofile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        An order is refused with invalidProfile
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#revocation-returns-serverinternal" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1603,6 +1642,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#an-order-is-refused-with-invalidprofile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        An order is refused with invalidProfile
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#revocation-returns-serverinternal" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1754,6 +1804,11 @@ extension.</p>
 <p>Another order already named this certificate in <code>replaces</code> and is not invalid yet. Clients such as
 lego and acmez retry without <code>replaces</code>. If the earlier order belongs to a crashed client, it frees
 the claim when it expires after <code>Config.OrderLifetime</code>.</p>
+<h2 id="an-order-is-refused-with-invalidprofile">An order is refused with <code>invalidProfile</code><a class="headerlink" href="#an-order-is-refused-with-invalidprofile" title="Permanent link">&para;</a></h2>
+<p>The client named a profile that <code>Config.Profiles</code> does not list. The server may also have no
+profiles at all. Names are compared exactly, including case. Compare the client setting with the
+<code>profiles</code> member of the directory <code>meta</code>. At finalization the error means the profile was removed
+after the order was created. The client has to order again.</p>
 <h2 id="revocation-returns-serverinternal">Revocation returns serverInternal<a class="headerlink" href="#revocation-returns-serverinternal" title="Permanent link">&para;</a></h2>
 <p>The <code>Revoker</code> returned an error that is not a <code>*Problem</code>. The log line <code>revocation failed</code> carries
 it. The operation ID and reason are already stored on the certificate, so the client's retry calls

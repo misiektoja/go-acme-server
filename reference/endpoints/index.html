@@ -637,6 +637,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/certificate-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Certificate profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1433,7 +1461,7 @@ base URL. Resource IDs are opaque random strings.</p>
 <tr>
 <td><code>new-nonce</code></td>
 <td>GET, HEAD</td>
-<td>A fresh <code>Replay-Nonce</code>. HEAD answers 200, GET answers 204</td>
+<td>A fresh <code>Replay-Nonce</code>. HEAD answers 200, GET answers 204. A request the <code>Limiter</code> refuses gets its problem and no nonce</td>
 </tr>
 <tr>
 <td><code>new-account</code></td>
@@ -1495,6 +1523,11 @@ base URL. Resource IDs are opaque random strings.</p>
 <td>GET, HEAD</td>
 <td>RFC 9773 renewal information, only with <code>Config.RenewalInfo</code></td>
 </tr>
+<tr>
+<td><code>profiles/&lt;name&gt;</code></td>
+<td>GET, HEAD</td>
+<td>The plain-text description of a profile configured with a <code>Description</code></td>
+</tr>
 </tbody>
 </table>
 <p>Any other path below the base URL and any path outside it is answered with a <code>404</code> <code>malformed</code>
@@ -1507,8 +1540,8 @@ a fresh <code>Replay-Nonce</code>. <code>newAccount</code> responses carry a <co
 problems built with <code>WithRetryAfter</code>. Renewal information responses carry the advisor's
 <code>Retry-After</code>.</p>
 <p>Request bodies must be <code>application/jose+json</code> and at most <code>Config.MaxRequestBody</code> bytes.
-Responses are <code>application/json</code>, <code>application/problem+json</code> or
-<code>application/pem-certificate-chain</code>.</p>
+Responses are <code>application/json</code>, <code>application/problem+json</code>,
+<code>application/pem-certificate-chain</code> or, for profile descriptions, <code>text/plain; charset=utf-8</code>.</p>
 <h2 id="what-the-handler-expects-from-the-host">What the handler expects from the host<a class="headerlink" href="#what-the-handler-expects-from-the-host" title="Permanent link">&para;</a></h2>
 <ul>
 <li>The request path reaches the handler with the base URL path intact, so <code>r.URL.Path</code> starts with <code>/acme/</code> in the example.</li>

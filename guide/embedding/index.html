@@ -548,6 +548,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#recording-refusals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recording refusals
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#time" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -772,6 +783,34 @@
     
   
     Renewal information
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../certificate-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Certificate profiles
   
 
     
@@ -1515,6 +1554,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#recording-refusals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recording refusals
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#time" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1647,8 +1697,28 @@ stalls.</p>
 <h2 id="logging">Logging<a class="headerlink" href="#logging" title="Permanent link">&para;</a></h2>
 <p><code>Config.Logger</code> takes a <code>*slog.Logger</code>. Without one, nothing is logged. The server logs failed
 store, validator and CA calls at error level with the resource and operation IDs involved, and
-retried validations at warn level. Problem documents sent to clients are not logged, so a host that
-wants an audit trail of refusals wraps the handler.</p>
+retried validations at warn level. Problem documents sent to clients are not logged. For an audit
+trail of refusals, see <a href="#recording-refusals">Recording refusals</a>.</p>
+<h2 id="recording-refusals">Recording refusals<a class="headerlink" href="#recording-refusals" title="Permanent link">&para;</a></h2>
+<p>Most refusals reach the host anyway, because they come from its own <code>Policy</code>, <code>IssuancePolicy</code>,
+<code>Issuer</code> or <code>Revoker</code>. The server refuses some requests itself: a CSR that does not match its
+order, a revocation by an account without authority or a revocation reason that is not allowed.
+<code>Config.Refusals</code> takes a <code>RefusalRecorder</code> that is told about these.</p>
+<div class="highlight"><pre><span></span><code><span class="kd">type</span><span class="w"> </span><span class="nx">RefusalRecorder</span><span class="w"> </span><span class="kd">interface</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">RecordRefusal</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">refusal</span><span class="w"> </span><span class="nx">Refusal</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span>
+<span class="p">}</span>
+</code></pre></div>
+<p><code>RecordRefusal</code> is called for every <code>finalize</code> and <code>revokeCert</code> request refused after the
+requester is known, including refusals that came from the <code>Revoker</code>. A <code>Refusal</code> carries the
+<code>Kind</code>, the <code>AccountID</code> and the <code>Problem</code> the client receives. A refused finalization adds the
+order, its identifiers and the CSR. A refused revocation adds the certificate and the requested
+reason. <code>AccountID</code> is empty for a revocation signed with the certificate key. Requests that fail authentication, a <code>finalize</code> for another account's order and
+<code>serverInternal</code> problems are not reported, because they say nothing about what a known client
+asked for.</p>
+<p>The call runs before the answer is sent, detached from the client request and bounded by
+<code>Config.DetachedWriteTimeout</code>. A returned error is logged as <code>refusal could not be recorded</code> and
+the client still gets the same answer. Refusals of new accounts and orders come from your
+<code>Policy</code>, which can record them itself.</p>
 <h2 id="time">Time<a class="headerlink" href="#time" title="Permanent link">&para;</a></h2>
 <p><code>Config.Clock</code> supplies the current time. It defaults to the system clock. Tests use
 <code>acmeserver.ClockFunc</code> to control expiry and retry timing.</p>

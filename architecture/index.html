@@ -739,6 +739,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/certificate-profiles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Certificate profiles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1584,10 +1612,13 @@ Resource IDs are opaque and random.</p>
   W-&gt;&gt;I: Issue
   W-&gt;&gt;S: CompleteIssuance with certificate
   C-&gt;&gt;H: POST-as-GET certificate</code></pre>
-<p><strong>Order creation.</strong> Identifiers are normalized and checked for duplicates and limits. <code>Policy.NewOrder</code>
-may refuse the order or adjust the requested validity. The store creates the order, one pending
-authorization per identifier and one challenge per applicable type in a single operation. There is
-no pre-authorization, so every order gets fresh authorizations.</p>
+<p><strong>Order creation.</strong> Identifiers are normalized and checked for duplicates and limits.
+<code>Policy.NewOrder</code> may refuse the order or adjust the requested validity. A policy that implements
+<code>ProfileChooser</code> picks the profile of an order that names none before <code>NewOrder</code> sees it. A policy
+that implements <code>PreApprover</code> may name identifiers that need no challenge. The store creates the
+order, one authorization per identifier and one challenge per applicable type in a single operation.
+A pre-approved identifier gets a valid authorization without challenges. There is no
+pre-authorization, so every order gets fresh authorizations.</p>
 <p><strong>Challenge response.</strong> A POST to a pending challenge moves it to <code>processing</code> and enqueues a
 validation task in the same store operation. Repeated responses are harmless. The account key
 thumbprint is captured on the challenge, so a later key rollover does not change an in-flight
@@ -1598,7 +1629,8 @@ challenge whose authorization stopped being pending, before or during validation
 with <code>authorization was &lt;status&gt; before validation</code>. A
 returned <code>*Problem</code> is final and makes the challenge and authorization invalid. Any other error is
 a transport failure and is retried with exponential backoff until <code>WorkerConfig.MaxAttempts</code> or the
-authorization expiry. Success makes the authorization valid for <code>Config.AuthorizationLifetime</code>.
+authorization expiry. Each failed attempt is stored as the challenge's <code>error</code> while it stays
+<code>processing</code>, as RFC 8555 section 8.2 requires. Success makes the authorization valid for <code>Config.AuthorizationLifetime</code>.
 When the last authorization becomes valid the order becomes <code>ready</code>.</p>
 <p><strong>Finalization.</strong> The CSR must be self-signed with an accepted key that is not the account key and
 must request exactly the order's identifiers. The order moves to <code>processing</code> and an issuance task
@@ -1629,7 +1661,7 @@ so it never overlaps the run of the worker that claims the task next.</p>
 <h2 id="what-the-host-decides">What the host decides<a class="headerlink" href="#what-the-host-decides" title="Permanent link">&para;</a></h2>
 <p>The library makes no policy decisions beyond the protocol. It does not choose validity periods,
 key usages, rate limits or which identifiers a CA may issue for. Those belong in <code>Policy</code>,
-<code>IssuancePolicy</code> and the CA behind <code>Issuer</code>. <a href="../security/security-model/">Security model</a> lists
+<code>IssuancePolicy</code>, the <code>Limiter</code> and the CA behind <code>Issuer</code>. <a href="../security/security-model/">Security model</a> lists
 the boundaries in detail.</p>
 
 
