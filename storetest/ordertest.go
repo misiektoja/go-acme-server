@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -65,6 +66,7 @@ func seedOrder(t *testing.T, store acmeserver.Store) (*acmeserver.Order, []*acme
 		t.Fatalf("CreateAccount: %v", err)
 	}
 	order, authzs, challenges := NewOrder(t, account.ID, "order-1", "a.example", "b.example")
+	order.Profile = "tls-server"
 	if err := store.CreateOrder(ctx, order, authzs, challenges); err != nil {
 		t.Fatalf("CreateOrder: %v", err)
 	}
@@ -253,6 +255,55 @@ func testAcceptChallenge(t *testing.T, store acmeserver.Store) {
 	}
 }
 
+// Checks that a retried validation stores the challenge error and releases the lease atomically.
+func testRetryValidation(t *testing.T, store acmeserver.Store) {
+	ctx := context.Background()
+	_, _, challenges := seedOrder(t, store)
+	challenge := challenges[0]
+	challenge.Status = acmeserver.ChallengeProcessing
+	task := newTask("task-1", acmeserver.TaskValidate, challenge.ID, testNow)
+	if err := store.AcceptChallenge(ctx, challenge, task); err != nil {
+		t.Fatalf("AcceptChallenge: %v", err)
+	}
+	lease := testNow.Add(time.Minute)
+	claimed, err := store.ClaimTask(ctx, testNow, lease)
+	if err != nil {
+		t.Fatalf("ClaimTask: %v", err)
+	}
+	stale := *challenge
+	challenge.Error = acmeserver.NewProblem(acmeserver.ErrorConnection, "connection refused")
+	claimed.RunAt = testNow.Add(10 * time.Second)
+	if err := store.RetryValidation(ctx, claimed, challenge); err != nil {
+		t.Fatalf("RetryValidation: %v", err)
+	}
+	if challenge.Revision != 3 || !claimed.LeaseUntil.IsZero() {
+		t.Fatalf("RetryValidation left Revision %d and lease %v, want 3 and no lease", challenge.Revision, claimed.LeaseUntil)
+	}
+	got, err := store.Challenge(ctx, challenge.ID)
+	if err != nil || got.Status != acmeserver.ChallengeProcessing || got.Error == nil ||
+		got.Error.Type != acmeserver.ErrorConnection || got.Error.Detail != "connection refused" {
+		t.Fatalf("Challenge after RetryValidation = %+v, %v", got, err)
+	}
+	if _, err := store.ClaimTask(ctx, testNow.Add(5*time.Second), lease); !errors.Is(err, acmeserver.ErrNotFound) {
+		t.Fatalf("ClaimTask(before RunAt) error = %v, want ErrNotFound", err)
+	}
+	again, err := store.ClaimTask(ctx, testNow.Add(10*time.Second), testNow.Add(2*time.Minute))
+	if err != nil || again.Fence != 2 {
+		t.Fatalf("ClaimTask(at RunAt) = %+v, %v", again, err)
+	}
+	stale.Error = acmeserver.NewProblem(acmeserver.ErrorDNS, "no answer")
+	if err := store.RetryValidation(ctx, again, &stale); !errors.Is(err, acmeserver.ErrRevisionMismatch) {
+		t.Fatalf("RetryValidation(stale challenge) error = %v, want ErrRevisionMismatch", err)
+	}
+	if err := store.RetryValidation(ctx, claimed, challenge); !errors.Is(err, acmeserver.ErrRevisionMismatch) {
+		t.Fatalf("RetryValidation(stale fence) error = %v, want ErrRevisionMismatch", err)
+	}
+	got, err = store.Challenge(ctx, challenge.ID)
+	if err != nil || got.Revision != 3 || got.Error.Type != acmeserver.ErrorConnection {
+		t.Fatalf("refused retries changed the challenge: %+v, %v", got, err)
+	}
+}
+
 // Checks claim ordering, leases, fences and rescheduling.
 func testClaimTask(t *testing.T, store acmeserver.Store) {
 	ctx := context.Background()
@@ -376,6 +427,8 @@ func testCompleteValidation(t *testing.T, store acmeserver.Store) {
 	authz.Status = acmeserver.AuthorizationValid
 	authz.CACertificate = true
 	authz.GrantExpires = testNow.Add(time.Hour)
+	authz.GrantNames = []acmeserver.Identifier{{Type: acmeserver.IdentifierURI, Value: "https://nf.example.test/api"}}
+	authz.GrantNFType = "AMF"
 	if err := store.CompleteValidation(ctx, task, challenge, authz, order); err != nil {
 		t.Fatalf("CompleteValidation: %v", err)
 	}
@@ -388,7 +441,8 @@ func testCompleteValidation(t *testing.T, store acmeserver.Store) {
 	}
 	gotAuthz, err := store.Authorization(ctx, authz.ID)
 	if err != nil || gotAuthz.Status != acmeserver.AuthorizationValid || !gotAuthz.CACertificate ||
-		!gotAuthz.GrantExpires.Equal(authz.GrantExpires) {
+		!gotAuthz.GrantExpires.Equal(authz.GrantExpires) || !slices.Equal(gotAuthz.GrantNames, authz.GrantNames) ||
+		gotAuthz.GrantNFType != "AMF" {
 		t.Fatalf("Authorization after completion = %+v, %v", gotAuthz, err)
 	}
 	_, err = store.ClaimTask(ctx, testNow.Add(time.Hour), testNow.Add(2*time.Hour))
@@ -463,7 +517,8 @@ func testFinalizeAndIssue(t *testing.T, store acmeserver.Store) {
 		NotBefore: testNow,
 		NotAfter:  testNow.Add(90 * 24 * time.Hour),
 		Validations: []acmeserver.Validation{
-			{Identifier: order.Identifiers[0], Type: acmeserver.ChallengeHTTP01, Validated: testNow},
+			{Identifier: order.Identifiers[0], Type: acmeserver.ChallengeHTTP01, Validated: testNow,
+				Names: []acmeserver.Identifier{{Type: acmeserver.IdentifierDNS, Value: "granted.test"}}, NFType: "SMF"},
 		},
 		CreatedAt: testNow,
 	}
@@ -479,12 +534,14 @@ func testFinalizeAndIssue(t *testing.T, store acmeserver.Store) {
 	if err != nil {
 		t.Fatalf("Certificate: %v", err)
 	}
-	if len(gotCert.Chain) != 2 || gotCert.OrderID != order.ID || len(gotCert.Validations) != 1 {
+	if len(gotCert.Chain) != 2 || gotCert.OrderID != order.ID || len(gotCert.Validations) != 1 ||
+		!slices.Equal(gotCert.Validations[0].Names, cert.Validations[0].Names) || gotCert.Validations[0].NFType != "SMF" {
 		t.Fatalf("Certificate = %+v", gotCert)
 	}
 	gotCert.Chain[0][0] = 0xff
+	gotCert.Validations[0].Names[0].Value = "changed.test"
 	again, _ := store.Certificate(ctx, cert.ID)
-	if again.Chain[0][0] != 0x30 {
+	if again.Chain[0][0] != 0x30 || again.Validations[0].Names[0].Value != "granted.test" {
 		t.Fatal("stored certificate changed through a returned copy")
 	}
 	gotOrder, _ := store.Order(ctx, order.ID)
@@ -589,7 +646,7 @@ func assertOrderEqual(t *testing.T, got, want *acmeserver.Order) {
 	if got.ID != want.ID || got.AccountID != want.AccountID || got.Status != want.Status ||
 		!got.Expires.Equal(want.Expires) || !got.CreatedAt.Equal(want.CreatedAt) || got.Revision != want.Revision ||
 		fmt.Sprint(got.Identifiers) != fmt.Sprint(want.Identifiers) ||
-		fmt.Sprint(got.AuthorizationIDs) != fmt.Sprint(want.AuthorizationIDs) {
+		fmt.Sprint(got.AuthorizationIDs) != fmt.Sprint(want.AuthorizationIDs) || got.Profile != want.Profile {
 		t.Fatalf("order mismatch\n got: %+v\nwant: %+v", got, want)
 	}
 }

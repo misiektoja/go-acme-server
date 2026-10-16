@@ -166,9 +166,18 @@ func (s *Server) issuanceAuthorization(ctx context.Context, operationID string, 
 
 // Loads the successful challenge that authorized an identifier.
 func (s *Server) validationEvidence(ctx context.Context, a *Authorization) (Validation, error) {
-	v := Validation{Identifier: a.Identifier, CACertificate: a.CACertificate, GrantExpires: a.GrantExpires}
+	v := Validation{Identifier: a.Identifier, CACertificate: a.CACertificate, GrantExpires: a.GrantExpires,
+		Names: slices.Clone(a.GrantNames), NFType: a.GrantNFType}
+	// The authorization keeps the token expiry, which still ends the signing deadline above.
+	if s.tnAuthListOutlive && a.Identifier.Type == IdentifierTNAuthList {
+		v.GrantExpires = time.Time{}
+	}
 	if a.Wildcard {
 		v.Identifier.Value = "*." + v.Identifier.Value
+	}
+	if a.PreApproved {
+		v.PreApproved, v.Validated = true, a.CreatedAt
+		return v, nil
 	}
 	for _, id := range a.ChallengeIDs {
 		ch, err := s.store.Challenge(ctx, id)
@@ -195,7 +204,7 @@ func (s *Server) issueRequest(order *Order) (IssueRequest, error) {
 		OperationID: state.OperationID, AccountID: order.AccountID, AccountURL: s.accountURL(order.AccountID),
 		OrderID: order.ID, CSR: csr, CSRDER: der, Identifiers: slices.Clone(order.Identifiers),
 		NotBefore: order.NotBefore, NotAfter: issuedNotAfter(order), Validations: slices.Clone(state.Validations),
-		Deadline: state.Deadline, RecoveryOnly: !state.Deadline.After(s.clock.Now()),
+		Deadline: state.Deadline, RecoveryOnly: !state.Deadline.After(s.clock.Now()), Profile: order.Profile,
 	}, nil
 }
 

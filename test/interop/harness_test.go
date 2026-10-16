@@ -114,12 +114,14 @@ type harnessOptions struct {
 	eab map[string][]byte
 	// How long the test CA answers Pending before it signs.
 	delay time.Duration
-	// Offers tkauth-01 for TNAuthList identifiers with this Token Authority trusted.
+	// Offers tkauth-01 for TNAuthList and NfInstanceId identifiers with this Token Authority trusted.
 	authority *tokenAuthority
 	// Accepts RFC 8738 IP identifiers.
 	ipIdentifiers bool
 	// Issues from a composite ML-DSA CA of this algorithm. HTTPS keeps the classical root.
 	compositeIssuer compositemldsa.Algorithm
+	// Offers the interopProfiles certificate profiles.
+	profiles bool
 }
 
 // Returns the MAC key for a configured external account identifier.
@@ -244,9 +246,13 @@ func configuredServer(t *testing.T, baseURL string, options harnessOptions, stor
 	}
 	if options.authority != nil {
 		config.TNAuthListIdentifiers = true
+		config.NfInstanceIDIdentifiers = true
 		config.TokenAuthority = tokenAuthorityURL
 	}
 	config.IPIdentifiers = options.ipIdentifiers
+	if options.profiles {
+		config.Profiles, config.DefaultProfile = interopProfiles, interopDefaultProfile
+	}
 	server, err := acmeserver.New(config)
 	if err != nil {
 		t.Fatal(err)

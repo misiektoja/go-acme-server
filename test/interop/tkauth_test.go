@@ -11,6 +11,8 @@ import (
 	"encoding/base64"
 	"math/big"
 	"net/http"
+	"net/url"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -56,9 +58,17 @@ func newTokenAuthority(t *testing.T) *tokenAuthority {
 // Returns a compact ES256 Authority Token binding the list to an account key thumbprint.
 func (a *tokenAuthority) token(t *testing.T, thumbprint string, list []byte, exp time.Time) string {
 	t.Helper()
+	return a.sign(t, map[string]any{"tktype": "TNAuthList", "tkvalue": base64.RawURLEncoding.EncodeToString(list),
+		"fingerprint": thumbprint}, exp)
+}
+
+// Returns a compact ES256 Authority Token with the atc claim, named after the account key in its fingerprint.
+func (a *tokenAuthority) sign(t *testing.T, atc map[string]any, exp time.Time) string {
+	t.Helper()
 	header := mustJSON(t, map[string]any{"typ": "JWT", "alg": "ES256", "x5u": authorityCertURL})
-	claims := mustJSON(t, map[string]any{"iss": tokenAuthorityURL, "exp": exp.Unix(), "jti": "interop-" + thumbprint[:8],
-		"atc": map[string]any{"tktype": "TNAuthList", "tkvalue": base64.RawURLEncoding.EncodeToString(list), "fingerprint": thumbprint}})
+	fingerprint, _ := atc["fingerprint"].(string)
+	claims := mustJSON(t, map[string]any{"iss": tokenAuthorityURL, "exp": exp.Unix(), "jti": "interop-" + fingerprint[:8],
+		"atc": atc})
 	input := base64.RawURLEncoding.EncodeToString(header) + "." + base64.RawURLEncoding.EncodeToString(claims)
 	digest := sha256.Sum256([]byte(input))
 	der, err := ecdsa.SignASN1(rand.Reader, a.key, digest[:])
@@ -192,4 +202,66 @@ func leafAuthorityList(leaf *x509.Certificate) ([]byte, bool) {
 		}
 	}
 	return nil, false
+}
+
+// The NF instance the interop test orders.
+const interopNfInstance = "8f3c2a51-7d4e-4b6a-9c1f-2e5d8a7b6c40"
+
+// Issues a network function certificate over HTTPS and SQLite with an NF Certificate Authority
+// Token, and checks that the granted names and NF type reach the stored evidence.
+func TestTKAuth01NfInstanceIssuance(t *testing.T) {
+	authority := newTokenAuthority(t)
+	h := newHarness(t, harnessOptions{authority: authority})
+	c := h.newProtocolClient(t)
+	instance := acmeserver.Identifier{Type: acmeserver.IdentifierNfInstanceID, Value: interopNfInstance}
+	orderURL, order := c.newOrderFor([]acmeserver.Identifier{instance})
+	var authz authorizationJSON
+	c.get(order.Authorizations[0], &authz)
+	if len(authz.Challenges) != 1 || authz.Challenges[0].Type != string(acmeserver.ChallengeTKAuth01) {
+		t.Fatalf("challenges = %+v, want tkauth-01 alone", authz.Challenges)
+	}
+	exp := time.Now().Add(30 * time.Minute).Truncate(time.Second)
+	token := authority.sign(t, map[string]any{"tktype": "NfInstanceId", "tkvalue": interopNfInstance,
+		"fingerprint": joseThumbprint(t, &c.key.PublicKey), "nftype": "SMF",
+		"sans": []string{"smf1.issuance.test", "https://smf1.issuance.test/nsmf"}}, exp)
+	if r := c.post(authz.Challenges[0].URL, mustJSON(t, map[string]string{"tkauth": token}), nil); r.status != http.StatusOK {
+		t.Fatalf("challenge response: %d %s", r.status, r.body)
+	}
+	order = c.waitOrder(orderURL, "ready")
+	key := newKey(t)
+	uris := []*url.URL{{Scheme: "urn", Opaque: "uuid:" + interopNfInstance}, {Scheme: "https", Host: "smf1.issuance.test", Path: "/nsmf"}}
+	csr, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{URIs: uris, DNSNames: []string{"smf1.issuance.test"}}, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := c.post(order.Finalize, finalizePayload(t, csr), nil); r.status != http.StatusOK {
+		t.Fatalf("finalize: %d %s", r.status, r.body)
+	}
+	order = c.waitOrder(orderURL, "valid")
+	leaf, _ := h.verifyLeaf(t, c.certificate(order), &key.PublicKey, []string{"smf1.issuance.test"})
+	leafURIs := make([]string, 0, len(leaf.URIs))
+	for _, uri := range leaf.URIs {
+		leafURIs = append(leafURIs, uri.String())
+	}
+	if !slices.Equal(leafURIs, []string{"urn:uuid:" + interopNfInstance, "https://smf1.issuance.test/nsmf"}) || leaf.NotAfter.After(exp) {
+		t.Fatalf("leaf URIs = %v, NotAfter = %v", leafURIs, leaf.NotAfter)
+	}
+	stored, err := h.store.Order(t.Context(), orderURL[strings.LastIndex(orderURL, "/")+1:])
+	if err != nil || stored.Status != acmeserver.OrderValid {
+		t.Fatalf("stored order = %+v, %v", stored, err)
+	}
+	granted := []acmeserver.Identifier{
+		{Type: acmeserver.IdentifierDNS, Value: "smf1.issuance.test"},
+		{Type: acmeserver.IdentifierURI, Value: "https://smf1.issuance.test/nsmf"},
+	}
+	storedAuthz, err := h.store.Authorization(t.Context(), stored.AuthorizationIDs[0])
+	if err != nil || !slices.Equal(storedAuthz.GrantNames, granted) || storedAuthz.GrantNFType != "SMF" {
+		t.Fatalf("stored authorization = %+v, %v", storedAuthz, err)
+	}
+	cert, err := h.store.Certificate(t.Context(), stored.CertificateID)
+	if err != nil || len(cert.Validations) != 1 || !slices.Equal(cert.Validations[0].Names, granted) ||
+		cert.Validations[0].NFType != "SMF" {
+		t.Fatalf("stored certificate evidence = %+v, %v", cert, err)
+	}
+	t.Log("NfInstanceId issuance over HTTPS and SQLite carried the instance URN, the granted names and the NF type")
 }

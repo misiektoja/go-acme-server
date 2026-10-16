@@ -215,6 +215,15 @@ func scope(identifier acmeserver.Identifier, wildcard bool) string {
 	return identifier.String()
 }
 
+// Returns the status kept in the revocation index. A pre-approved authorization is indexed under
+// its own value, because AuthorizedFor must never count it.
+func indexStatus(a *acmeserver.Authorization) string {
+	if a.PreApproved {
+		return "pre-approved"
+	}
+	return string(a.Status)
+}
+
 // Encodes unset lease times as zero for runnable-task comparisons.
 func timestamp(value time.Time) int64 {
 	if value.IsZero() {

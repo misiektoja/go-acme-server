@@ -111,7 +111,10 @@ func (s *signer) Issue(ctx context.Context, req acmeserver.IssueRequest) (acmese
 			leaf.DNSNames = append(leaf.DNSNames, id.Value)
 		case acmeserver.IdentifierIP:
 			leaf.IPAddresses = append(leaf.IPAddresses, net.ParseIP(id.Value))
-		case acmeserver.IdentifierTNAuthList:
+		case acmeserver.IdentifierTNAuthList, acmeserver.IdentifierNfInstanceID, acmeserver.IdentifierURI:
+			return acmeserver.IssueResult{
+				Rejected: acmeserver.NewProblem(acmeserver.ErrorRejectedIdentifier, "unsupported identifier")}, nil
+		default:
 			return acmeserver.IssueResult{
 				Rejected: acmeserver.NewProblem(acmeserver.ErrorRejectedIdentifier, "unsupported identifier")}, nil
 		}

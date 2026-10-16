@@ -14,7 +14,7 @@ import (
 	acmeserver "github.com/misiektoja/go-acme-server"
 )
 
-// Gives a healthy fallback time to answer after transport failures while retaining terminal errors.
+// Gives a healthy fallback time to answer after transport failures and missing-name answers.
 func TestResolverFailover(t *testing.T) {
 	for _, mode := range []string{"silent", "refused", "SERVFAIL", "NXDOMAIN"} {
 		t.Run(mode, func(t *testing.T) {
@@ -50,16 +50,28 @@ func TestResolverFailover(t *testing.T) {
 				t.Fatal(err)
 			}
 			values, err := resolver.LookupTXT(t.Context(), "_acme-challenge.a.test")
-			if mode == "NXDOMAIN" {
-				if _, terminal := acmeserver.AsProblem(err); !terminal || queries.Load() != 0 {
-					t.Fatalf("terminal reply: error=%v backup queries=%d", err, queries.Load())
-				}
-				return
-			}
 			if err != nil || len(values) != 1 || values[0] != "proof" || queries.Load() != 1 {
 				t.Fatalf("fallback: TXT=%v error=%v backup queries=%d", values, err, queries.Load())
 			}
 		})
+	}
+}
+
+// Reports a name missing on every server as a retryable DNS failure, because a new TXT record
+// may not have reached the resolvers yet.
+func TestResolverMissingNameIsRetryable(t *testing.T) {
+	missing := func(message *dnsmessage.Message) { message.RCode = dnsmessage.RCodeNameError }
+	resolver, err := NewResolver(ResolverOptions{Servers: []netip.AddrPort{dnsServer(t, missing), dnsServer(t, missing)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = resolver.LookupTXT(t.Context(), "_acme-challenge.a.test")
+	if _, terminal := acmeserver.AsProblem(err); terminal {
+		t.Fatalf("missing name ended validation at once: %v", err)
+	}
+	retryable, ok := errors.AsType[*acmeserver.RetryableError](err)
+	if !ok || retryable.Problem.Type != acmeserver.ErrorDNS {
+		t.Fatalf("missing name error = %v, want a retryable dns problem", err)
 	}
 }
 

@@ -85,7 +85,7 @@ func (s *Store) CreateOrder(ctx context.Context, order *acmeserver.Order, authzs
 			copyOf.Revision = 1
 			if err := insert(ctx, c, insertAuthorizationSQL,
 				&copyOf, a.ID, a.AccountID, a.OrderID, scope(a.Identifier, a.Wildcard),
-				string(a.Status), timestamp(a.Expires), 1); err != nil {
+				indexStatus(a), timestamp(a.Expires), 1); err != nil {
 				return err
 			}
 		}
@@ -311,6 +311,6 @@ func saveAuthorization(ctx context.Context, c *sql.Conn, a *acmeserver.Authoriza
 		return err
 	}
 	_, err := c.ExecContext(ctx, updateAuthorizationIndexSQL, scope(a.Identifier, a.Wildcard),
-		string(a.Status), timestamp(a.Expires), a.ID)
+		indexStatus(a), timestamp(a.Expires), a.ID)
 	return err
 }

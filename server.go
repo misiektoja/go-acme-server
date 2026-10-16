@@ -3,6 +3,7 @@ package acmeserver
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"maps"
 	"math"
@@ -27,6 +28,7 @@ const (
 	challengePathPrefix = "chall/"
 	certPathPrefix      = "cert/"
 	renewalPathPrefix   = "renewal-info/"
+	profilePathPrefix   = "profiles/"
 )
 
 // Media types the protocol uses.
@@ -35,6 +37,7 @@ const (
 	contentTypeJOSE     = "application/jose+json"
 	contentTypeProblem  = "application/problem+json"
 	contentTypePEMChain = "application/pem-certificate-chain"
+	contentTypeText     = "text/plain; charset=utf-8"
 )
 
 // Serves the ACME resources below Config.BaseURL. Mount it at the base path, for example
@@ -60,13 +63,23 @@ type Server struct {
 	requireTOS     bool
 	ipIdentifiers  bool
 	tnAuthList     bool
-	tokenAuthority string
-	renewal        RenewalAdvisor
-	orderLifetime  time.Duration
-	authzLifetime  time.Duration
-	maxIdentifiers int
-	detachedWrite  time.Duration
-	workers        WorkerConfig
+	// Certificates for TNAuthList identifiers keep their own validity, see Config.
+	tnAuthListOutlive bool
+	nfInstanceIDs     bool
+	tokenAuthority    string
+	renewal           RenewalAdvisor
+	profiles          map[string]Profile
+	defaultProfile    string
+	orderLifetime     time.Duration
+	authzLifetime     time.Duration
+	maxIdentifiers    int
+	detachedWrite     time.Duration
+	workers           WorkerConfig
+	// The allowed revocation reason codes in ascending order and their names for refusals.
+	revocationReasons []int
+	reasonsText       string
+	refusals          RefusalRecorder
+	limits            Limiter
 	// Signals Run that new work was accepted in this process.
 	wake    chan struct{}
 	running atomic.Bool
@@ -86,37 +99,48 @@ func New(cfg Config) (*Server, error) {
 		return nil, err
 	}
 	s := &Server{
-		baseURL:        base.String(),
-		basePath:       base.Path,
-		store:          cfg.Store,
-		nonces:         cfg.Nonces,
-		clock:          cfg.Clock,
-		log:            cfg.Logger,
-		meta:           cfg.Meta,
-		maxBody:        cfg.MaxRequestBody,
-		issuer:         cfg.Issuer,
-		revoker:        cfg.Revoker,
-		validators:     make(map[ChallengeType]Validator, len(cfg.Validators)),
-		eabKeys:        cfg.ExternalAccounts,
-		singleUseEAB:   cfg.SingleUseExternalAccounts,
-		policy:         cfg.Policy,
-		issuancePolicy: cfg.IssuancePolicy,
-		requireTOS:     cfg.RequireTermsOfServiceAgreed,
-		ipIdentifiers:  cfg.IPIdentifiers,
-		tnAuthList:     cfg.TNAuthListIdentifiers,
-		tokenAuthority: cfg.TokenAuthority,
-		renewal:        cfg.RenewalInfo,
-		orderLifetime:  cfg.OrderLifetime,
-		authzLifetime:  cfg.AuthorizationLifetime,
-		maxIdentifiers: cfg.MaxIdentifiers,
-		detachedWrite:  cfg.DetachedWriteTimeout,
-		workers:        workers,
-		wake:           make(chan struct{}, 1),
+		baseURL:           base.String(),
+		basePath:          base.Path,
+		store:             cfg.Store,
+		nonces:            cfg.Nonces,
+		clock:             cfg.Clock,
+		log:               cfg.Logger,
+		meta:              cfg.Meta,
+		maxBody:           cfg.MaxRequestBody,
+		issuer:            cfg.Issuer,
+		revoker:           cfg.Revoker,
+		revocationReasons: revocationReasons(cfg.RevocationReasons),
+		refusals:          cfg.Refusals,
+		limits:            cfg.Limits,
+		validators:        make(map[ChallengeType]Validator, len(cfg.Validators)),
+		eabKeys:           cfg.ExternalAccounts,
+		singleUseEAB:      cfg.SingleUseExternalAccounts,
+		policy:            cfg.Policy,
+		issuancePolicy:    cfg.IssuancePolicy,
+		requireTOS:        cfg.RequireTermsOfServiceAgreed,
+		ipIdentifiers:     cfg.IPIdentifiers,
+		tnAuthList:        cfg.TNAuthListIdentifiers,
+		tnAuthListOutlive: cfg.TNAuthListCertificatesOutliveTokens,
+		nfInstanceIDs:     cfg.NfInstanceIDIdentifiers,
+		tokenAuthority:    cfg.TokenAuthority,
+		renewal:           cfg.RenewalInfo,
+		profiles:          make(map[string]Profile, len(cfg.Profiles)),
+		defaultProfile:    cfg.DefaultProfile,
+		orderLifetime:     cfg.OrderLifetime,
+		authzLifetime:     cfg.AuthorizationLifetime,
+		maxIdentifiers:    cfg.MaxIdentifiers,
+		detachedWrite:     cfg.DetachedWriteTimeout,
+		workers:           workers,
+		wake:              make(chan struct{}, 1),
 	}
 	maps.Copy(s.validators, cfg.Validators)
+	s.reasonsText = revocationReasonsText(s.revocationReasons)
+	for _, p := range cfg.Profiles {
+		s.profiles[p.Name] = p
+	}
 	s.meta.CAAIdentities = append([]string(nil), cfg.Meta.CAAIdentities...)
 	s.hasMeta = s.meta.TermsOfService != "" || s.meta.Website != "" || len(s.meta.CAAIdentities) > 0 ||
-		s.meta.ExternalAccountRequired
+		s.meta.ExternalAccountRequired || len(s.profiles) > 0
 	if s.clock == nil {
 		s.clock = SystemClock()
 	}
@@ -163,13 +187,12 @@ func (cfg Config) validate() error {
 		return errorf("Config.SingleUseExternalAccounts needs Config.ExternalAccounts")
 	case cfg.RequireTermsOfServiceAgreed && cfg.Meta.TermsOfService == "":
 		return errorf("Config.RequireTermsOfServiceAgreed needs Meta.TermsOfService")
-	case cfg.TNAuthListIdentifiers && cfg.Validators[ChallengeTKAuth01] == nil:
-		return errorf("Config.TNAuthListIdentifiers needs a " + string(ChallengeTKAuth01) + " validator")
-	case cfg.TokenAuthority != "" && !isHTTPSURL(cfg.TokenAuthority):
-		return errorf("Config.TokenAuthority must be an absolute https URL")
 	case cfg.MaxRequestBody < 0 || cfg.OrderLifetime < 0 || cfg.AuthorizationLifetime < 0 ||
 		cfg.MaxIdentifiers < 0 || cfg.DetachedWriteTimeout < 0:
 		return errorf("Config limits must not be negative")
+	}
+	if err := cfg.validateAuthorityTokens(); err != nil {
+		return err
 	}
 	for typ, v := range cfg.Validators {
 		if v == nil {
@@ -179,6 +202,25 @@ func (cfg Config) validate() error {
 			typ != ChallengeTKAuth01 {
 			return errorf("Config.Validators has the unknown challenge type " + string(typ))
 		}
+	}
+	if err := validateRevocationReasons(cfg.RevocationReasons); err != nil {
+		return err
+	}
+	return validateProfiles(cfg.Profiles, cfg.DefaultProfile)
+}
+
+// Checks that the Authority Token identifiers have a tkauth-01 validator and a usable token
+// authority URL.
+func (cfg Config) validateAuthorityTokens() error {
+	switch {
+	case cfg.TNAuthListIdentifiers && cfg.Validators[ChallengeTKAuth01] == nil:
+		return errorf("Config.TNAuthListIdentifiers needs a " + string(ChallengeTKAuth01) + " validator")
+	case cfg.TNAuthListCertificatesOutliveTokens && !cfg.TNAuthListIdentifiers:
+		return errorf("Config.TNAuthListCertificatesOutliveTokens needs Config.TNAuthListIdentifiers")
+	case cfg.NfInstanceIDIdentifiers && cfg.Validators[ChallengeTKAuth01] == nil:
+		return errorf("Config.NfInstanceIDIdentifiers needs a " + string(ChallengeTKAuth01) + " validator")
+	case cfg.TokenAuthority != "" && !isHTTPSURL(cfg.TokenAuthority):
+		return errorf("Config.TokenAuthority must be an absolute https URL")
 	}
 	return nil
 }
@@ -254,6 +296,10 @@ func (s *Server) serveResource(w http.ResponseWriter, r *http.Request, rel strin
 	}
 	if kind+"/" == renewalPathPrefix {
 		s.serveRenewalInfo(w, r, rest)
+		return
+	}
+	if kind+"/" == profilePathPrefix {
+		s.serveProfile(w, r, rest)
 		return
 	}
 	id, suffix, _ := strings.Cut(rest, "/")
@@ -335,7 +381,43 @@ func (s *Server) metaObject() map[string]any {
 	if s.meta.ExternalAccountRequired {
 		meta["externalAccountRequired"] = true
 	}
+	if len(s.profiles) > 0 {
+		profiles := make(map[string]string, len(s.profiles))
+		for name, p := range s.profiles {
+			profiles[name] = s.profileURL(p)
+		}
+		meta["profiles"] = profiles
+	}
 	return meta
+}
+
+// Returns the description URL a profile is advertised with.
+func (s *Server) profileURL(p Profile) string {
+	if p.URL != "" {
+		return p.URL
+	}
+	return s.resourceURL(profilePathPrefix + p.Name)
+}
+
+// Writes the plain-text description of a profile the server publishes itself.
+func (s *Server) serveProfile(w http.ResponseWriter, r *http.Request, name string) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		s.writeMethodNotAllowed(r.Context(), w, http.MethodGet, http.MethodHead)
+		return
+	}
+	p, ok := s.profiles[name]
+	if !ok || p.Description == "" {
+		s.writeProblem(r.Context(), w, notFound())
+		return
+	}
+	w.Header().Set("Content-Type", contentTypeText)
+	w.Header().Set("Content-Length", strconv.Itoa(len(p.Description)))
+	w.WriteHeader(http.StatusOK)
+	if r.Method == http.MethodGet {
+		if _, err := io.WriteString(w, p.Description); err != nil {
+			s.log.LogAttrs(r.Context(), slog.LevelWarn, "response writing failed", slog.Any("error", err))
+		}
+	}
 }
 
 // Answers HEAD with 200 and GET with 204, both with a fresh nonce.
@@ -344,6 +426,11 @@ func (s *Server) serveNewNonce(w http.ResponseWriter, r *http.Request) {
 	case http.MethodHead, http.MethodGet:
 	default:
 		s.writeMethodNotAllowed(r.Context(), w, http.MethodGet, http.MethodHead)
+		return
+	}
+	// A refused request gets no nonce, because the nonce is what the client came for.
+	if p := s.checkLimit(r.Context(), LimitRequest{Kind: LimitNewNonce, Client: clientAddr(r)}); p != nil {
+		s.writeProblemWithoutNonce(w, p)
 		return
 	}
 	nonce, err := s.nonces.Issue(r.Context())
@@ -369,8 +456,13 @@ func (s *Server) writeMethodNotAllowed(ctx context.Context, w http.ResponseWrite
 
 // Writes a problem document with a fresh nonce and the index link.
 func (s *Server) writeProblem(ctx context.Context, w http.ResponseWriter, p *Problem) {
-	s.setCommonHeaders(w)
 	s.addNonce(ctx, w)
+	s.writeProblemWithoutNonce(w, p)
+}
+
+// Writes a problem document with the index link and no nonce, for a refused newNonce request.
+func (s *Server) writeProblemWithoutNonce(w http.ResponseWriter, p *Problem) {
+	s.setCommonHeaders(w)
 	if p.RetryAfter > 0 {
 		w.Header().Set("Retry-After", strconv.FormatInt(int64(math.Ceil(p.RetryAfter.Seconds())), 10))
 	}

@@ -29,9 +29,10 @@ type basicConstraints struct {
 }
 
 // Parses a CSR and checks that it may finalize the order: a valid self signature, an accepted
-// key that is not the account key and exactly the order's identifiers, see RFC 8555 section 7.4.
-// The CA basic constraint is compared with the authorization grants separately.
-func checkCSR(der []byte, order *Order, account *Account) (*x509.CertificateRequest, *Problem) {
+// key that is not the account key and the order's identifiers, see RFC 8555 section 7.4. Names
+// an authority token granted may be requested as well. The CA basic constraint is compared with
+// the authorization grants separately.
+func checkCSR(der []byte, order *Order, account *Account, granted []Identifier) (*x509.CertificateRequest, *Problem) {
 	csr, err := x509.ParseCertificateRequest(der)
 	if err != nil {
 		return nil, NewProblem(ErrorBadCSR, "CSR could not be parsed")
@@ -65,7 +66,7 @@ func checkCSR(der []byte, order *Order, account *Account) (*x509.CertificateRequ
 	if p != nil {
 		return nil, p
 	}
-	if !sameIdentifiers(requested, order.Identifiers) {
+	if !coversIdentifiers(requested, order.Identifiers, granted) {
 		return nil, NewProblem(ErrorBadCSR, "CSR identifiers do not match the order")
 	}
 	return csr, nil
@@ -109,8 +110,8 @@ func checkCSRKey(key any) *Problem {
 	return nil
 }
 
-// Returns the normalized identifiers a CSR requests through its SANs and, unless an authority
-// list is the only one, its common name.
+// Returns the normalized identifiers a CSR requests through its SANs and, unless it names an
+// authority list alone or a network function instance, its common name.
 func csrIdentifiers(csr *x509.CertificateRequest) ([]Identifier, *Problem) {
 	tnAuthList, present, err := tnAuthListExtension(csr.Extensions)
 	if err != nil {
@@ -126,8 +127,14 @@ func csrIdentifiers(csr *x509.CertificateRequest) ([]Identifier, *Problem) {
 	for _, ip := range csr.IPAddresses {
 		raw = append(raw, Identifier{Type: IdentifierIP, Value: ip.String()})
 	}
-	// A STIR request names a service provider in the common name, not one of its identifiers.
-	if csr.Subject.CommonName != "" && !authorityListOnly(raw) {
+	for _, uri := range csr.URIs {
+		id, err := uriNameIdentifier(uri.String())
+		if err != nil {
+			return nil, NewProblem(ErrorBadCSR, "CSR URI name "+uri.String()+" is not acceptable")
+		}
+		raw = append(raw, id)
+	}
+	if csr.Subject.CommonName != "" && !commonNameExempt(raw) {
 		raw = append(raw, commonNameIdentifier(csr.Subject.CommonName))
 	}
 	if len(raw) == 0 {
@@ -146,13 +153,16 @@ func csrIdentifiers(csr *x509.CertificateRequest) ([]Identifier, *Problem) {
 	return normalized, nil
 }
 
-// Reports whether two normalized identifier lists hold the same set.
-func sameIdentifiers(a, b []Identifier) bool {
-	if len(a) != len(b) {
-		return false
+// Reports whether the names requested or issued include every order identifier and add only
+// names an authority token granted. All lists hold normalized identifiers.
+func coversIdentifiers(names, order, granted []Identifier) bool {
+	for _, id := range order {
+		if !slices.Contains(names, id) {
+			return false
+		}
 	}
-	for _, id := range a {
-		if !slices.Contains(b, id) {
+	for _, id := range names {
+		if !slices.Contains(order, id) && !slices.Contains(granted, id) {
 			return false
 		}
 	}

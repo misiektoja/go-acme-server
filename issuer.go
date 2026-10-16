@@ -33,6 +33,9 @@ type IssueRequest struct {
 	Deadline time.Time
 	// Allows only recovery of an existing result, never a new signing operation.
 	RecoveryOnly bool
+	// The Order.Profile name the certificate is issued under. It is empty when the server offered
+	// no profiles when the order was created.
+	Profile string
 }
 
 // The outcome of an issuance attempt. Exactly one of Chain, Pending and Rejected is set.
@@ -101,6 +104,11 @@ type ValidationGrant struct {
 	// Bounds the validity of certificates issued on this proof, see RFC 9447 section 7. The zero
 	// value leaves the validity to the order and the issuer.
 	Expires time.Time
+	// Further names the certificate may carry on this proof, such as the sans of a 3GPP NF
+	// Certificate Authority Token. Each is a normalized dns, ip or uri identifier.
+	Names []Identifier
+	// The RFC 9310 network function type the proof attests, empty when it attests none.
+	NFType string
 }
 
 // Checks a challenge response. A nil result marks the challenge valid, a returned *Problem
@@ -132,6 +140,27 @@ type Policy interface {
 	// NotAfter. Any other change, or a NotAfter no later than NotBefore, fails the request with
 	// serverInternal.
 	NewOrder(ctx context.Context, account *Account, order *Order) error
+}
+
+// An optional extension of Policy that authorizes identifiers without a challenge, for example
+// names an administrator approved in advance for an external account binding. Their
+// authorizations start valid with no challenges and expire with the order. An order whose
+// identifiers are all pre-approved starts ready.
+type PreApprover interface {
+	// Returns the identifiers of a new order that need no challenge. It runs after NewOrder has
+	// accepted the order, which it must not change. Each returned identifier must be one of
+	// order.Identifiers, wildcard names included. A returned *Problem refuses the order and any
+	// other error, or an identifier the order does not contain, is reported as serverInternal.
+	PreApprove(ctx context.Context, account *Account, order *Order) ([]Identifier, error)
+}
+
+// An optional extension of Policy that picks the profile of a new order whose client named none,
+// for example the profile an account's external account binding allows. Policy.NewOrder sees the
+// chosen profile. An empty answer keeps Config.DefaultProfile. A returned *Problem refuses the
+// order. Any other error, or a profile the server does not offer, is reported as serverInternal.
+type ProfileChooser interface {
+	// Returns the profile for an order whose client named none, or "" for the default.
+	DefaultProfile(ctx context.Context, account *Account) (string, error)
 }
 
 // A Policy that accepts every request.

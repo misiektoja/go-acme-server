@@ -18,7 +18,8 @@ parts that differ between deployments:
 * an `Issuer` and a `Revoker` that call the host CA
 * one `Validator` per challenge type, with HTTP-01, DNS-01, TLS-ALPN-01 and tkauth-01
   implementations in `challenge`
-* optional policy hooks, external account binding keys and directory metadata
+* optional policy hooks, a rate limiter, a recorder for refused finalize and revocation requests,
+  external account binding keys and directory metadata
 
 The result is an `http.Handler` mounted behind the host's HTTPS origin and a worker that runs next
 to it. Standard ACME clients such as Certbot, lego, acmez and cert-manager then obtain certificates
@@ -59,8 +60,10 @@ import (
 | RFC 8555 ACME | Accounts, external account binding, key rollover, orders, HTTP-01, DNS-01, finalization, certificates, revocation | Always |
 | RFC 8737 TLS-ALPN-01 | Challenge validation | A `ChallengeTLSALPN01` validator |
 | RFC 8738 IP identifiers | IPv4 and IPv6 identifiers through HTTP-01 and TLS-ALPN-01 | `Config.IPIdentifiers` |
-| RFC 9447 and RFC 9448 | tkauth-01 with TNAuthList identifiers | `Config.TNAuthListIdentifiers` |
+| RFC 9447 and RFC 9448 | tkauth-01 with TNAuthList identifiers, including the ATIS-1000080 `atc` field for STIR/SHAKEN | `Config.TNAuthListIdentifiers` |
+| 3GPP TS 33.310 Annex J | tkauth-01 with NfInstanceId identifiers for 5G network functions | `Config.NfInstanceIDIdentifiers` |
 | RFC 9773 | Renewal information and `replaces` | `Config.RenewalInfo` |
+| draft-ietf-acme-profiles | Certificate profiles in the directory and on new orders | `Config.Profiles` |
 
 Account keys may use ES256, ES384, ES512, RS256 or EdDSA. External account bindings use HS256, HS384 or
 HS512. Independent clients verify the behavior, see
@@ -76,13 +79,13 @@ signatures in requests and in returned chains itself. Account keys stay classica
 ### Limitations
 
 * No pre-authorization. The directory omits `newAuthz` and every order receives fresh
-  authorizations, so clients validate each identifier again for every order.
+  authorizations, so clients validate each identifier again for every order. A `PreApprover`
+  can skip validation for names the host approved in advance.
 * No alternate chains. The certificate response carries one chain and no `rel="alternate"` link.
-* No certificate profiles, `dns-account-01`, short-term automatic renewal, delegation, subdomain
-  authorizations or email, onion and device identifiers. Working group drafts are not exposed in
-  the public API.
-* No rate limits. `Policy` and `IssuancePolicy` are the places to refuse accounts, orders or
-  issuance.
+* No `dns-account-01`, short-term automatic renewal, delegation, subdomain authorizations or
+  email, onion and device identifiers.
+* No built-in rate limits. The host supplies a `Limiter` for nonces, new accounts and new
+  orders. `Policy` and `IssuancePolicy` can refuse other work.
 * No TLS termination or CA. The host serves the handler behind its HTTPS origin, signs with its
   own CA and supplies durable storage. `memstore` keeps everything in memory.
 
@@ -135,6 +138,7 @@ Full documentation is at
 * [Accounts and policy](https://misiektoja.github.io/go-acme-server/guide/accounts-and-policy/)
 * [Authority Token challenges](https://misiektoja.github.io/go-acme-server/guide/authority-tokens/)
 * [Renewal information](https://misiektoja.github.io/go-acme-server/guide/renewal-information/)
+* [Certificate profiles](https://misiektoja.github.io/go-acme-server/guide/certificate-profiles/)
 * [Configuration](https://misiektoja.github.io/go-acme-server/reference/configuration/)
 * [Deployment](https://misiektoja.github.io/go-acme-server/operations/deployment/)
 * [Troubleshooting](https://misiektoja.github.io/go-acme-server/operations/troubleshooting/)

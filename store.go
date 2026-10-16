@@ -55,8 +55,9 @@ type OrderStore interface {
 	// When the authorization reaches a terminal status, the same operation marks its order invalid
 	// with Error set to InvalidAuthorizationProblem() unless issuance was already dispatched.
 	UpdateAuthorization(ctx context.Context, authz *Authorization) error
-	// Reports whether the account holds a valid unexpired authorization for every identifier,
-	// read in one consistent snapshot. Revocation by another account relies on it.
+	// Reports whether the account holds a valid unexpired authorization that is not PreApproved
+	// for every identifier, read in one consistent snapshot. Revocation by another account relies
+	// on it.
 	AuthorizedFor(ctx context.Context, accountID string, identifiers []Identifier, now time.Time) (bool, error)
 	// Returns the challenge with the given ID or ErrNotFound.
 	Challenge(ctx context.Context, id string) (*Challenge, error)
@@ -89,6 +90,10 @@ type WorkStore interface {
 	ClaimTask(ctx context.Context, now, leaseUntil time.Time) (*Task, error)
 	// Releases the lease and stores task.RunAt for a later claim.
 	RescheduleTask(ctx context.Context, task *Task) error
+	// Stores the challenge when its revision matches and releases the lease with task.RunAt for
+	// a later claim, all in one operation. It records the error of a validation attempt that
+	// will be retried.
+	RetryValidation(ctx context.Context, task *Task, challenge *Challenge) error
 	// Removes the task without touching any resource.
 	FinishTask(ctx context.Context, task *Task) error
 	// Stores the challenge, authorization and order when every revision matches and removes the

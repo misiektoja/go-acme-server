@@ -30,12 +30,18 @@ problem. Zero values select the defaults below. Negative limits are refused.
 | `RequireTermsOfServiceAgreed` | `false` | Refuses accounts that do not agree. Needs `Meta.TermsOfService` |
 | `IPIdentifiers` | `false` | Accepts RFC 8738 IP identifiers |
 | `TNAuthListIdentifiers` | `false` | Accepts RFC 9448 TNAuthList identifiers. Needs a `ChallengeTKAuth01` validator |
+| `TNAuthListCertificatesOutliveTokens` | `false` | Lets a TNAuthList certificate keep its own validity after the token expires, as ATIS-1000080 clause 6.3.8 specifies for STIR/SHAKEN. Needs `TNAuthListIdentifiers` |
 | `TokenAuthority` | empty | The `https` URL advertised as `token-authority` on `tkauth-01` challenges |
 | `OrderLifetime` | 7 days | How long a new order and its pending authorizations stay valid |
 | `AuthorizationLifetime` | 30 days | How long a validated authorization stays valid |
 | `MaxIdentifiers` | 100 | Bounds the identifiers of one order |
+| `RevocationReasons` | 0, 1, 3, 4 and 5 | The RFC 5280 reason codes clients may request. May hold 0 to 5, 9 and 10. See [Revocation](../guide/revocation.md#reason-codes) |
+| `Refusals` | none | Learns about `finalize` and `revokeCert` requests the server refuses. See [Recording refusals](../guide/embedding.md#recording-refusals) |
+| `Limits` | none | Limits how often clients may get nonces, create accounts and place orders. See [Rate limits](../guide/accounts-and-policy.md#rate-limits) |
 | `DetachedWriteTimeout` | 30 seconds | Bounds a store write that finishes after the client request ended, such as recording a revocation the CA already carried out |
 | `RenewalInfo` | none | Serves RFC 9773 renewal information and accepts `replaces`. `LifetimeRenewal{}` is the built-in advisor |
+| `Profiles` | none | The certificate profiles advertised in the directory and accepted on new orders. See [Certificate profiles](../guide/certificate-profiles.md) |
+| `DefaultProfile` | empty | The profile of an order that names none, unless a `ProfileChooser` policy picks another. Required with `Profiles` and must be one of them |
 | `Workers` | see below | Tunes `Run` and `Ready` |
 
 ## `DirectoryMeta`
@@ -47,7 +53,16 @@ problem. Zero values select the defaults below. Negative limits are refused.
 | `CAAIdentities` | `caaIdentities` | Informational. CAA is not checked by the library |
 | `ExternalAccountRequired` | `externalAccountRequired` | Refuses accounts without a binding |
 
-The `meta` object is omitted from the directory when every field is empty.
+The `meta` object is omitted from the directory when every field is empty and no profiles are
+configured. Configured profiles appear in it as `profiles`.
+
+## `Profile`
+
+| Field | Purpose |
+| --- | --- |
+| `Name` | The name clients send. 1 to 64 ASCII letters, digits, dots, underscores or hyphens, starting with a letter or digit |
+| `Description` | Plain text the server publishes at `<BaseURL>profiles/<Name>` |
+| `URL` | An absolute `https` URL of a description published elsewhere. Set exactly one of `Description` and `URL` |
 
 ## `WorkerConfig`
 
@@ -75,7 +90,7 @@ field:
 | `DNSOptions.Timeout` | 10 seconds |
 | `TKAuthOptions.ClockSkew` | 1 minute |
 | `nonce.Options.TTL`, `Capacity` | 1 hour, 100000 |
-| `LifetimeRenewal.Start`, `End`, `RetryAfter` | 2/3, 5/6, 6 hours |
+| `LifetimeRenewal.Start`, `End`, `RetryAfter`, `Clock` | 2/3, 5/6, 6 hours, system clock |
 
 ## Validation errors
 
@@ -87,5 +102,10 @@ field:
 * `Meta.ExternalAccountRequired` or `SingleUseExternalAccounts` without `ExternalAccounts`
 * `RequireTermsOfServiceAgreed` without `Meta.TermsOfService`
 * `TNAuthListIdentifiers` without a `tkauth-01` validator
+* `TNAuthListCertificatesOutliveTokens` without `TNAuthListIdentifiers`
 * a `TokenAuthority` that is not an absolute `https` URL
+* an invalid or repeated profile name, a profile without exactly one of `Description` and `URL`, a
+  profile `URL` that is not an absolute `https` URL or a `Description` that is not valid UTF-8
+* `DefaultProfile` without `Profiles` or a `DefaultProfile` that names none of them
+* a `RevocationReasons` code other than 0 to 5, 9 and 10
 * a negative limit or worker value

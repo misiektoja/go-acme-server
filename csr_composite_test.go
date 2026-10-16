@@ -33,14 +33,14 @@ func TestCompositeCSR(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			csr, problem := checkCSR(der, order, account)
+			csr, problem := checkCSR(der, order, account, nil)
 			if problem != nil {
 				t.Fatal(problem)
 			}
 			if string(csr.Raw) != string(der) {
 				t.Fatal("accepted CSR differs from the submitted one")
 			}
-			if _, problem := checkCSR(der, &Order{Identifiers: []Identifier{{Type: IdentifierDNS, Value: "other.example.test"}}}, account); problem == nil {
+			if _, problem := checkCSR(der, &Order{Identifiers: []Identifier{{Type: IdentifierDNS, Value: "other.example.test"}}}, account, nil); problem == nil {
 				t.Fatal("mismatched identity accepted")
 			}
 
@@ -53,7 +53,7 @@ func TestCompositeCSR(t *testing.T) {
 			for name, offset := range map[string]int{"traditional": len(der) - 1, "ML-DSA": len(der) - len(parsed.Signature)} {
 				tampered := append([]byte(nil), der...)
 				tampered[offset] ^= 1
-				if _, problem := checkCSR(tampered, order, account); problem == nil || problem.Type != ErrorBadCSR {
+				if _, problem := checkCSR(tampered, order, account, nil); problem == nil || problem.Type != ErrorBadCSR {
 					t.Fatalf("invalid %s signature accepted: %v", name, problem)
 				}
 			}

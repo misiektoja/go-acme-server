@@ -2,19 +2,32 @@ package acmeserver
 
 import (
 	"net/netip"
+	"net/url"
 	"strings"
+
+	"golang.org/x/net/idna"
 )
 
 // Names the kind of subject an order or authorization refers to.
 type IdentifierType string
 
-// Identifier types registered by RFC 8555 section 9.7.7, RFC 8738 and RFC 9448.
+// Identifier types registered by RFC 8555 section 9.7.7, RFC 8738, RFC 9448 and 3GPP TS 33.310
+// Annex J, plus the uri type that only authority tokens grant.
 const (
 	IdentifierDNS IdentifierType = "dns"
 	IdentifierIP  IdentifierType = "ip"
 	// A base64url encoded DER TN Authorization List, see RFC 8226 section 9.
 	IdentifierTNAuthList IdentifierType = "TNAuthList"
+	// The UUID of a 5G network function instance, see 3GPP TS 33.310 clause J.3.3.2. A certificate
+	// carries it as the URI name urn:uuid:<value>.
+	IdentifierNfInstanceID IdentifierType = "NfInstanceId"
+	// An https URI name that an authority token adds to a certificate, such as the API root of a
+	// network function. No ACME specification registers it, so orders cannot request it.
+	IdentifierURI IdentifierType = "uri"
 )
+
+// The URI prefix that carries an NfInstanceId in a certificate, see RFC 4122 section 3.
+const nfInstanceURNPrefix = "urn:uuid:"
 
 // An ACME identifier object.
 type Identifier struct {
@@ -46,8 +59,110 @@ func (id Identifier) Normalize() (Identifier, error) {
 		return normalizeIP(id.Value)
 	case IdentifierTNAuthList:
 		return normalizeTNAuthList(id.Value)
+	case IdentifierNfInstanceID:
+		return normalizeNfInstanceID(id.Value)
+	case IdentifierURI:
+		return normalizeURI(id.Value)
 	}
 	return Identifier{}, Problemf(ErrorUnsupportedIdentifier, "identifier type %q is not supported", string(id.Type))
+}
+
+// Returns the URI name a certificate carries for an NfInstanceId identifier, or an https URI
+// identifier's value. Other identifier types have no URI form and return an empty string.
+func (id Identifier) URI() string {
+	switch id.Type {
+	case IdentifierNfInstanceID:
+		return nfInstanceURNPrefix + id.Value
+	case IdentifierURI:
+		return id.Value
+	case IdentifierDNS, IdentifierIP, IdentifierTNAuthList:
+	}
+	return ""
+}
+
+// Returns the identifier a certificate URI name stands for: an NfInstanceId for urn:uuid and a
+// uri identifier for an https URI. Errors are *Problem values like those of Normalize.
+func uriNameIdentifier(name string) (Identifier, error) {
+	if len(name) > len(nfInstanceURNPrefix) && strings.EqualFold(name[:len(nfInstanceURNPrefix)], nfInstanceURNPrefix) {
+		return normalizeNfInstanceID(name[len(nfInstanceURNPrefix):])
+	}
+	return normalizeURI(name)
+}
+
+// Lowercases a UUID in the 8-4-4-4-12 hexadecimal form. TS 29.571 asks senders for version 4 in
+// lower case and receivers to ignore case, so only the form is checked. The nil UUID names no
+// instance and is refused.
+func normalizeNfInstanceID(value string) (Identifier, error) {
+	id := Identifier{Type: IdentifierNfInstanceID, Value: value}
+	if value == "" {
+		return Identifier{}, NewProblem(ErrorMalformed, "NfInstanceId identifier value is empty")
+	}
+	if len(value) != 36 {
+		return Identifier{}, rejected(id, "NfInstanceId identifier is not a UUID")
+	}
+	lower := strings.ToLower(value)
+	for i := 0; i < len(lower); i++ {
+		c := lower[i]
+		if i == 8 || i == 13 || i == 18 || i == 23 {
+			if c != '-' {
+				return Identifier{}, rejected(id, "NfInstanceId identifier is not a UUID")
+			}
+			continue
+		}
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return Identifier{}, rejected(id, "NfInstanceId identifier is not a UUID")
+		}
+	}
+	if strings.Trim(lower, "0-") == "" {
+		return Identifier{}, rejected(id, "NfInstanceId identifier is the nil UUID")
+	}
+	return Identifier{Type: IdentifierNfInstanceID, Value: lower}, nil
+}
+
+// Bounds the length of a uri identifier.
+const maxURILength = 2048
+
+// Checks an absolute https URI without user information or a fragment and returns it with the
+// scheme and host in lower case, the form crypto/x509 reads back from a certificate.
+func normalizeURI(value string) (Identifier, error) {
+	id := Identifier{Type: IdentifierURI, Value: value}
+	if value == "" {
+		return Identifier{}, NewProblem(ErrorMalformed, "uri identifier value is empty")
+	}
+	if len(value) > maxURILength {
+		return Identifier{}, rejected(id, "uri identifier exceeds 2048 characters")
+	}
+	for i := 0; i < len(value); i++ {
+		if value[i] <= ' ' || value[i] >= 0x7f {
+			return Identifier{}, rejected(id, "uri identifier must be ASCII without spaces or control characters")
+		}
+	}
+	u, err := url.Parse(value)
+	if err != nil || !strings.EqualFold(u.Scheme, schemeHTTPS) || u.Host == "" || u.User != nil || u.Fragment != "" ||
+		u.Opaque != "" {
+		return Identifier{}, rejected(id, "uri identifier must be an absolute https URI without user information "+
+			"or a fragment")
+	}
+	u.Scheme, u.Host = schemeHTTPS, strings.ToLower(u.Host)
+	return Identifier{Type: IdentifierURI, Value: u.String()}, nil
+}
+
+// Limits from RFC 9310 section 3 on one NFType string.
+const maxNFTypeLength = 32
+
+// Reports whether value is a valid RFC 9310 NFType: 1 to 32 printable ASCII characters without
+// spaces. 3GPP TS 29.510 clause 6.1.6.3.3 lists the values in use, such as AMF or NRF, and keeps
+// adding new ones, so the value is not compared with a list.
+func ValidNFType(value string) bool {
+	if value == "" || len(value) > maxNFTypeLength {
+		return false
+	}
+	for i := 0; i < len(value); i++ {
+		if value[i] <= ' ' || value[i] >= 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 // Normalizes every identifier and rejects duplicates in the normalized set.
@@ -101,7 +216,8 @@ func normalizeDNS(value string) (Identifier, error) {
 	return Identifier{Type: IdentifierDNS, Value: name}, nil
 }
 
-// Returns why a lowercase label is not a valid host name label, or an empty string.
+// Returns why a lowercase label is not a valid host name label, or an empty string. A label
+// starting with xn-- must be a properly encoded A-label, as RFC 8555 section 7.1.4 requires.
 func checkDNSLabel(label string) string {
 	if label == "" {
 		return "dns identifier contains an empty label"
@@ -118,7 +234,22 @@ func checkDNSLabel(label string) string {
 			return "dns identifier contains a character outside letters, digits and hyphens"
 		}
 	}
+	if strings.HasPrefix(label, "xn--") && !validALabel(label) {
+		return "dns identifier label " + label + " is not a valid A-label"
+	}
 	return ""
+}
+
+// Reports whether a label decodes as Punycode to a name the IDNA2008 registration rules allow
+// and encodes back to the same label. The registration profile of golang.org/x/net/idna follows
+// UTS 46, which also accepts a few symbols IDNA2008 itself disallows, such as emoji.
+func validALabel(label string) bool {
+	uLabel, err := idna.Registration.ToUnicode(label)
+	if err != nil {
+		return false
+	}
+	aLabel, err := idna.Registration.ToASCII(uLabel)
+	return err == nil && aLabel == label
 }
 
 // Parses an IP address and returns its RFC 5952 textual form.

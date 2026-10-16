@@ -10,18 +10,19 @@ means for clients or the host.
 The directory omits `newAuthz` and every order receives fresh pending authorizations. A client that
 renews the same name every week validates it again every week. Clients handle this without
 configuration, but a CA that promised subscribers long-lived authorizations cannot keep that promise
-with this library.
+with this library. A host can skip validation for names it approved in advance with a
+[`PreApprover`](guide/accounts-and-policy.md#pre-approved-identifiers).
 
 ### One chain per certificate
 
 The certificate response carries a single chain and no `rel="alternate"` link. A CA with several
 roots picks one chain in its `Issuer` and clients cannot ask for another.
 
-### Working group drafts are not exposed
+### Other ACME extensions are not implemented
 
-Certificate profiles, `dns-account-01`, short-term automatic renewal, delegation, subdomain
-authorizations and `email`, `onion` or device identifiers are not implemented. Unknown identifier
-types are refused with `unsupportedIdentifier` and unknown directory or order members are ignored.
+`dns-account-01`, short-term automatic renewal, delegation, subdomain authorizations and `email`,
+`onion` or device identifiers are not implemented. Unknown identifier types are refused with
+`unsupportedIdentifier` and unknown directory or order members are ignored.
 
 ### Contacts are mailto only
 
@@ -30,11 +31,12 @@ with `unsupportedContact`.
 
 ## Host responsibilities
 
-### No rate limits
+### No built-in rate limits
 
-The library never answers `rateLimited` on its own. `Policy.NewAccount`, `Policy.NewOrder` and
-`IssuancePolicy` are the places to refuse work, and a returned `*Problem` reaches the client
-unchanged.
+The library never answers `rateLimited` on its own. A host sets `Config.Limits` to limit nonces,
+new accounts and new orders. `Policy` and `IssuancePolicy` can refuse other work. See
+[Rate limits](guide/accounts-and-policy.md#rate-limits). The limiter is not asked about other
+requests. An error response to any request carries a fresh nonce.
 
 ### No TLS termination, CA or durable storage
 

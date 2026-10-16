@@ -28,7 +28,7 @@ database.
 | `AccountStore` | `CreateAccount`, `Account`, `AccountByKey`, `UpdateAccount` | Account ID, key thumbprint and a non-empty `ExternalAccountClaim` are each unique |
 | `OrderStore` | `CreateOrder`, `Order`, `OrderIDs`, `Authorization`, `UpdateAuthorization`, `AuthorizedFor`, `Challenge` | `CreateOrder` writes the order with all its authorizations and challenges |
 | `CertificateStore` | `Certificate`, `CertificateByRenewalID`, `UpdateCertificate` | A non-empty `RenewalID` is unique |
-| `WorkStore` | `AcceptChallenge`, `FinalizeOrder`, `BeginIssuance`, `ClaimTask`, `RescheduleTask`, `FinishTask`, `CompleteValidation`, `CompleteIssuance`, `PendingTasks` | Combines resource updates with task changes in one transaction |
+| `WorkStore` | `AcceptChallenge`, `FinalizeOrder`, `BeginIssuance`, `ClaimTask`, `RescheduleTask`, `RetryValidation`, `FinishTask`, `CompleteValidation`, `CompleteIssuance`, `PendingTasks` | Combines resource updates with task changes in one transaction |
 
 The Go documentation on each method states its exact semantics. The sections below explain the
 ones that carry the most weight.
@@ -69,7 +69,7 @@ and hold no lease past it, which `Ready` uses to detect that no worker is active
 
 | Method | Writes in one transaction |
 | --- | --- |
-| `CreateOrder` | The order, its authorizations, its challenges and, when `order.Replaces` is set, the `ReplacedByOrderID` of the predecessor certificate |
+| `CreateOrder` | The order including its `Profile`, its authorizations, its challenges and, when `order.Replaces` is set, the `ReplacedByOrderID` of the predecessor certificate |
 | `AcceptChallenge` | The challenge at its revision and the new validation task |
 | `FinalizeOrder` | The order at its revision and the new issuance task |
 | `BeginIssuance` | `order.Issuance` after checking the task fence and the revision and status of the order, the account and every authorization |
@@ -93,7 +93,7 @@ inside the transaction.
 
 `AuthorizedFor` reports whether an account holds a valid unexpired authorization for every
 identifier in the list, read in one consistent snapshot. Revocation by an account other than the
-issuer relies on it. A wildcard authorization covers the wildcard identifier and is stored with
+issuer relies on it, so an authorization with `PreApproved` set never counts. A wildcard authorization covers the wildcard identifier and is stored with
 `Wildcard` set and the base name in `Identifier`, so index authorizations by account, identifier
 type, value and wildcard flag.
 

@@ -350,7 +350,7 @@ func (s *Store) AuthorizedFor(ctx context.Context, accountID string, identifiers
 		valid := false
 		for _, id := range s.authzIndex[authorizationKey{accountID: accountID, identifier: identifier}] {
 			a := s.authzs[id]
-			if a.Status == acmeserver.AuthorizationValid && a.Expires.After(now) {
+			if a.Status == acmeserver.AuthorizationValid && !a.PreApproved && a.Expires.After(now) {
 				valid = true
 				break
 			}
@@ -498,6 +498,28 @@ func (s *Store) RescheduleTask(ctx context.Context, task *acmeserver.Task) error
 	if err != nil {
 		return err
 	}
+	stored.RunAt = task.RunAt
+	stored.LeaseUntil = time.Time{}
+	task.LeaseUntil = time.Time{}
+	return nil
+}
+
+// Stores the challenge of a validation attempt that will be retried and releases the lease together.
+func (s *Store) RetryValidation(ctx context.Context, task *acmeserver.Task, challenge *acmeserver.Challenge) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	stored, err := s.checkTask(task)
+	if err != nil {
+		return err
+	}
+	if err := s.checkChallenge(challenge); err != nil {
+		return err
+	}
+	challenge.Revision++
+	s.challenges[challenge.ID] = cloneChallenge(challenge)
 	stored.RunAt = task.RunAt
 	stored.LeaseUntil = time.Time{}
 	task.LeaseUntil = time.Time{}
@@ -692,7 +714,7 @@ func cloneOrder(o *acmeserver.Order) *acmeserver.Order {
 	c.Error = cloneProblem(o.Error)
 	if o.Issuance != nil {
 		state := *o.Issuance
-		state.Validations = slices.Clone(state.Validations)
+		state.Validations = cloneValidations(state.Validations)
 		c.Issuance = &state
 	}
 	if o.UnpublishedResult != nil {
@@ -708,7 +730,17 @@ func cloneOrder(o *acmeserver.Order) *acmeserver.Order {
 func cloneAuthorization(a *acmeserver.Authorization) *acmeserver.Authorization {
 	c := *a
 	c.ChallengeIDs = slices.Clone(a.ChallengeIDs)
+	c.GrantNames = slices.Clone(a.GrantNames)
 	return &c
+}
+
+// Returns a copy of validation evidence whose granted names are not shared.
+func cloneValidations(validations []acmeserver.Validation) []acmeserver.Validation {
+	out := slices.Clone(validations)
+	for i := range out {
+		out[i].Names = slices.Clone(out[i].Names)
+	}
+	return out
 }
 
 // Returns a copy of the challenge with its own error.
@@ -722,7 +754,7 @@ func cloneChallenge(ch *acmeserver.Challenge) *acmeserver.Challenge {
 func cloneCertificate(cert *acmeserver.Certificate) *acmeserver.Certificate {
 	c := *cert
 	c.Chain = cloneChain(cert.Chain)
-	c.Validations = slices.Clone(cert.Validations)
+	c.Validations = cloneValidations(cert.Validations)
 	return &c
 }
 

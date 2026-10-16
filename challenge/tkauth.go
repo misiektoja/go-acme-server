@@ -8,7 +8,10 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"net/netip"
 	"net/url"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,6 +21,9 @@ import (
 
 // Bounds the Authority Token the server may hand to the validator.
 const maxAuthorityTokenLength = 16 << 10
+
+// Bounds the sans of one NF Certificate Authority Token.
+const maxTokenNames = 100
 
 // Names the Token Authority that an Authority Token points at. Every field comes from a token
 // whose signature is still unverified.
@@ -52,8 +58,9 @@ type TKAuthOptions struct {
 	Now func() time.Time
 }
 
-// Validates a tkauth-01 response by checking the Authority Token of RFC 9448 against the
-// challenge identifier and the responding account.
+// Validates a tkauth-01 response by checking the Authority Token against the challenge identifier
+// and the responding account. It accepts the TNAuthList tokens of RFC 9448 and the NF Certificate
+// Authority Tokens of 3GPP TS 33.310 clause J.3.3.3.
 type TKAuth01 struct {
 	authorities TokenAuthorities
 	skew        time.Duration
@@ -81,8 +88,9 @@ func (v *TKAuth01) Validate(ctx context.Context, request acmeserver.ValidationRe
 }
 
 // Performs the token checks an ACME server owns at response time, that is steps 1 to 8 of
-// RFC 9448 section 6. The CA basic constraint of step 9 is compared with the certificate request
-// at finalization, and the token expiry bounds the validity of the issued certificate.
+// RFC 9448 section 6 or the checks of 3GPP TS 33.310 clause J.3.3.4. The CA basic constraint of
+// RFC 9448 step 9 is compared with the certificate request at finalization, and the token expiry
+// bounds the validity of the issued certificate. An NF token grants its nftype and sans.
 func (v *TKAuth01) ValidateGrant(ctx context.Context,
 	request acmeserver.ValidationRequest) (acmeserver.ValidationGrant, error) {
 	none := acmeserver.ValidationGrant{}
@@ -119,7 +127,13 @@ func (v *TKAuth01) ValidateGrant(ctx context.Context,
 	if err := v.checkClaims(claims, id, request.AccountKeyThumbprint, now); err != nil {
 		return none, err
 	}
-	return acmeserver.ValidationGrant{CACertificate: claims.ATC.CA, Expires: time.Unix(*claims.Expires, 0)}, nil
+	grant := acmeserver.ValidationGrant{Expires: time.Unix(*claims.Expires, 0)}
+	if id.Type == acmeserver.IdentifierNfInstanceID {
+		grant.Names, grant.NFType, err = nfGrant(claims.ATC, id)
+		return grant, err
+	}
+	grant.CACertificate = claims.ATC.CA
+	return grant, nil
 }
 
 // Checks the claims of a verified token against the challenge identifier and the account key.
@@ -128,10 +142,12 @@ func (v *TKAuth01) checkClaims(claims *authorityTokenJSON, id acmeserver.Identif
 	switch {
 	// RFC 9448 section 5.4 spells the type TNAuthList while the RFC 9447 example writes TnAuthList.
 	// Token Authorities built from either text must interoperate, so the comparison ignores case.
-	case !strings.EqualFold(claims.ATC.TokenType, string(acmeserver.IdentifierTNAuthList)):
+	case !strings.EqualFold(claims.ATC.TokenType, string(id.Type)):
 		return incorrect("the authority token attests another identifier type")
-	case !sameAuthorityList(claims.ATC.TokenValue, id.Value):
+	case id.Type == acmeserver.IdentifierTNAuthList && !sameAuthorityList(claims.ATC.TokenValue, id.Value):
 		return incorrect("the authority token attests another authority list")
+	case id.Type == acmeserver.IdentifierNfInstanceID && !sameNfInstance(claims.ATC.TokenValue, id.Value):
+		return incorrect("the authority token attests another NF instance")
 	case now.After(time.Unix(*claims.Expires, 0).Add(v.skew)):
 		return incorrect("the authority token has expired")
 	case claims.NotBefore != nil && now.Before(time.Unix(*claims.NotBefore, 0).Add(-v.skew)):
@@ -148,8 +164,8 @@ func checkTKAuthRequest(req acmeserver.ValidationRequest) (acmeserver.Identifier
 	if err != nil {
 		return acmeserver.Identifier{}, err
 	}
-	if req.Challenge.Type != acmeserver.ChallengeTKAuth01 || id.Type != acmeserver.IdentifierTNAuthList ||
-		req.Wildcard {
+	if req.Challenge.Type != acmeserver.ChallengeTKAuth01 || req.Wildcard ||
+		(id.Type != acmeserver.IdentifierTNAuthList && id.Type != acmeserver.IdentifierNfInstanceID) {
 		return acmeserver.Identifier{}, incorrect("identifier does not support this challenge")
 	}
 	if len(req.Challenge.Token) < 22 || len(req.Challenge.Token) > 256 || !base64URL(req.Challenge.Token) ||
@@ -172,12 +188,15 @@ type authorityTokenJSON struct {
 	ATC       *atcClaimJSON `json:"atc"`
 }
 
-// The atc claim of RFC 9447 section 4.
+// The atc claim of RFC 9447 section 4 with the optional NF profile parameters of 3GPP TS 33.310
+// clause J.3.3.3.
 type atcClaimJSON struct {
-	TokenType   string `json:"tktype"`
-	TokenValue  string `json:"tkvalue"`
-	CA          bool   `json:"ca"`
-	Fingerprint string `json:"fingerprint"`
+	TokenType   string    `json:"tktype"`
+	TokenValue  string    `json:"tkvalue"`
+	CA          bool      `json:"ca"`
+	Fingerprint string    `json:"fingerprint"`
+	NFType      *string   `json:"nftype"`
+	Names       *[]string `json:"sans"`
 }
 
 // Decodes the token payload and checks that the mandatory claims are present and well formed.
@@ -215,6 +234,61 @@ func authorityRef(header jws.CompactHeader, issuer string) (TokenAuthorityRef, e
 		return TokenAuthorityRef{}, incorrect("the authority token names no token authority certificate")
 	}
 	return ref, nil
+}
+
+// Reports whether a token value names the NF instance of a normalized identifier. Receivers
+// ignore the case of the UUID, see 3GPP TS 33.310 clause J.3.3.2.
+func sameNfInstance(tkvalue, identifier string) bool {
+	id, err := acmeserver.Identifier{Type: acmeserver.IdentifierNfInstanceID, Value: tkvalue}.Normalize()
+	return err == nil && id.Value == identifier
+}
+
+// Returns the names and NF type an NF Certificate Authority Token grants beyond its instance. Each
+// sans entry is an IP address, an https URI or a DNS name, the kinds of name clause 6.1.3c.3
+// places in an NF certificate. The URN of the token's own instance adds nothing and is skipped,
+// while the URN of another instance is refused, because a token attests a single instance.
+func nfGrant(atc *atcClaimJSON, instance acmeserver.Identifier) ([]acmeserver.Identifier, string, error) {
+	nfType := ""
+	if atc.NFType != nil {
+		if !acmeserver.ValidNFType(*atc.NFType) {
+			return nil, "", incorrect("the authority token nftype is not an RFC 9310 NF type")
+		}
+		nfType = *atc.NFType
+	}
+	if atc.Names == nil {
+		return nil, nfType, nil
+	}
+	if len(*atc.Names) > maxTokenNames {
+		return nil, "", incorrect("the authority token sans list is too long")
+	}
+	var names []acmeserver.Identifier
+	for _, raw := range *atc.Names {
+		id, err := tokenName(raw)
+		if err != nil {
+			return nil, "", incorrect("the authority token sans entry " + strconv.Quote(raw) + " is not a supported name")
+		}
+		switch {
+		case id.Type == acmeserver.IdentifierNfInstanceID && id != instance:
+			return nil, "", incorrect("the authority token sans name another NF instance")
+		case id != instance && !slices.Contains(names, id):
+			names = append(names, id)
+		}
+	}
+	return names, nfType, nil
+}
+
+// Classifies and normalizes one sans entry of an NF token.
+func tokenName(raw string) (acmeserver.Identifier, error) {
+	switch {
+	case strings.HasPrefix(strings.ToLower(raw), "urn:uuid:"):
+		return acmeserver.Identifier{Type: acmeserver.IdentifierNfInstanceID, Value: raw[len("urn:uuid:"):]}.Normalize()
+	case strings.Contains(raw, "://"):
+		return acmeserver.Identifier{Type: acmeserver.IdentifierURI, Value: raw}.Normalize()
+	}
+	if _, err := netip.ParseAddr(raw); err == nil {
+		return acmeserver.Identifier{Type: acmeserver.IdentifierIP, Value: raw}.Normalize()
+	}
+	return acmeserver.Identifier{Type: acmeserver.IdentifierDNS, Value: raw}.Normalize()
 }
 
 // Reports whether two base64 encodings carry the same authority list. Padded values are accepted

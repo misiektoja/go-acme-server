@@ -33,6 +33,8 @@ type orderJSON struct {
 	Finalize       string       `json:"finalize"`
 	Certificate    string       `json:"certificate,omitempty"`
 	Replaces       string       `json:"replaces,omitempty"`
+	// The certificate profile of draft-ietf-acme-profiles.
+	Profile string `json:"profile,omitempty"`
 }
 
 // The authorization object of RFC 8555 section 7.1.4.
@@ -80,6 +82,7 @@ func (s *Server) orderView(order *Order, now time.Time) orderJSON {
 		Error:       order.Error,
 		Finalize:    s.resourceURL(orderPathPrefix + order.ID + "/finalize"),
 		Replaces:    order.Replaces,
+		Profile:     order.Profile,
 	}
 	view.Authorizations = make([]string, len(order.AuthorizationIDs))
 	for i, id := range order.AuthorizationIDs {

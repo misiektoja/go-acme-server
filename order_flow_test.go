@@ -731,6 +731,8 @@ func (denyPolicy) NewOrder(_ context.Context, _ *acmeserver.Account, order *acme
 		order.Identifiers[0].Value = "other.test"
 	case "extended.test":
 		order.Expires = order.Expires.Add(time.Hour)
+	case "reprofiled.test":
+		order.Profile = "other"
 	case "inverted.test":
 		order.NotBefore, order.NotAfter = order.CreatedAt.Add(2*time.Hour), order.CreatedAt.Add(time.Hour)
 	}
@@ -752,9 +754,10 @@ func TestOrderPolicyEdits(t *testing.T) {
 		t.Fatalf("stored order = %+v", order)
 	}
 	for name, logged := range map[string]string{
-		"renamed.test":  "changed order fields other than NotBefore and NotAfter",
-		"extended.test": "changed order fields other than NotBefore and NotAfter",
-		"inverted.test": "set NotAfter no later than NotBefore",
+		"renamed.test":    "changed order fields other than NotBefore and NotAfter",
+		"extended.test":   "changed order fields other than NotBefore and NotAfter",
+		"reprofiled.test": "changed order fields other than NotBefore and NotAfter",
+		"inverted.test":   "set NotAfter no later than NotBefore",
 	} {
 		assertProblem(t, c.post(baseURL+"new-order", map[string]any{"identifiers": []map[string]string{{"type": "dns", "value": name}}}),
 			http.StatusInternalServerError, acmeserver.ErrorServerInternal)

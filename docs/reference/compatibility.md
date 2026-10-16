@@ -1,8 +1,8 @@
 # Compatibility policy
 
 The module uses semantic versioning. The public API is every exported identifier of the root
-package and of `challenge`, `memstore`, `nonce` and `storetest`. The `internal` packages and the
-`test/interop` module are not part of it.
+package and of `challenge`, `memstore`, `nonce`, `noncetest` and `storetest`. The `internal`
+packages and the `test/interop` module are not part of it.
 
 ## Before v1.0.0
 
@@ -20,7 +20,7 @@ reason. Patch releases keep the API.
 
 1. Read the release notes section for the new version.
 2. Run `go get github.com/misiektoja/go-acme-server@vX.Y.Z` and build. A new interface method is a compile error that names what to implement.
-3. Run your `storetest` suite.
+3. Run your `storetest` suite and, for a custom nonce manager, `noncetest`.
 4. Run your own integration tests against the ACME clients you support. [Tested clients](../interoperability/tested-clients.md) names the versions each release was verified with.
 
 ## Go version

@@ -18,6 +18,9 @@ import (
 	acmeserver "github.com/misiektoja/go-acme-server"
 )
 
+// The cause recorded when a resolver answers NXDOMAIN.
+var errNameDoesNotExist = errors.New("challenge: DNS name does not exist")
+
 // Configures explicit recursive DNS endpoints with bounded messages and alias traversal.
 type ResolverOptions struct {
 	// Numeric TCP resolver endpoints, including ports, with at most three entries.
@@ -271,8 +274,11 @@ func (r *Resolver) parseResponse(wire []byte, id uint16, question dnsmessage.Que
 		!strings.EqualFold(questions[0].Name.String(), question.Name.String()) {
 		return nil, dnsFailure("DNS response question differs")
 	}
+	// A record that has not reached this resolver yet looks like a missing name, so the
+	// answer is retried and only reported once the validation attempts run out.
 	if header.RCode == dnsmessage.RCodeNameError {
-		return nil, dnsFailure("DNS name does not exist")
+		return nil, acmeserver.Retryable(acmeserver.NewProblem(acmeserver.ErrorDNS, "DNS name does not exist"),
+			errNameDoesNotExist)
 	}
 	if header.RCode != dnsmessage.RCodeSuccess {
 		return nil, errors.New("DNS resolver returned a transient failure")

@@ -160,8 +160,8 @@ func TestDNSNegativeReplies(t *testing.T) {
 			if err == nil {
 				t.Fatal("invalid DNS reply accepted")
 			}
-			if _, terminal := acmeserver.AsProblem(err); mode == "SERVFAIL" && terminal {
-				t.Fatal("transient resolver error became terminal")
+			if mode == "SERVFAIL" || mode == "NXDOMAIN" {
+				assertRetryable(t, err, acmeserver.ErrorDNS)
 			}
 		})
 	}

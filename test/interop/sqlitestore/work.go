@@ -113,22 +113,45 @@ func (s *Store) RescheduleTask(ctx context.Context, task *acmeserver.Task) error
 		if err := checkTask(ctx, c, task); err != nil {
 			return err
 		}
-		var stored acmeserver.Task
-		if err := read(ctx, c, "tasks", task.ID, &stored); err != nil {
-			return err
-		}
-		stored.RunAt = task.RunAt
-		stored.LeaseUntil = time.Time{}
-		data, err := encode(&stored)
-		if err != nil {
-			return err
-		}
-		_, err = c.ExecContext(ctx, rescheduleTaskSQL, timestamp(task.RunAt), data, task.ID)
-		return err
+		return releaseTask(ctx, c, task)
 	})
 	if err == nil {
 		task.LeaseUntil = time.Time{}
 	}
+	return err
+}
+
+// Stores the challenge of a validation attempt that will be retried and releases the lease atomically.
+func (s *Store) RetryValidation(ctx context.Context, task *acmeserver.Task, challenge *acmeserver.Challenge) error {
+	err := s.transaction(ctx, true, func(c *sql.Conn) error {
+		if err := checkTask(ctx, c, task); err != nil {
+			return err
+		}
+		if err := saveChallenge(ctx, c, challenge); err != nil {
+			return err
+		}
+		return releaseTask(ctx, c, task)
+	})
+	if err == nil {
+		challenge.Revision++
+		task.LeaseUntil = time.Time{}
+	}
+	return err
+}
+
+// Stores task.RunAt and clears the lease of a task whose fence the caller checked.
+func releaseTask(ctx context.Context, c *sql.Conn, task *acmeserver.Task) error {
+	var stored acmeserver.Task
+	if err := read(ctx, c, "tasks", task.ID, &stored); err != nil {
+		return err
+	}
+	stored.RunAt = task.RunAt
+	stored.LeaseUntil = time.Time{}
+	data, err := encode(&stored)
+	if err != nil {
+		return err
+	}
+	_, err = c.ExecContext(ctx, rescheduleTaskSQL, timestamp(task.RunAt), data, task.ID)
 	return err
 }
 

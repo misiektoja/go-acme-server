@@ -10,9 +10,9 @@ and its versions are separate from the library. `make test-interop` is a release
 | Client | Version | Scenarios |
 | --- | --- | --- |
 | [acmez](https://github.com/mholt/acmez) | v3.1.7 | HTTP-01, DNS-01 with a wildcard and its base name, TLS-ALPN-01, an IP identifier next to a DNS name, renewal information and `replaces` |
-| [Certbot](https://certbot.eff.org/) | 5.8.0 | Standalone HTTP-01, manual DNS-01 for a wildcard pair, revocation through the account, waiting out a pending order, a composite ML-DSA CSR |
-| [lego](https://go-acme.github.io/lego/) | v4.35.2 | HTTP-01, DNS-01 for a wildcard pair, TLS-ALPN-01, revocation with a reason code and `alreadyRevoked` on repeat, renewal information and `replaces`, waiting out a pending order, a composite ML-DSA issuer |
-| Go [crypto/acme](https://pkg.go.dev/golang.org/x/crypto/acme) | v0.57.0 | Contact update, key rollover, HTTP-01, ML-DSA-44/65/87 and composite ML-DSA certificate requests with account-authorized revocation, classical certificate-key revocation, composite ML-DSA issuers and account deactivation |
+| [Certbot](https://certbot.eff.org/) | 5.8.0 | Standalone HTTP-01, manual DNS-01 for a wildcard pair, revocation through the account, waiting out a pending order, a composite ML-DSA CSR, `--required-profile` and a `--preferred-profile` the directory does not list |
+| [lego](https://go-acme.github.io/lego/) | v4.35.2 | HTTP-01, DNS-01 for a wildcard pair, TLS-ALPN-01, revocation with a reason code and `alreadyRevoked` on repeat, renewal information and `replaces`, waiting out a pending order, a composite ML-DSA issuer, a requested profile, the default profile and `invalidProfile` |
+| Go [crypto/acme](https://pkg.go.dev/golang.org/x/crypto/acme) | v0.58.0 | Contact update, key rollover, HTTP-01, ML-DSA-44/65/87 and composite ML-DSA certificate requests with account-authorized revocation, classical certificate-key revocation, composite ML-DSA issuers and account deactivation |
 | [go-jose](https://github.com/go-jose/go-jose) raw client | v4.1.5 | Every signature algorithm, thumbprint cross-check, key change, external account binding, refused signatures, `tkauth-01`, repeated and concurrent requests |
 | [cert-manager](https://cert-manager.io/) | v1.21.1 | Issuance and renewal through a `ClusterIssuer` in a kind cluster |
 
@@ -27,7 +27,7 @@ rather than on every push.
 * **One CA call per operation.** The test CA records every issuance and revocation by operation ID, so retries and races are visible.
 * **Idempotent clients.** Registering one key again or from several connections at once yields one account. Repeated and concurrent challenge responses validate once. Repeated finalizations with the same CSR issue once and a different CSR is refused.
 * **Recovery.** Two processes share one SQLite store without processing any task twice. A worker killed after the CA committed but before publication is replaced by a new worker that recovers the identical certificate with one issuance across two CA calls.
-* **Extensions.** IP identifiers are offered HTTP-01 alone and refused when the feature is off. Renewal information is read, a certificate is replaced and a second `replaces` claim is refused with `alreadyReplaced`. A `tkauth-01` order with an Authority Token from a local Token Authority issues a certificate bounded by the token expiry.
+* **Extensions.** IP identifiers are offered HTTP-01 alone and refused when the feature is off. Renewal information is read, a certificate is replaced and a second `replaces` claim is refused with `alreadyReplaced`. A `tkauth-01` order with an Authority Token from a local Token Authority issues a certificate bounded by the token expiry. An `NfInstanceId` order issues a certificate with the instance URN and the names its token grants, and the granted names and NF type reach the stored evidence. A requested certificate profile reaches the stored order, an order without one gets the default and an unadvertised name is refused with `invalidProfile`.
 
 ## What they do not establish
 

@@ -61,6 +61,35 @@ func TestValidationStopsAtTheAttemptLimitAfterTimeouts(t *testing.T) {
 	}
 }
 
+// A Validator whose destination never accepts a connection.
+type refusingValidator struct{}
+
+// Reports a retryable connection failure.
+func (refusingValidator) Validate(context.Context, acmeserver.ValidationRequest) error {
+	return acmeserver.Retryable(acmeserver.NewProblem(acmeserver.ErrorConnection, "connection refused"),
+		errors.New("dial tcp: connection refused"))
+}
+
+// Requires the problem a retryable failure names, rather than serverInternal, once the attempts
+// run out.
+func TestRetryableValidationReportsItsProblem(t *testing.T) {
+	f := newFlow(t, func(cfg *acmeserver.Config) {
+		cfg.Validators = map[acmeserver.ChallengeType]acmeserver.Validator{acmeserver.ChallengeHTTP01: refusingValidator{}}
+		cfg.Workers = exhaustingWorkers()
+	})
+	f.runWorker()
+	c := f.newClient()
+	c.register()
+	orderURL, order := c.newOrder("refused.test")
+	c.respondHTTP01(order)
+	order = c.waitOrder(orderURL, statusInvalid)
+	var authz authzBody
+	c.get(order.Authorizations[0], &authz)
+	if problem := authz.Challenges[0].Error; problem == nil || problem.Type != acmeserver.ErrorConnection {
+		t.Fatalf("challenge error = %+v, want a connection problem", problem)
+	}
+}
+
 // An Issuer that refuses the order only once its context is done.
 type stallingIssuer struct{ calls atomic.Int64 }
 
@@ -159,5 +188,61 @@ func TestTaskRunEndsWithItsLease(t *testing.T) {
 	deadline, leaseEnd := time.Unix(0, validator.deadline.Load()), time.Unix(0, validator.leaseEnd.Load())
 	if validator.deadline.Load() == 0 || deadline.After(leaseEnd) {
 		t.Fatalf("validator deadline %s is after the lease end %s", deadline.Format(time.StampMicro), leaseEnd.Format(time.StampMicro))
+	}
+}
+
+// A Validator that refuses the first connection and passes a later attempt once the test releases it.
+type flakyValidator struct {
+	calls   atomic.Int64
+	release chan struct{}
+}
+
+// Fails the first attempt with a retryable connection problem and waits for the release after that.
+func (v *flakyValidator) Validate(ctx context.Context, _ acmeserver.ValidationRequest) error {
+	if v.calls.Add(1) == 1 {
+		return acmeserver.Retryable(acmeserver.NewProblem(acmeserver.ErrorConnection, "connection refused"),
+			errors.New("dial tcp: connection refused"))
+	}
+	select {
+	case <-v.release:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// Requires the error of a failed attempt on a challenge that stays processing, as RFC 8555
+// section 8.2 asks, and its removal once a later attempt succeeds.
+func TestRetriedValidationShowsTheFailedAttempt(t *testing.T) {
+	validator := &flakyValidator{release: make(chan struct{})}
+	f := newFlow(t, func(cfg *acmeserver.Config) {
+		cfg.Validators = map[acmeserver.ChallengeType]acmeserver.Validator{acmeserver.ChallengeHTTP01: validator}
+		cfg.Workers = acmeserver.WorkerConfig{
+			Concurrency:  1,
+			PollInterval: 2 * time.Millisecond,
+			Lease:        20 * time.Second,
+			TaskTimeout:  10 * time.Second,
+			MaxAttempts:  3,
+			RetryDelay:   time.Millisecond,
+			StaleAfter:   time.Minute,
+		}
+	})
+	f.runWorker()
+	c := f.newClient()
+	c.register()
+	orderURL, order := c.newOrder("flaky.test")
+	c.respondHTTP01(order)
+	waitFor(t, "the second validation attempt", func() bool { return validator.calls.Load() >= 2 })
+	var authz authzBody
+	c.get(order.Authorizations[0], &authz)
+	if ch := authz.Challenges[0]; ch.Status != statusProcessing || ch.Error == nil || ch.Error.Type != acmeserver.ErrorConnection {
+		t.Fatalf("challenge during the retry = %q with error %+v, want processing with a connection problem", ch.Status, ch.Error)
+	}
+	close(validator.release)
+	c.waitOrder(orderURL, statusReady)
+	var done authzBody
+	c.get(order.Authorizations[0], &done)
+	if ch := done.Challenges[0]; ch.Status != statusValid || ch.Error != nil {
+		t.Fatalf("challenge after the retry = %q with error %+v, want valid without an error", ch.Status, ch.Error)
 	}
 }

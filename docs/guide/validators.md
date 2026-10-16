@@ -38,6 +38,8 @@ the record count. The defaults are ten seconds, eight hops, 16 KiB and 64 record
 Servers are tried in order. Each attempt receives an equal share of the time remaining for the
 untried servers, so a silent endpoint leaves time for a fallback. All attempts and CNAME hops
 share the lookup deadline. A terminal DNS error ends the lookup without trying another server.
+A name that does not exist (NXDOMAIN) is not terminal. The next server is asked and the validation
+is retried, because a record the client has just added may not have reached every resolver yet.
 
 A custom `IPResolver` or `TXTResolver` may replace it, for example a resolver that consults an
 internal zone during tests. It must honor context cancellation and bound its own work, because the
@@ -117,11 +119,13 @@ happens next:
 | --- | --- | --- |
 | `nil` | The proof matched | Challenge and authorization become valid |
 | `*acmeserver.Problem` | The proof was wrong or the target refused | Final. Challenge and authorization become invalid, the problem is shown to the client |
-| Any other error | A transport failure | Retried with exponential backoff until `WorkerConfig.MaxAttempts` or the authorization expiry |
+| `*acmeserver.RetryableError` | A failure that may clear, such as a refused connection | Retried like any other error. Once the attempts run out, its `Problem` becomes the challenge error |
+| Any other error | A transport failure | Retried with exponential backoff until `WorkerConfig.MaxAttempts` or the authorization expiry, then reported as `serverInternal` |
 
-The bundled validators return `incorrectResponse` for a wrong proof, `dns` for a resolver failure
-that is unlikely to change and a plain error for connection failures. They never include fetched
-content in the problem detail.
+The bundled validators return `incorrectResponse` for a wrong proof and `dns` for a malformed or
+contradictory DNS answer. Failures that may clear are retryable and are reported as `dns` when a
+name cannot be resolved, `connection` when the destination cannot be reached or does not answer
+and `tls` when the TLS handshake fails. They never include fetched content in the problem detail.
 
 ## Writing a validator
 
@@ -136,13 +140,13 @@ authorization, the account key thumbprint captured when the client responded and
 `tkauth-01`, the Authority Token. A custom validator should:
 
 * check that `req.Challenge.Type` is the type it handles and that the identifier type is one it can prove
-* return `*acmeserver.Problem` for a definitive failure and any other error for one worth retrying
+* return `*acmeserver.Problem` for a definitive failure and `acmeserver.Retryable` or any other error for one worth retrying
 * finish within the context deadline and never follow untrusted redirects or resolve names without a policy
 * keep fetched content out of error details
 
 A validator that also authorizes something beyond control of the identifier, such as a CA
-certificate or a validity bound, implements `GrantingValidator`. The `tkauth-01` validator is the
-example.
+certificate, a validity bound or extra certificate names, implements `GrantingValidator`. The
+`tkauth-01` validator is the example.
 
 ## Checklist
 

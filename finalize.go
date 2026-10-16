@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"slices"
 )
 
 // The finalize payload of RFC 8555 section 7.4.
@@ -14,7 +15,9 @@ type finalizeJSON struct {
 	CSR string `json:"csr"`
 }
 
-// Accepts a CSR for a ready order and enqueues issuance, see RFC 8555 section 7.4.
+// Accepts a CSR for a ready order and enqueues issuance, see RFC 8555 section 7.4. Every refusal
+// after the order is found is reported to the RefusalRecorder, except a concurrent change that a
+// retry resolves.
 func (s *Server) serveFinalize(w http.ResponseWriter, r *http.Request, id string) {
 	ctx := r.Context()
 	req, order, p := s.readOwnedOrder(r, id, orderPathPrefix+id+"/finalize")
@@ -22,16 +25,23 @@ func (s *Server) serveFinalize(w http.ResponseWriter, r *http.Request, id string
 		s.writeProblem(ctx, w, p)
 		return
 	}
+	refusal := Refusal{Kind: RefusalFinalize, AccountID: order.AccountID, OrderID: order.ID,
+		Identifiers: slices.Clone(order.Identifiers)}
+	refuse := func(p *Problem) {
+		s.recordRefusal(ctx, refusal, p)
+		s.writeProblem(ctx, w, p)
+	}
 	var payload finalizeJSON
 	if p := decodePayload(req.Payload, &payload); p != nil {
-		s.writeProblem(ctx, w, p)
+		refuse(p)
 		return
 	}
 	der, err := base64.RawURLEncoding.Strict().DecodeString(payload.CSR)
 	if err != nil || len(der) == 0 {
-		s.writeProblem(ctx, w, NewProblem(ErrorMalformed, "csr is not valid base64url"))
+		refuse(NewProblem(ErrorMalformed, "csr is not valid base64url"))
 		return
 	}
+	refusal.CSR = der
 	now := s.clock.Now()
 	status := effectiveOrderStatus(order, now)
 	switch {
@@ -40,19 +50,34 @@ func (s *Server) serveFinalize(w http.ResponseWriter, r *http.Request, id string
 		s.writeOrder(ctx, w, http.StatusOK, order, now)
 		return
 	case status == OrderProcessing || status == OrderValid:
-		s.writeProblem(ctx, w, NewProblem(ErrorOrderNotReady, "order was already finalized with a different CSR"))
+		refuse(NewProblem(ErrorOrderNotReady, "order was already finalized with a different CSR"))
 		return
 	default:
-		s.writeProblem(ctx, w, Problemf(ErrorOrderNotReady, "order is %s", string(status)))
+		refuse(Problemf(ErrorOrderNotReady, "order is %s", string(status)))
 		return
 	}
-	csr, p := checkCSR(der, order, req.Account)
+	// The draft requires refusing an order whose profile the server stopped offering after the
+	// order was created.
+	if _, ok := s.profiles[order.Profile]; order.Profile != "" && !ok {
+		refuse(NewProblem(ErrorInvalidProfile, "the server no longer offers the profile of this order"))
+		return
+	}
+	authzs, p := s.orderAuthorizations(ctx, order)
 	if p != nil {
-		s.writeProblem(ctx, w, p)
+		refuse(p)
 		return
 	}
-	if p := s.checkCAGrants(ctx, order, csr); p != nil {
-		s.writeProblem(ctx, w, p)
+	var granted []Identifier
+	for _, authz := range authzs {
+		granted = append(granted, authz.GrantNames...)
+	}
+	csr, p := checkCSR(der, order, req.Account, granted)
+	if p != nil {
+		refuse(p)
+		return
+	}
+	if p := checkCAGrants(authzs, csr); p != nil {
+		refuse(p)
 		return
 	}
 	taskID, err := newID()
@@ -83,20 +108,29 @@ func (s *Server) serveFinalize(w http.ResponseWriter, r *http.Request, id string
 	s.writeOrder(ctx, w, http.StatusOK, order, now)
 }
 
+// Loads the authorizations of an order, whose grants decide what its certificate request may ask for.
+func (s *Server) orderAuthorizations(ctx context.Context, order *Order) ([]*Authorization, *Problem) {
+	authzs := make([]*Authorization, 0, len(order.AuthorizationIDs))
+	for _, id := range order.AuthorizationIDs {
+		authz, err := s.store.Authorization(ctx, id)
+		if err != nil {
+			return nil, s.storeProblem(ctx, err, "authorization")
+		}
+		authzs = append(authzs, authz)
+	}
+	return authzs, nil
+}
+
 // Requires every authorization of the order to have granted exactly what the request asks for,
 // see RFC 9448 section 6 step 9. A network challenge grants nothing, so a request for a CA
 // certificate needs a granting challenge behind every identifier, and a grant that one identifier
 // received cannot be dropped by requesting an end-entity certificate alongside other identifiers.
-func (s *Server) checkCAGrants(ctx context.Context, order *Order, csr *x509.CertificateRequest) *Problem {
+func checkCAGrants(authzs []*Authorization, csr *x509.CertificateRequest) *Problem {
 	requested, err := csrCACertificate(csr.Extensions)
 	if err != nil {
 		return NewProblem(ErrorBadCSR, "CSR basic constraints could not be read")
 	}
-	for _, id := range order.AuthorizationIDs {
-		authz, err := s.store.Authorization(ctx, id)
-		if err != nil {
-			return s.storeProblem(ctx, err, "authorization")
-		}
+	for _, authz := range authzs {
 		if authz.CACertificate != requested {
 			return NewProblem(ErrorBadCSR, "CSR CA basic constraint does not match the granted authorization")
 		}

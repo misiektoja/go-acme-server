@@ -17,17 +17,20 @@ What the library implements, what a configuration field turns on and what is out
 | RFC 8555 ACME | Accounts, external account binding, key rollover, deactivation, orders, authorizations, HTTP-01, DNS-01, finalization, certificate download, revocation | Implemented, Interoperability tested | Always |
 | RFC 8737 TLS-ALPN-01 | Challenge validation | Implemented, Interoperability tested | A `ChallengeTLSALPN01` validator |
 | RFC 8738 IP identifiers | IPv4 and IPv6 identifiers through HTTP-01 and TLS-ALPN-01 | Implemented, Interoperability tested | `Config.IPIdentifiers` |
-| RFC 9447 and RFC 9448 | `tkauth-01` with TNAuthList identifiers, CA certificates and token-bounded validity | Implemented, Interoperability tested with a go-jose client | `Config.TNAuthListIdentifiers` and a `ChallengeTKAuth01` validator |
+| RFC 9447 and RFC 9448 | `tkauth-01` with TNAuthList identifiers, CA certificates and token-bounded validity. The ATIS-1000080 `atc` response field and its validity rule for STIR/SHAKEN | Implemented, Interoperability tested with a go-jose client | `Config.TNAuthListIdentifiers` and a `ChallengeTKAuth01` validator |
+| 3GPP TS 33.310 Annex J | `tkauth-01` with `NfInstanceId` identifiers for 5G network function certificates, with the NF type and extra names a token grants | Implemented, Interoperability tested with a go-jose client | `Config.NfInstanceIDIdentifiers` and a `ChallengeTKAuth01` validator |
 | RFC 9773 | Renewal information and `replaces` on new orders | Implemented, Interoperability tested | `Config.RenewalInfo` |
 | RFC 7638 | Account key thumbprints | Implemented, Interoperability tested | Always |
+| draft-ietf-acme-profiles-02 | Profiles in the directory, `profile` on new orders, `invalidProfile` | Implemented, Interoperability tested | `Config.Profiles` |
 
 ## Challenges and identifiers
 
 | Identifier | Challenges offered | Notes |
 | --- | --- | --- |
-| `dns` | `http-01`, `dns-01`, `tls-alpn-01` from the configured validators | A wildcard name is offered `dns-01` alone |
+| `dns` | `http-01`, `dns-01`, `tls-alpn-01` from the configured validators | A wildcard name is offered `dns-01` alone. Internationalized names must be valid A-labels (`xn--`) |
 | `ip` | `http-01` and `tls-alpn-01` from the configured validators | Needs `Config.IPIdentifiers`. Never `dns-01` |
 | `TNAuthList` | `tkauth-01` alone | Needs `Config.TNAuthListIdentifiers`. One per order |
+| `NfInstanceId` | `tkauth-01` alone | Needs `Config.NfInstanceIDIdentifiers`. One per order and never with `TNAuthList` |
 
 Only challenge types with a configured validator appear in authorizations. An order whose
 identifier has no usable challenge type is refused.
@@ -37,7 +40,7 @@ identifier has no usable challenge type is refused.
 | Use | Accepted |
 | --- | --- |
 | Account key signatures | ES256, ES384, ES512, RS256, EdDSA |
-| External account binding MACs | HS256, HS384, HS512 |
+| External account binding MACs | HS256, HS384, HS512 with a key at least as long as the hash |
 | Account keys | RSA 2048 to 4096 bits, ECDSA P-256, P-384 and P-521, Ed25519 |
 | Account contacts | `mailto` with one bare address, at most ten contacts |
 
@@ -50,14 +53,17 @@ Issuer chains may use composite ML-DSA signatures.
 | Interface | Required | Included implementation |
 | --- | --- | --- |
 | `Store` | Yes | `memstore` for tests and examples, `storetest` contract suite for your own adapter |
-| `NonceManager` | Yes | `nonce` for a single process |
+| `NonceManager` | Yes | `nonce` for a single process, `noncetest` contract suite for a shared manager |
 | `Issuer` and `Revoker` | Yes | None, they call your CA |
 | `Validator` | At least one | `challenge.HTTP01`, `challenge.DNS01`, `challenge.TLSALPN01`, `challenge.TKAuth01` |
 | `Policy` | No | `AllowAll` |
+| `PreApprover` and `ProfileChooser` on the `Policy` | No | None |
 | `IssuancePolicy` | No | None |
 | `ExternalAccountKeys` | With external account binding | None |
 | `RenewalAdvisor` | No | `LifetimeRenewal` |
 | `challenge.TokenAuthorities` | With `tkauth-01` | `challenge.StaticTokenAuthorities` |
+| `Limiter` | No | None |
+| `RefusalRecorder` | No | None |
 | `Clock` | No | `SystemClock` |
 
 ## Not supported
@@ -66,9 +72,9 @@ Issuer chains may use composite ML-DSA signatures.
 | --- | --- |
 | Pre-authorization (`newAuthz`) and authorization reuse across orders | Unsupported |
 | Alternate certificate chains | Unsupported |
-| Certificate profiles, `dns-account-01`, short-term automatic renewal, delegation, subdomain authorizations | Unsupported, working group drafts are not exposed |
+| `dns-account-01`, short-term automatic renewal, delegation, subdomain authorizations | Unsupported |
 | `email`, `onion` and device identifiers | Unsupported |
-| Rate limits | Unsupported, refuse in `Policy` or `IssuancePolicy` |
+| Rate limits other than nonces, new accounts and new orders | Unsupported, refuse in `Policy` or `IssuancePolicy` |
 | TLS termination, a CA or durable storage | Provided by the host |
 
 ## Compatibility

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 )
@@ -58,14 +59,15 @@ func (s *Server) Run(ctx context.Context) error {
 }
 
 // Reports whether accepted work is being picked up. It returns an error when tasks have waited
-// longer than WorkerConfig.StaleAfter without a claim, which means no Run is active.
+// longer than WorkerConfig.StaleAfter without a claim. Either no Run is active on the store or
+// every worker is busy or stuck.
 func (s *Server) Ready(ctx context.Context) error {
 	n, err := s.store.PendingTasks(ctx, s.clock.Now().Add(-s.workers.StaleAfter))
 	if err != nil {
 		return fmt.Errorf("acmeserver: pending task count: %w", err)
 	}
 	if n > 0 {
-		return fmt.Errorf("acmeserver: %d tasks have waited longer than %s for a worker, Run is not active", n,
+		return fmt.Errorf("acmeserver: %d tasks have waited longer than %s for a worker", n,
 			s.workers.StaleAfter)
 	}
 	return nil
@@ -158,6 +160,8 @@ func (s *Server) runValidation(base context.Context, task *Task) {
 		authz.Expires = now.Add(s.authzLifetime)
 		authz.CACertificate = grant.CACertificate
 		authz.GrantExpires = grant.Expires
+		authz.GrantNames = grant.Names
+		authz.GrantNFType = grant.NFType
 		s.completeValidation(base, task, ch, authz)
 		return
 	}
@@ -166,11 +170,12 @@ func (s *Server) runValidation(base context.Context, task *Task) {
 		if task.Attempts < s.workers.MaxAttempts && authz.Expires.After(now) {
 			s.log.LogAttrs(base, slog.LevelWarn, "validation will be retried", slog.String("challenge", ch.ID),
 				slog.Int("attempt", task.Attempts), slog.Any("error", err))
-			s.reschedule(base, task, now)
+			ch.Error = retryProblem(err, "validation attempt failed and will be retried")
+			s.retryValidation(base, task, ch, now)
 			return
 		}
 		s.logError(base, "validation gave up", err, slog.String("challenge", ch.ID), slog.Int("attempts", task.Attempts))
-		p = NewProblem(ErrorServerInternal, "validation could not be completed")
+		p = retryProblem(err, "validation could not be completed")
 	}
 	ch.Status = ChallengeInvalid
 	ch.Error = p
@@ -209,10 +214,43 @@ func (s *Server) validationTargets(base context.Context, task *Task) (*Challenge
 func (s *Server) validate(base context.Context, v Validator, req ValidationRequest) (ValidationGrant, error) {
 	ctx, cancel := s.taskPhase(base)
 	defer cancel()
-	if granting, ok := v.(GrantingValidator); ok {
-		return granting.ValidateGrant(ctx, req)
+	granting, ok := v.(GrantingValidator)
+	if !ok {
+		return ValidationGrant{}, v.Validate(ctx, req)
 	}
-	return ValidationGrant{}, v.Validate(ctx, req)
+	grant, err := granting.ValidateGrant(ctx, req)
+	if err != nil {
+		return ValidationGrant{}, err
+	}
+	grant, err = checkGrant(grant)
+	if err != nil {
+		s.logError(base, "validator returned an unusable grant", err, slog.String("challenge", req.Challenge.ID))
+	}
+	return grant, err
+}
+
+// Normalizes the names a validator granted and refuses any that a certificate request cannot add
+// to an order, so a faulty validator cannot widen what the order may request.
+func checkGrant(grant ValidationGrant) (ValidationGrant, error) {
+	if grant.NFType != "" && !ValidNFType(grant.NFType) {
+		return ValidationGrant{}, NewProblem(ErrorServerInternal, "the validator granted an invalid NF type")
+	}
+	if len(grant.Names) == 0 {
+		grant.Names = nil
+		return grant, nil
+	}
+	names := make([]Identifier, 0, len(grant.Names))
+	for _, name := range grant.Names {
+		id, err := name.Normalize()
+		if err != nil || (id.Type != IdentifierDNS && id.Type != IdentifierIP && id.Type != IdentifierURI) {
+			return ValidationGrant{}, NewProblem(ErrorServerInternal, "the validator granted an unusable name")
+		}
+		if !slices.Contains(names, id) {
+			names = append(names, id)
+		}
+	}
+	grant.Names = names
+	return grant, nil
 }
 
 // Commits a validation result, deriving the order status from every authorization. A concurrent
@@ -298,14 +336,45 @@ func (s *Server) deriveOrderStatus(ctx context.Context, order *Order, updated *A
 	return OrderPending, nil
 }
 
+// Returns the problem a client sees for a validation failure that may clear on a later attempt.
+// A RetryableError names it, any other error is reported with the fallback detail.
+func retryProblem(err error, fallback string) *Problem {
+	if retryable, ok := errors.AsType[*RetryableError](err); ok && retryable.Problem != nil {
+		return retryable.Problem
+	}
+	return NewProblem(ErrorServerInternal, fallback)
+}
+
+// Stores the error of a failed attempt on the processing challenge and releases the task for a
+// later attempt, because RFC 8555 section 8.2 requires an error entry after each failed attempt.
+// A challenge that changed meanwhile is left alone and the next claim reloads it.
+func (s *Server) retryValidation(base context.Context, task *Task, ch *Challenge, now time.Time) {
+	task.RunAt = now.Add(s.retryDelay(task))
+	ctx, cancel := s.taskPhase(base)
+	defer cancel()
+	err := s.store.RetryValidation(ctx, task, ch)
+	switch {
+	case err == nil:
+	case errors.Is(err, ErrRevisionMismatch):
+		s.storeReschedule(base, task)
+	default:
+		s.logError(base, "validation retry could not be stored", err, slog.String("challenge", ch.ID))
+	}
+}
+
 // Releases the task for a later attempt with exponential backoff.
 func (s *Server) reschedule(base context.Context, task *Task, now time.Time) {
+	task.RunAt = now.Add(s.retryDelay(task))
+	s.storeReschedule(base, task)
+}
+
+// Returns the exponential backoff before the next attempt of a task.
+func (s *Server) retryDelay(task *Task) time.Duration {
 	delay := s.workers.RetryDelay
 	for i := 1; i < task.Attempts && delay < 32*s.workers.RetryDelay; i++ {
 		delay *= 2
 	}
-	task.RunAt = now.Add(delay)
-	s.storeReschedule(base, task)
+	return delay
 }
 
 // Stores a rescheduled task and logs failures.

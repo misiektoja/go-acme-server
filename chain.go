@@ -13,7 +13,7 @@ import (
 	"github.com/misiektoja/go-composite-mldsa/compositex509"
 )
 
-// Rejects SAN forms that the DNS and IP authorization model cannot cover.
+// Rejects SAN forms that no identifier covers: anything but DNS names, URIs and IP addresses.
 func checkSANExtensions(extensions []pkix.Extension) error {
 	for _, extension := range extensions {
 		if !extension.Id.Equal(asn1.ObjectIdentifier{2, 5, 29, 17}) {
@@ -25,7 +25,7 @@ func checkSANExtensions(extensions []pkix.Extension) error {
 			return errors.New("invalid subject alternative name extension")
 		}
 		for _, name := range names {
-			if name.Class != asn1.ClassContextSpecific || name.IsCompound || (name.Tag != 2 && name.Tag != 7) {
+			if name.Class != asn1.ClassContextSpecific || name.IsCompound || (name.Tag != 2 && name.Tag != 6 && name.Tag != 7) {
 				return errors.New("unsupported subject alternative name type")
 			}
 		}
@@ -42,9 +42,16 @@ func certificateSANs(leaf *x509.Certificate) ([]Identifier, error) {
 	if err != nil {
 		return nil, err
 	}
-	names := make([]Identifier, 0, len(leaf.DNSNames)+len(leaf.IPAddresses)+1)
+	names := make([]Identifier, 0, len(leaf.DNSNames)+len(leaf.IPAddresses)+len(leaf.URIs)+1)
 	if hasTNAuthList {
 		names = append(names, tnAuthList)
+	}
+	for _, uri := range leaf.URIs {
+		id, err := uriNameIdentifier(uri.String())
+		if err != nil {
+			return nil, errors.New("unsupported URI SAN")
+		}
+		names = append(names, id)
 	}
 	for _, name := range leaf.DNSNames {
 		names = append(names, Identifier{Type: IdentifierDNS, Value: name})
@@ -64,16 +71,16 @@ func certificateSANs(leaf *x509.Certificate) ([]Identifier, error) {
 }
 
 // Returns the identifier the common name of a certificate asserts. A zero identifier means it
-// asserts none. A STIR certificate names a service provider there instead of one of its identities.
+// asserts none, as for STIR and network function certificates, see commonNameExempt.
 func certificateCommonName(leaf *x509.Certificate, ids []Identifier) (Identifier, error) {
-	if leaf.Subject.CommonName == "" || authorityListOnly(ids) {
+	if leaf.Subject.CommonName == "" || commonNameExempt(ids) {
 		return Identifier{}, nil
 	}
 	return commonNameIdentifier(leaf.Subject.CommonName).Normalize()
 }
 
-// Returns the complete supported SAN set and checks the common name against it, unless an
-// authority list is the certificate's only identity.
+// Returns the complete supported SAN set and checks the common name against it, unless the
+// common name is exempt, see commonNameExempt.
 func certificateIdentifiers(leaf *x509.Certificate) ([]Identifier, error) {
 	ids, err := certificateSANs(leaf)
 	if err != nil {
@@ -103,10 +110,15 @@ func revocationIdentifiers(leaf *x509.Certificate) ([]Identifier, error) {
 	return ids, nil
 }
 
-// Reports whether an authority list is the only identity, the STIR case where the common name
-// names a service provider instead of one of the identifiers.
-func authorityListOnly(ids []Identifier) bool {
-	return len(ids) == 1 && ids[0].Type == IdentifierTNAuthList
+// Reports whether the common name is outside the identifier model. A STIR certificate whose only
+// identity is an authority list names a service provider there. A network function certificate
+// has its subject set by the CA, and 3GPP TS 33.310 clause 6.1.3c.3 does not use the common name
+// as an identity.
+func commonNameExempt(ids []Identifier) bool {
+	if len(ids) == 1 && ids[0].Type == IdentifierTNAuthList {
+		return true
+	}
+	return slices.ContainsFunc(ids, func(id Identifier) bool { return id.Type == IdentifierNfInstanceID })
 }
 
 // Interprets an IP common name as an IP identifier and every other value as DNS.
@@ -155,8 +167,12 @@ func checkChain(chain [][]byte, csr *x509.CertificateRequest, order *Order, now 
 	if requested := issuedNotAfter(order); !requested.IsZero() && leaf.NotAfter.After(requested.Truncate(time.Second)) {
 		return nil, errors.New("leaf notAfter is later than the requested validity")
 	}
+	var granted []Identifier
+	if order.Issuance != nil {
+		granted = grantedNames(order.Issuance.Validations)
+	}
 	ids, err := certificateIdentifiers(leaf)
-	if err != nil || !sameIdentifiers(ids, order.Identifiers) {
+	if err != nil || !coversIdentifiers(ids, order.Identifiers, granted) {
 		return nil, errors.New("leaf identifiers do not match the order")
 	}
 	if err := checkLeafCACertificate(leaf, csr, order); err != nil {
@@ -170,6 +186,15 @@ func checkChain(chain [][]byte, csr *x509.CertificateRequest, order *Order, now 
 		}
 	}
 	return leaf, nil
+}
+
+// Returns every name the validations granted beyond their own identifiers.
+func grantedNames(validations []Validation) []Identifier {
+	var names []Identifier
+	for _, v := range validations {
+		names = append(names, v.Names...)
+	}
+	return names
 }
 
 // Checks the leaf CA basic constraint, which must match the accepted request on an authority list

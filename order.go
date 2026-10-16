@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"net/netip"
 	"reflect"
 	"slices"
 	"strings"
@@ -19,6 +20,8 @@ type newOrderJSON struct {
 	NotAfter    string       `json:"notAfter"`
 	// The RFC 9773 predecessor, used only when Config.RenewalInfo is set.
 	Replaces string `json:"replaces"`
+	// The certificate profile of draft-ietf-acme-profiles. Empty selects Config.DefaultProfile.
+	Profile string `json:"profile"`
 }
 
 // The authorization update payload of RFC 8555 section 7.5.2.
@@ -27,9 +30,19 @@ type authorizationUpdateJSON struct {
 }
 
 // The challenge response payload. RFC 8555 section 7.5.1 sends an empty object and RFC 9448
-// section 4 adds the Authority Token for tkauth-01.
+// section 4 adds the Authority Token for tkauth-01. ATIS-1000080 clause 6.3.5.2 puts the same
+// token in an atc field, which SHAKEN clients send, so both names are read.
 type challengeResponseJSON struct {
 	TKAuth string `json:"tkauth"`
+	ATC    string `json:"atc"`
+}
+
+// Returns the Authority Token of a response, from whichever field carries it.
+func (p challengeResponseJSON) authorityToken() string {
+	if p.TKAuth != "" {
+		return p.TKAuth
+	}
+	return p.ATC
 }
 
 // Bounds the Authority Token a client may present.
@@ -49,12 +62,17 @@ func (s *Server) serveNewOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := s.clock.Now()
-	order, p := s.buildOrder(ctx, req.Account, &payload, now)
+	order, p := s.buildOrder(ctx, req.Account, &payload, now, clientAddr(r))
 	if p != nil {
 		s.writeProblem(ctx, w, p)
 		return
 	}
-	authzs, challenges, p := s.buildAuthorizations(ctx, order)
+	preApproved, p := s.preApprove(ctx, req.Account, order)
+	if p != nil {
+		s.writeProblem(ctx, w, p)
+		return
+	}
+	authzs, challenges, p := s.buildAuthorizations(ctx, order, preApproved)
 	if p != nil {
 		s.writeProblem(ctx, w, p)
 		return
@@ -72,8 +90,7 @@ func (s *Server) serveNewOrder(w http.ResponseWriter, r *http.Request) {
 }
 
 // Validates a newOrder payload and returns the order to store, without authorizations.
-func (s *Server) buildOrder(ctx context.Context, account *Account, payload *newOrderJSON,
-	now time.Time) (*Order, *Problem) {
+func (s *Server) buildOrder(ctx context.Context, account *Account, payload *newOrderJSON, now time.Time, client netip.Addr) (*Order, *Problem) {
 	if len(payload.Identifiers) == 0 {
 		return nil, NewProblem(ErrorMalformed, "an order needs at least one identifier")
 	}
@@ -88,6 +105,14 @@ func (s *Server) buildOrder(ctx context.Context, account *Account, payload *newO
 			return nil, NewProblem(ErrorUnsupportedIdentifier, "TNAuthList identifiers are not supported").
 				WithIdentifier(id)
 		}
+		if id.Type == IdentifierNfInstanceID && !s.nfInstanceIDs {
+			return nil, NewProblem(ErrorUnsupportedIdentifier, "NfInstanceId identifiers are not supported").
+				WithIdentifier(id)
+		}
+		if id.Type == IdentifierURI {
+			return nil, NewProblem(ErrorUnsupportedIdentifier, "uri names come only from authority tokens").
+				WithIdentifier(id)
+		}
 	}
 	identifiers, err := NormalizeIdentifiers(payload.Identifiers)
 	if err != nil {
@@ -98,6 +123,15 @@ func (s *Server) buildOrder(ctx context.Context, account *Account, payload *newO
 	// matched by a certificate request.
 	if countIdentifiers(identifiers, IdentifierTNAuthList) > 1 {
 		return nil, NewProblem(ErrorMalformed, "an order may have at most one TNAuthList identifier")
+	}
+	// A network function certificate names one instance (3GPP TS 33.310 clause 6.1.3c.3), and an
+	// authority list certificate is a STIR credential, so neither combines with the other.
+	nfInstances := countIdentifiers(identifiers, IdentifierNfInstanceID)
+	if nfInstances > 1 {
+		return nil, NewProblem(ErrorMalformed, "an order may have at most one NfInstanceId identifier")
+	}
+	if nfInstances > 0 && countIdentifiers(identifiers, IdentifierTNAuthList) > 0 {
+		return nil, NewProblem(ErrorMalformed, "an order may not combine NfInstanceId and TNAuthList identifiers")
 	}
 	for _, id := range identifiers {
 		if len(s.challengeTypesFor(id)) == 0 {
@@ -115,6 +149,10 @@ func (s *Server) buildOrder(ctx context.Context, account *Account, payload *newO
 	}
 	if !notBefore.IsZero() && !notAfter.IsZero() && !notAfter.After(notBefore) {
 		return nil, NewProblem(ErrorMalformed, "notAfter must be later than notBefore")
+	}
+	profile, p := s.selectProfile(ctx, account, payload.Profile)
+	if p != nil {
+		return nil, p
 	}
 	replaces, p := s.checkReplaces(ctx, account, identifiers, payload.Replaces)
 	if p != nil {
@@ -134,12 +172,52 @@ func (s *Server) buildOrder(ctx context.Context, account *Account, payload *newO
 		NotBefore:   notBefore,
 		NotAfter:    notAfter,
 		Replaces:    replaces,
+		Profile:     profile,
 		CreatedAt:   now,
+	}
+	limit := LimitRequest{
+		Kind:        LimitNewOrder,
+		Client:      client,
+		Account:     account,
+		Identifiers: identifiers,
+		Replaces:    replaces,
+	}
+	if p := s.checkLimit(ctx, limit); p != nil {
+		return nil, p
 	}
 	if p := s.reviewOrder(ctx, account, order); p != nil {
 		return nil, p
 	}
 	return order, nil
+}
+
+// Returns the profile a new order is issued under: the requested one when the server offers it.
+// When the client names none, a ProfileChooser policy picks one or the default applies. An
+// unadvertised name is refused rather than replaced, so a client never receives a certificate
+// it did not ask for.
+func (s *Server) selectProfile(ctx context.Context, account *Account, requested string) (string, *Problem) {
+	if requested != "" {
+		if _, ok := s.profiles[requested]; !ok {
+			return "", NewProblem(ErrorInvalidProfile, "the server does not offer the requested profile")
+		}
+		return requested, nil
+	}
+	chooser, ok := s.policy.(ProfileChooser)
+	if !ok {
+		return s.defaultProfile, nil
+	}
+	const what = "profile choice"
+	chosen, err := chooser.DefaultProfile(ctx, account)
+	if p := s.hostProblem(ctx, err, what); p != nil {
+		return "", p
+	}
+	if chosen == "" {
+		return s.defaultProfile, nil
+	}
+	if _, ok := s.profiles[chosen]; !ok {
+		return "", s.hostProblem(ctx, errors.New("the policy chose a profile the server does not offer"), what)
+	}
+	return chosen, nil
 }
 
 // Asks the policy about a new order and keeps only its changes to NotBefore and NotAfter. Any
@@ -166,8 +244,37 @@ func (s *Server) reviewOrder(ctx context.Context, account *Account, order *Order
 	return nil
 }
 
-// Creates one pending authorization per identifier with a challenge per supported type.
-func (s *Server) buildAuthorizations(ctx context.Context, order *Order) ([]*Authorization, []*Challenge, *Problem) {
+// Asks a PreApprover policy which identifiers of a new order need no challenge.
+func (s *Server) preApprove(ctx context.Context, account *Account, order *Order) (map[Identifier]bool, *Problem) {
+	authorizer, ok := s.policy.(PreApprover)
+	if !ok {
+		return nil, nil
+	}
+	reviewed := *order
+	reviewed.Identifiers = slices.Clone(order.Identifiers)
+	const what = "pre-approval policy"
+	ids, err := authorizer.PreApprove(ctx, account, &reviewed)
+	if p := s.hostProblem(ctx, err, what); p != nil {
+		return nil, p
+	}
+	if !reflect.DeepEqual(&reviewed, order) {
+		return nil, s.hostProblem(ctx, errors.New("the policy changed the order"), what)
+	}
+	granted := make(map[Identifier]bool, len(ids))
+	for _, id := range ids {
+		normalized, err := id.Normalize()
+		if err != nil || !slices.Contains(order.Identifiers, normalized) {
+			return nil, s.hostProblem(ctx, errors.New("the policy returned an identifier the order does not contain"), what)
+		}
+		granted[normalized] = true
+	}
+	return granted, nil
+}
+
+// Creates one authorization per identifier. A pre-approved identifier gets a valid
+// authorization without challenges and every other one a pending authorization with a challenge
+// per supported type. An order whose authorizations are all valid starts ready.
+func (s *Server) buildAuthorizations(ctx context.Context, order *Order, preApproved map[Identifier]bool) ([]*Authorization, []*Challenge, *Problem) {
 	authzs := make([]*Authorization, 0, len(order.Identifiers))
 	var challenges []*Challenge
 	order.AuthorizationIDs = make([]string, 0, len(order.Identifiers))
@@ -189,6 +296,13 @@ func (s *Server) buildAuthorizations(ctx context.Context, order *Order) ([]*Auth
 		}
 		if authz.Wildcard {
 			authz.Identifier.Value = strings.TrimPrefix(id.Value, "*.")
+		}
+		if preApproved[id] {
+			authz.Status = AuthorizationValid
+			authz.PreApproved = true
+			authzs = append(authzs, authz)
+			order.AuthorizationIDs = append(order.AuthorizationIDs, authz.ID)
+			continue
 		}
 		for _, typ := range s.challengeTypesFor(id) {
 			challengeID, err := newID()
@@ -214,6 +328,9 @@ func (s *Server) buildAuthorizations(ctx context.Context, order *Order) ([]*Auth
 		authzs = append(authzs, authz)
 		order.AuthorizationIDs = append(order.AuthorizationIDs, authz.ID)
 	}
+	if len(preApproved) == len(order.Identifiers) {
+		order.Status = OrderReady
+	}
 	return authzs, challenges, nil
 }
 
@@ -229,15 +346,17 @@ func countIdentifiers(ids []Identifier, typ IdentifierType) int {
 }
 
 // Returns the configured challenge types that may validate the identifier. Wildcard names need
-// dns-01, IP addresses exclude it and only TNAuthList identifiers use tkauth-01, see RFC 8555
-// section 7.1.3, RFC 8738 section 5 and RFC 9447 section 3.
+// dns-01, IP addresses exclude it and only TNAuthList and NfInstanceId identifiers use tkauth-01,
+// see RFC 8555 section 7.1.3, RFC 8738 section 5, RFC 9447 section 3 and 3GPP TS 33.310 clause
+// J.3.3.2.
 func (s *Server) challengeTypesFor(id Identifier) []ChallengeType {
 	var types []ChallengeType
+	token := id.Type == IdentifierTNAuthList || id.Type == IdentifierNfInstanceID
 	for _, typ := range []ChallengeType{ChallengeHTTP01, ChallengeDNS01, ChallengeTLSALPN01, ChallengeTKAuth01} {
 		if _, ok := s.validators[typ]; !ok {
 			continue
 		}
-		if (typ == ChallengeTKAuth01) != (id.Type == IdentifierTNAuthList) {
+		if (typ == ChallengeTKAuth01) != token {
 			continue
 		}
 		if id.IsWildcard() && typ != ChallengeDNS01 {
@@ -254,15 +373,17 @@ func (s *Server) challengeTypesFor(id Identifier) []ChallengeType {
 // Checks a challenge response payload against what the challenge type expects.
 func checkChallengeResponse(typ ChallengeType, payload challengeResponseJSON) *Problem {
 	if typ != ChallengeTKAuth01 {
-		if payload.TKAuth != "" {
+		if payload.authorityToken() != "" {
 			return Problemf(ErrorMalformed, "a %s response does not carry an authority token", string(typ))
 		}
 		return nil
 	}
 	switch {
-	case payload.TKAuth == "":
-		return NewProblem(ErrorMalformed, "a tkauth-01 response needs the tkauth authority token")
-	case len(payload.TKAuth) > maxAuthorityTokenLength:
+	case payload.authorityToken() == "":
+		return NewProblem(ErrorMalformed, "a tkauth-01 response needs the authority token in tkauth or atc")
+	case payload.TKAuth != "" && payload.ATC != "" && payload.TKAuth != payload.ATC:
+		return NewProblem(ErrorMalformed, "the tkauth and atc fields carry different authority tokens")
+	case len(payload.authorityToken()) > maxAuthorityTokenLength:
 		return Problemf(ErrorMalformed, "the authority token exceeds %d characters", maxAuthorityTokenLength)
 	}
 	return nil
@@ -464,7 +585,7 @@ func (s *Server) acceptChallenge(ctx context.Context, ch *Challenge, account *Ac
 	}
 	ch.Status = ChallengeProcessing
 	ch.KeyThumbprint = account.KeyThumbprint
-	ch.AuthorityToken = payload.TKAuth
+	ch.AuthorityToken = payload.authorityToken()
 	task := &Task{ID: taskID, Kind: TaskValidate, TargetID: ch.ID, AccountID: account.ID, RunAt: now, CreatedAt: now}
 	err = s.store.AcceptChallenge(ctx, ch, task)
 	switch {

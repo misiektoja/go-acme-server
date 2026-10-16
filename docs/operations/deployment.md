@@ -51,7 +51,8 @@ Two things are per process and need attention when there is more than one handle
 another, so a client whose requests land on different replicas gets `badNonce` and retries. Clients
 handle `badNonce` by retrying with the nonce in the response, so a small number of replicas works
 without coordination. For predictable behavior implement `NonceManager` over a shared store such as
-Redis or use session affinity at the load balancer. A nonce must be valid exactly once.
+Redis or the database behind your `Store`, or use session affinity at the load balancer. A nonce
+must be valid exactly once. Check a shared manager with `noncetest.Run` and `noncetest.RunShared`.
 
 **Store connections.** Every replica needs its own connection to the same database. The store
 contract already handles concurrency.
@@ -106,6 +107,9 @@ should keep:
 
 * certificates for as long as revocation and renewal information must work
 * orders with an unpublished result until they are reconciled
+* authorizations until their `Expires`, because `AuthorizedFor` lets an account revoke another
+  account's certificate with a valid authorization for its names
 * accounts for as long as their certificates exist
 
-Everything else can go once its order has expired.
+Delete an order together with its authorizations and challenges once the order and all of its
+authorizations have expired. Authorizations are never shared between orders.

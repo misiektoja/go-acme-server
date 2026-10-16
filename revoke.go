@@ -13,17 +13,14 @@ import (
 	"github.com/misiektoja/go-acme-server/internal/jws"
 )
 
-// The CRL reason codes clients may request, see RFC 5280 section 5.3.1. Hold and CA reasons
-// are refused.
-var allowedRevocationReasons = []int{0, 1, 3, 4, 5}
-
 // The revokeCert payload of RFC 8555 section 7.6.
 type revokeJSON struct {
 	Certificate string `json:"certificate"`
 	Reason      *int   `json:"reason"`
 }
 
-// Revokes a certificate on proof from its account or its key, see RFC 8555 section 7.6.
+// Revokes a certificate on proof from its account or its key, see RFC 8555 section 7.6. Every
+// refusal after authentication is reported to the RefusalRecorder.
 func (s *Server) serveRevokeCert(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	req, p := s.readSignedRequest(r, resourceRevokeCert, keyModeEither)
@@ -31,46 +28,55 @@ func (s *Server) serveRevokeCert(w http.ResponseWriter, r *http.Request) {
 		s.writeProblem(ctx, w, p)
 		return
 	}
+	refusal := Refusal{Kind: RefusalRevocation}
+	if req.Account != nil {
+		refusal.AccountID = req.Account.ID
+	}
+	refuse := func(p *Problem) {
+		s.recordRefusal(ctx, refusal, p)
+		s.writeProblem(ctx, w, p)
+	}
 	var payload revokeJSON
 	if p := decodePayload(req.Payload, &payload); p != nil {
-		s.writeProblem(ctx, w, p)
+		refuse(p)
 		return
+	}
+	if payload.Reason != nil {
+		refusal.Reason = *payload.Reason
 	}
 	der, err := base64.RawURLEncoding.Strict().DecodeString(payload.Certificate)
 	if err != nil || len(der) == 0 {
-		s.writeProblem(ctx, w, NewProblem(ErrorMalformed, "certificate is not valid base64url"))
+		refuse(NewProblem(ErrorMalformed, "certificate is not valid base64url"))
 		return
 	}
+	refusal.Certificate = der
 	leaf, err := x509.ParseCertificate(der)
 	if err != nil {
-		s.writeProblem(ctx, w, NewProblem(ErrorMalformed, "certificate could not be parsed"))
+		refuse(NewProblem(ErrorMalformed, "certificate could not be parsed"))
 		return
 	}
-	reason := 0
-	if payload.Reason != nil {
-		reason = *payload.Reason
-	}
-	if !slices.Contains(allowedRevocationReasons, reason) {
-		s.writeProblem(ctx, w, Problemf(ErrorBadRevocationReason, "revocation reason %d is not allowed", reason))
+	reason := refusal.Reason
+	if !slices.Contains(s.revocationReasons, reason) {
+		refuse(Problemf(ErrorBadRevocationReason, "revocation reason %d is not allowed. %s", reason, s.reasonsText))
 		return
 	}
 	cert, err := s.store.Certificate(ctx, certificateID(der))
 	if err != nil || len(cert.Chain) == 0 || !bytes.Equal(cert.Chain[0], der) {
 		if err != nil && !errors.Is(err, ErrNotFound) {
-			s.writeProblem(ctx, w, s.storeProblem(ctx, err, "certificate"))
+			refuse(s.storeProblem(ctx, err, "certificate"))
 			return
 		}
-		s.writeProblem(ctx, w, NewProblem(ErrorMalformed, "certificate was not issued by this server").
+		refuse(NewProblem(ErrorMalformed, "certificate was not issued by this server").
 			WithStatus(http.StatusNotFound))
 		return
 	}
 	if p := s.authorizeRevocation(ctx, req, cert, leaf); p != nil {
-		s.writeProblem(ctx, w, p)
+		refuse(p)
 		return
 	}
 	cert, p = s.beginRevocation(ctx, cert, reason)
 	if p != nil {
-		s.writeProblem(ctx, w, p)
+		refuse(p)
 		return
 	}
 	revokeReq := RevokeRequest{OperationID: cert.RevocationOperationID, Certificate: leaf, DER: der,
@@ -81,7 +87,7 @@ func (s *Server) serveRevokeCert(w http.ResponseWriter, r *http.Request) {
 	if err := s.revoker.Revoke(ctx, revokeReq); err != nil {
 		if p, ok := AsProblem(err); ok {
 			s.abandonRevocation(ctx, cert)
-			s.writeProblem(ctx, w, p)
+			refuse(p)
 			return
 		}
 		s.logError(ctx, "revocation failed", err)
@@ -98,6 +104,8 @@ func (s *Server) serveRevokeCert(w http.ResponseWriter, r *http.Request) {
 }
 
 // Accepts the issuing account, an account authorized for every identifier or the certificate key.
+// A network function certificate leaves out the second way, because 3GPP TS 33.310 clause J.4
+// limits its revocation to the enrolling client and the holder of the certificate key.
 func (s *Server) authorizeRevocation(ctx context.Context, req *signedRequest, cert *Certificate, leaf *x509.Certificate) *Problem {
 	if req.Account != nil {
 		if req.Account.ID == cert.AccountID {
@@ -106,6 +114,10 @@ func (s *Server) authorizeRevocation(ctx context.Context, req *signedRequest, ce
 		ids, err := revocationIdentifiers(leaf)
 		if err != nil {
 			return NewProblem(ErrorUnauthorized, "certificate identifiers cannot be authorized")
+		}
+		if slices.ContainsFunc(ids, func(id Identifier) bool { return id.Type == IdentifierNfInstanceID }) {
+			return NewProblem(ErrorUnauthorized, "a network function certificate is revoked by the enrolling account "+
+				"or with the certificate key")
 		}
 		allowed, err := s.store.AuthorizedFor(ctx, req.Account.ID, ids, s.clock.Now())
 		if err != nil {

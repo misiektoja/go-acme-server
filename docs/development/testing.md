@@ -14,7 +14,7 @@ Runs `go vet` and every test under the race detector with coverage written to th
 directory. The root package tests drive complete flows through the handler with `memstore`, a test
 CA and test validators, including account, order, renewal, revocation, timeout, recovery and
 `tkauth-01` scenarios. The `challenge` tests check proof and egress rules against local servers.
-`memstore` runs the `storetest` suite.
+`memstore` runs the `storetest` suite and `nonce` runs the `noncetest` suite.
 
 ## Fuzzing
 

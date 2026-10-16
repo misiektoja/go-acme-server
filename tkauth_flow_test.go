@@ -76,6 +76,12 @@ func (a *tokenAuthority) tokenUntil(t *testing.T, thumbprint string, list []byte
 	if ca {
 		atc["ca"] = true
 	}
+	return a.sign(t, atc, exp)
+}
+
+// Returns a compact Authority Token that carries the atc claim and expires at exp.
+func (a *tokenAuthority) sign(t *testing.T, atc map[string]any, exp time.Time) string {
+	t.Helper()
 	header, err := json.Marshal(map[string]any{"typ": "JWT", "alg": "ES256", "x5u": authorityCertURL})
 	if err != nil {
 		t.Fatal(err)
@@ -110,6 +116,13 @@ func newTKAuthFlow(t *testing.T) (*flow, *tokenAuthority) {
 // Builds a tkauth-01 flow whose server and validator read clock, or the system clock when it is nil.
 func newTKAuthFlowAt(t *testing.T, clock *flowClock) (*flow, *tokenAuthority) {
 	t.Helper()
+	return newTokenFlow(t, clock, func(cfg *acmeserver.Config) { cfg.TNAuthListIdentifiers = true })
+}
+
+// Builds a flow with a tkauth-01 validator that trusts a new Token Authority. The validator and
+// server read clock, or the system clock when it is nil, and enable reports the token identifiers.
+func newTokenFlow(t *testing.T, clock *flowClock, enable func(*acmeserver.Config)) (*flow, *tokenAuthority) {
+	t.Helper()
 	a := newTokenAuthority(t)
 	options := challenge.TKAuthOptions{
 		Authorities: challenge.StaticTokenAuthorities{
@@ -125,7 +138,7 @@ func newTKAuthFlowAt(t *testing.T, clock *flowClock) (*flow, *tokenAuthority) {
 	}
 	f := newFlow(t, func(cfg *acmeserver.Config) {
 		cfg.Validators[acmeserver.ChallengeTKAuth01] = validator
-		cfg.TNAuthListIdentifiers = true
+		enable(cfg)
 		cfg.TokenAuthority = tokenAuthorityURL
 		if clock != nil {
 			cfg.Clock = clock
@@ -368,6 +381,88 @@ func TestTKAuth01TokenExpiryBoundsCertificate(t *testing.T) {
 	}
 }
 
+// Leaves the certificate validity to the CA when TNAuthList certificates may outlive their token,
+// while the token expiry still ends the signing deadline.
+func TestTKAuth01CertificateOutlivesToken(t *testing.T) {
+	f, authority := newTokenFlow(t, nil, func(cfg *acmeserver.Config) {
+		cfg.TNAuthListIdentifiers = true
+		cfg.TNAuthListCertificatesOutliveTokens = true
+	})
+	f.runWorker()
+	c := f.newClient()
+	c.register()
+	orderURL, order := c.newAuthorityListOrder(flowAuthorityList)
+	ch := c.onlyChallenge(order)
+	exp := time.Now().Add(30 * time.Minute).Truncate(time.Second)
+	token := authority.tokenUntil(t, thumbprint(t, &c.key.PublicKey), flowAuthorityList, false, exp)
+	if rec := c.post(ch.URL, map[string]any{"atc": token}); rec.Code != http.StatusOK {
+		t.Fatalf("challenge response = %d %s", rec.Code, rec.Body.String())
+	}
+	order = c.waitOrder(orderURL, statusReady)
+	if rec := c.finalizeCSR(order, makeTNAuthListCSR(t, newKey(t), flowAuthorityList, false)); rec.Code != http.StatusOK {
+		t.Fatalf("finalize = %d %s", rec.Code, rec.Body.String())
+	}
+	order = c.waitOrder(orderURL, statusValid)
+	if leaf := c.downloadLeaf(order); !leaf.NotAfter.After(exp.Add(24 * time.Hour)) {
+		t.Fatalf("leaf NotAfter = %v, want the CA validity rather than the token expiry %v", leaf.NotAfter, exp)
+	}
+	call := f.ca.calls[0]
+	if !call.NotAfter.IsZero() || !call.Validations[0].GrantExpires.IsZero() {
+		t.Fatalf("issue request NotAfter = %v and grant expiry = %v, want both unbounded", call.NotAfter, call.Validations[0].GrantExpires)
+	}
+	if !call.Deadline.Equal(exp) {
+		t.Fatalf("issue request Deadline = %v, want the token expiry %v", call.Deadline, exp)
+	}
+}
+
+// Still refuses to sign after the token expired when TNAuthList certificates may outlive it.
+func TestTKAuth01OutlivingCertificateNeedsLiveToken(t *testing.T) {
+	clock := &flowClock{now: time.Now()}
+	f, authority := newTokenFlow(t, clock, func(cfg *acmeserver.Config) {
+		cfg.TNAuthListIdentifiers = true
+		cfg.TNAuthListCertificatesOutliveTokens = true
+	})
+	f.runWorker()
+	c := f.newClient()
+	c.register()
+	orderURL, order := c.newAuthorityListOrder(flowAuthorityList)
+	ch := c.onlyChallenge(order)
+	exp := clock.Now().Add(10 * time.Minute).Truncate(time.Second)
+	token := authority.tokenUntil(t, thumbprint(t, &c.key.PublicKey), flowAuthorityList, false, exp)
+	if rec := c.post(ch.URL, map[string]any{"tkauth": token}); rec.Code != http.StatusOK {
+		t.Fatalf("challenge response = %d %s", rec.Code, rec.Body.String())
+	}
+	order = c.waitOrder(orderURL, statusReady)
+	clock.advance(15 * time.Minute)
+	if rec := c.finalizeCSR(order, makeTNAuthListCSR(t, newKey(t), flowAuthorityList, false)); rec.Code != http.StatusOK {
+		t.Fatalf("finalize = %d %s", rec.Code, rec.Body.String())
+	}
+	order = c.waitOrder(orderURL, statusInvalid)
+	if order.Error == nil || !strings.Contains(order.Error.Detail, "authority token expired") {
+		t.Fatalf("order error = %+v", order.Error)
+	}
+	if n := f.ca.callCount(); n != 0 {
+		t.Fatalf("the CA was called %d times after the token expired", n)
+	}
+}
+
+// Accepts the ATIS-1000080 atc field and refuses a response whose two fields disagree.
+func TestTKAuth01ATCResponseField(t *testing.T) {
+	f, authority := newTKAuthFlow(t)
+	f.runWorker()
+	c := f.newClient()
+	c.register()
+	orderURL, order := c.newAuthorityListOrder(flowAuthorityList)
+	ch := c.onlyChallenge(order)
+	token := authority.token(t, thumbprint(t, &c.key.PublicKey), flowAuthorityList, false)
+	assertProblem(t, c.post(ch.URL, map[string]any{"tkauth": token, "atc": token + "x"}), http.StatusBadRequest,
+		acmeserver.ErrorMalformed)
+	if rec := c.post(ch.URL, map[string]any{"tkauth": token, "atc": token}); rec.Code != http.StatusOK {
+		t.Fatalf("challenge response = %d %s", rec.Code, rec.Body.String())
+	}
+	c.waitOrder(orderURL, statusReady)
+}
+
 // Fails the order without a CA call when the Authority Token expires between validation and dispatch.
 func TestTKAuth01TokenExpiryBeforeDispatch(t *testing.T) {
 	clock := &flowClock{now: time.Now()}
@@ -563,6 +658,8 @@ func TestTKAuthFieldOnNetworkChallenge(t *testing.T) {
 			t.Fatalf("an http-01 challenge carries authority token members: %+v", ch)
 		}
 		assertProblem(t, c.post(ch.URL, map[string]any{"tkauth": "token"}), http.StatusBadRequest,
+			acmeserver.ErrorMalformed)
+		assertProblem(t, c.post(ch.URL, map[string]any{"atc": "token"}), http.StatusBadRequest,
 			acmeserver.ErrorMalformed)
 	}
 }

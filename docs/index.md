@@ -34,7 +34,7 @@ go get github.com/misiektoja/go-acme-server
 
 The module needs Go 1.27.2 or newer. The root package is imported as `acmeserver`. The bundled
 validators are in `challenge`, the in-memory store in `memstore`, the single-process nonce manager
-in `nonce` and the store contract suite in `storetest`.
+in `nonce` and the contract suites for stores and nonce managers in `storetest` and `noncetest`.
 
 ## Start here
 
@@ -55,6 +55,7 @@ implementation by following the integration guide.
 | Restrict who may register or order | [Accounts and policy](guide/accounts-and-policy.md) |
 | Issue STIR certificates with Authority Tokens | [Authority Token challenges](guide/authority-tokens.md) |
 | Tell clients when to renew | [Renewal information](guide/renewal-information.md) |
+| Offer several kinds of certificate | [Certificate profiles](guide/certificate-profiles.md) |
 | Look up every configuration field | [Configuration](reference/configuration.md) |
 | Configure a reverse proxy or health checks | [Deployment](operations/deployment.md) |
 | Fix something that does not work | [Troubleshooting](operations/troubleshooting.md) |

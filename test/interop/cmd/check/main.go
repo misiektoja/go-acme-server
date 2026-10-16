@@ -51,6 +51,8 @@ var required = map[string]string{
 	"github.com/misiektoja/go-acme-server/test/interop/TestAcmezRenewalInfo":                    "",
 	"github.com/misiektoja/go-acme-server/test/interop/TestLegoRenewalInfo":                     "",
 	"github.com/misiektoja/go-acme-server/test/interop/TestCertbotDelayedIssuance":              "",
+	"github.com/misiektoja/go-acme-server/test/interop/TestLegoProfiles":                        "",
+	"github.com/misiektoja/go-acme-server/test/interop/TestCertbotProfiles":                     "",
 	"github.com/misiektoja/go-acme-server/test/interop/TestCryptoACMEAccountAndKeyRevocation":   "",
 	"github.com/misiektoja/go-acme-server/test/interop/TestTKAuth01Issuance":                    "",
 	"github.com/misiektoja/go-acme-server/test/interop/TestTKAuth01RejectsForeignToken":         "",

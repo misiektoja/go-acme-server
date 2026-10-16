@@ -2,6 +2,35 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.6.0] - 16 Oct 2026
+
+Adds certificate profiles, 5G network function certificates and hooks that let the host pre-approve names, limit request rates and record refused requests. Failed validations are retried with their cause shown. Several RFC checks are stricter. Custom stores need an update.
+
+### Protocol
+
+* **Certificate profiles** from draft-ietf-acme-profiles-02. `Config.Profiles` lists them in the directory and `Config.DefaultProfile` applies when an order names none. An unknown name is refused with `invalidProfile`. A server without profiles now refuses an order that names one. Earlier versions ignored it.
+* **5G network function certificates** from 3GPP TS 33.310 Annex J. `Config.NfInstanceIDIdentifiers` accepts an `NfInstanceId` identifier proved by `tkauth-01` with an NF Certificate Authority Token. The token can grant an NF type and extra names.
+* **STIR/SHAKEN clients built to ATIS-1000080** can send their token in the `atc` field. `Config.TNAuthListCertificatesOutliveTokens` lets their certificates outlive the token, as that standard specifies.
+* **Failed validations are retried and show their cause.** Connection, TLS and DNS failures, including a name that does not exist yet, are retried. While the challenge is `processing` its `error` shows the last cause as `connection`, `tls` or `dns`. Earlier versions reported `serverInternal` after the last attempt.
+* **Stricter checks.** Internationalized names must be valid A-labels and are refused with `rejectedIdentifier` otherwise. External account binding keys must be as long as the MAC algorithm requires and at least 256 bits.
+* **acme.sh retries an expired nonce.** The `badNonce` detail now uses the wording it looks for.
+* **Revocation.** `badRevocationReason` lists the reasons the server allows. Renewal information for a revoked certificate now ends at the time of the request, so clients renew at once. In 0.5.0 a client could wait up to a minute after the revocation.
+
+### Host integration
+
+* **`PreApprover` and `ProfileChooser`** are optional `Policy` extensions. The first names order identifiers that need no challenge, for example names approved for an external account binding. The second picks the profile of an order that names none.
+* **`Config.Limits`** takes a `Limiter` that is asked about every `newNonce`, new account and `newOrder`. Refuse with a `rateLimited` problem and the client gets status 429 and `Retry-After`. The client address comes from `RemoteAddr` only. Without a `Limiter` nothing is limited.
+* **`Config.Refusals`** takes a `RefusalRecorder` that is told about every `finalize` and `revokeCert` request refused after the requester is known.
+* **`Config.RevocationReasons`** sets the reason codes clients may request. The default is unchanged. `certificateHold` is never allowed.
+* **`IssueRequest.Profile`** and **`ValidationGrant.Names` and `NFType`** pass the order profile and the token grants to the CA.
+* **New helpers.** `Retryable` marks a custom validator failure for retry. `ImmediateRenewal` serves custom `RenewalAdvisor` implementations. `noncetest` checks a custom `NonceManager`, including replicas that share nonces.
+* **Custom stores must be updated.** Persist `Authorization.PreApproved`, `GrantNames` and `GrantNFType`, `Validation.Names` and `NFType` and `Order.Profile`. Leave pre-approved authorizations out of `AuthorizedFor`. Implement `WorkStore.RetryValidation`. Then run `storetest`.
+* **Dependencies.** golang.org/x/net v0.61.0 is now the minimum. It clears five HTTP/2 advisories against v0.59.0 that the library does not reach but dependency scanners report. golang.org/x/text is a new indirect dependency, used for the A-label checks.
+
+### Verification
+
+* **Tested clients:** acmez v3.1.7, Certbot 5.8.0, lego v4.35.2 and Go crypto/acme v0.58.0.
+
 ## [0.5.0] - 11 Oct 2026
 
 Fixes stuck challenges, revocation retries and DNS failover. Custom stores and worker settings may need updates.

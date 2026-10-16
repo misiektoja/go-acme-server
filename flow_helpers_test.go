@@ -21,6 +21,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	neturl "net/url"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -289,6 +291,7 @@ type orderBody struct {
 	Authorizations []string                `json:"authorizations"`
 	Finalize       string                  `json:"finalize"`
 	Certificate    string                  `json:"certificate"`
+	Profile        string                  `json:"profile"`
 }
 
 type authzBody struct {
@@ -523,7 +526,11 @@ func (ca *testCA) Issue(_ context.Context, req acmeserver.IssueRequest) (acmeser
 	if capped := time.Now().Add(ca.maxLifetime); ca.maxLifetime > 0 && (notAfter.IsZero() || capped.Before(notAfter)) {
 		notAfter = capped.Truncate(time.Second)
 	}
-	chain, err := ca.sign(req.CSR.PublicKey, req.Identifiers, notAfter, grantedCACertificate(req.Validations))
+	names := slices.Clone(req.Identifiers)
+	for _, validation := range req.Validations {
+		names = append(names, validation.Names...)
+	}
+	chain, err := ca.sign(req.CSR.PublicKey, names, notAfter, grantedCACertificate(req.Validations))
 	if err != nil {
 		return acmeserver.IssueResult{}, err
 	}
@@ -541,7 +548,8 @@ func grantedCACertificate(validations []acmeserver.Validation) bool {
 	return len(validations) != 0
 }
 
-// Signs a leaf for the identifiers, as a CA certificate when the authorizations granted one.
+// Signs a leaf for the identifiers and granted names, as a CA certificate when the authorizations
+// granted one.
 func (ca *testCA) sign(pub any, identifiers []acmeserver.Identifier, notAfter time.Time,
 	isCA bool) ([][]byte, error) {
 	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 100))
@@ -570,6 +578,12 @@ func (ca *testCA) sign(pub any, identifiers []acmeserver.Identifier, notAfter ti
 			tmpl.ExtraExtensions = append(tmpl.ExtraExtensions, pkix.Extension{Id: tnAuthListOID, Value: value})
 		case acmeserver.IdentifierDNS:
 			tmpl.DNSNames = append(tmpl.DNSNames, id.Value)
+		case acmeserver.IdentifierNfInstanceID, acmeserver.IdentifierURI:
+			uri, err := neturl.Parse(id.URI())
+			if err != nil {
+				return nil, err
+			}
+			tmpl.URIs = append(tmpl.URIs, uri)
 		default:
 			return nil, fmt.Errorf("unsupported identifier type %q", id.Type)
 		}

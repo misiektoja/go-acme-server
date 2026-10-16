@@ -21,8 +21,10 @@ type RenewalAdvisor interface {
 
 `LifetimeRenewal` is the built-in advisor. It opens the window at two thirds of the certificate
 lifetime and closes it at five sixths. For a 90-day certificate that is days 60 to 75. A revoked
-certificate gets a window that opened at its revocation time, so clients renew at once. The
-fractions, an explanation URL and the `Retry-After` are fields on the struct:
+certificate gets a window from its revocation time to the time of the request, so clients renew
+at once. Clients pick a random time inside a window, so a window that reached into the future
+would let some of them wait. `LifetimeRenewal.Clock` dates that window and defaults to the system
+clock. The fractions, an explanation URL and the `Retry-After` are fields on the struct:
 
 ```go
 RenewalInfo: acmeserver.LifetimeRenewal{
@@ -34,8 +36,9 @@ RenewalInfo: acmeserver.LifetimeRenewal{
 ```
 
 Implement `RenewalAdvisor` for other schedules, for example to move every window forward when a
-CA incident requires mass renewal. The `End` must be later than the `Start`. `RetryAfter` defaults
-to six hours and tells clients how long to wait before asking again.
+CA incident requires mass renewal. `ImmediateRenewal(since, now)` returns the window that asks for
+renewal at once. The `End` must be later than the `Start`. `RetryAfter` defaults to six hours and
+tells clients how long to wait before asking again.
 
 ## The certificate identifier
 

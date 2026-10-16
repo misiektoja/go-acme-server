@@ -75,10 +75,13 @@ sequenceDiagram
   C->>H: POST-as-GET certificate
 ```
 
-**Order creation.** Identifiers are normalized and checked for duplicates and limits. `Policy.NewOrder`
-may refuse the order or adjust the requested validity. The store creates the order, one pending
-authorization per identifier and one challenge per applicable type in a single operation. There is
-no pre-authorization, so every order gets fresh authorizations.
+**Order creation.** Identifiers are normalized and checked for duplicates and limits.
+`Policy.NewOrder` may refuse the order or adjust the requested validity. A policy that implements
+`ProfileChooser` picks the profile of an order that names none before `NewOrder` sees it. A policy
+that implements `PreApprover` may name identifiers that need no challenge. The store creates the
+order, one authorization per identifier and one challenge per applicable type in a single operation.
+A pre-approved identifier gets a valid authorization without challenges. There is no
+pre-authorization, so every order gets fresh authorizations.
 
 **Challenge response.** A POST to a pending challenge moves it to `processing` and enqueues a
 validation task in the same store operation. Repeated responses are harmless. The account key
@@ -91,7 +94,8 @@ challenge whose authorization stopped being pending, before or during validation
 with `authorization was <status> before validation`. A
 returned `*Problem` is final and makes the challenge and authorization invalid. Any other error is
 a transport failure and is retried with exponential backoff until `WorkerConfig.MaxAttempts` or the
-authorization expiry. Success makes the authorization valid for `Config.AuthorizationLifetime`.
+authorization expiry. Each failed attempt is stored as the challenge's `error` while it stays
+`processing`, as RFC 8555 section 8.2 requires. Success makes the authorization valid for `Config.AuthorizationLifetime`.
 When the last authorization becomes valid the order becomes `ready`.
 
 **Finalization.** The CSR must be self-signed with an accepted key that is not the account key and
@@ -131,5 +135,5 @@ so it never overlaps the run of the worker that claims the task next.
 
 The library makes no policy decisions beyond the protocol. It does not choose validity periods,
 key usages, rate limits or which identifiers a CA may issue for. Those belong in `Policy`,
-`IssuancePolicy` and the CA behind `Issuer`. [Security model](security/security-model.md) lists
+`IssuancePolicy`, the `Limiter` and the CA behind `Issuer`. [Security model](security/security-model.md) lists
 the boundaries in detail.

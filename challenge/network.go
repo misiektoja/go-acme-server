@@ -121,7 +121,8 @@ func (p networkPolicy) resolve(ctx context.Context, host string) ([]netip.Addr, 
 		}
 		addresses, err = p.resolver.LookupNetIP(ctx, "ip", id.Value+".")
 		if err != nil {
-			return nil, fmt.Errorf("challenge: destination resolution: %w", err)
+			return nil, retryable(acmeserver.ErrorDNS, "validation destination could not be resolved",
+				fmt.Errorf("challenge: destination resolution: %w", err))
 		}
 	}
 	if len(addresses) == 0 || len(addresses) > p.maxAddresses {
@@ -150,7 +151,8 @@ func (p networkPolicy) dial(ctx context.Context, host string, port int) (net.Con
 		}
 		last = err
 	}
-	return nil, fmt.Errorf("challenge: connection failed: %w", last)
+	return nil, retryable(acmeserver.ErrorConnection, "could not connect to the validation destination",
+		fmt.Errorf("challenge: connection failed: %w", last))
 }
 
 // Checks identifier scope and the captured proof before any network access.
@@ -159,7 +161,8 @@ func checkRequest(req acmeserver.ValidationRequest, typ acmeserver.ChallengeType
 	if err != nil {
 		return acmeserver.Identifier{}, err
 	}
-	if req.Challenge.Type != typ || id.IsWildcard() || (req.Wildcard && typ != acmeserver.ChallengeDNS01) ||
+	if req.Challenge.Type != typ || (id.Type != acmeserver.IdentifierDNS && id.Type != acmeserver.IdentifierIP) ||
+		id.IsWildcard() || (req.Wildcard && typ != acmeserver.ChallengeDNS01) ||
 		(id.Type == acmeserver.IdentifierIP && typ == acmeserver.ChallengeDNS01) {
 		return acmeserver.Identifier{}, incorrect("identifier does not support this challenge")
 	}
@@ -181,6 +184,18 @@ func base64URL(value string) bool {
 		}
 	}
 	return value != ""
+}
+
+// Marks a failure for retry and names the problem type reported once the attempts run out. A
+// *Problem in the chain stays final and an already classified failure keeps its type.
+func retryable(typ acmeserver.ErrorType, detail string, err error) error {
+	if _, final := acmeserver.AsProblem(err); final {
+		return err
+	}
+	if _, classified := errors.AsType[*acmeserver.RetryableError](err); classified {
+		return err
+	}
+	return acmeserver.Retryable(acmeserver.NewProblem(typ, detail), err)
 }
 
 // Returns a terminal invalid-proof result without exposing fetched content.

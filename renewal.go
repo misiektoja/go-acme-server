@@ -39,14 +39,20 @@ type LifetimeRenewal struct {
 	// Copied into every response.
 	ExplanationURL string
 	RetryAfter     time.Duration
+	// Dates the window of a revoked certificate. Defaults to the system clock.
+	Clock Clock
 }
 
 // Returns the window for the certificate. A revoked certificate gets a window that opened at
-// its revocation, so clients renew at once.
+// its revocation and ends at the time of the request, so clients renew at once.
 func (l LifetimeRenewal) RenewalInfo(_ context.Context, cert *Certificate) (RenewalInfo, error) {
 	info := RenewalInfo{ExplanationURL: l.ExplanationURL, RetryAfter: l.RetryAfter}
 	if cert.Revoked {
-		info.Start, info.End = cert.RevokedAt, cert.RevokedAt.Add(time.Minute)
+		clock := l.Clock
+		if clock == nil {
+			clock = SystemClock()
+		}
+		info.Start, info.End = ImmediateRenewal(cert.RevokedAt, clock.Now())
 		return info, nil
 	}
 	start, end := l.Start, l.End
@@ -63,6 +69,18 @@ func (l LifetimeRenewal) RenewalInfo(_ context.Context, cert *Certificate) (Rene
 	info.Start = cert.NotBefore.Add(time.Duration(float64(lifetime) * start)).Truncate(time.Second)
 	info.End = cert.NotBefore.Add(time.Duration(float64(lifetime) * end)).Truncate(time.Second)
 	return info, nil
+}
+
+// Returns a window that opened at since and ends at now, for a certificate that should be
+// renewed at once. Clients pick a random time inside the window, so a window reaching into the
+// future would let some of them wait. A since that is not before now gives the minute before now.
+func ImmediateRenewal(since, now time.Time) (start, end time.Time) {
+	end = now.Truncate(time.Second)
+	start = since.Truncate(time.Second)
+	if !start.Before(end) {
+		start = end.Add(-time.Minute)
+	}
+	return start, end
 }
 
 // The renewalInfo object clients receive.
