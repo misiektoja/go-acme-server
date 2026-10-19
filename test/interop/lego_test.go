@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cloudflare/circl/sign/slhdsa"
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/certificate"
 	"github.com/go-acme/lego/v4/challenge/dns01"
@@ -149,6 +150,27 @@ func TestLegoCompositeIssuer(t *testing.T) {
 	}
 	h.verifyRevoked(t, order, 4)
 	t.Log(clientLabel("lego") + " HTTP-01 issuance from a composite ML-DSA CA and revocation passed")
+}
+
+// Issues from an SLH-DSA CA through lego, which parses the chain it receives, and revokes.
+func TestLegoSLHDSAIssuer(t *testing.T) {
+	port := availablePort(t)
+	h := newHarness(t, harnessOptions{httpPort: port, slhdsaIssuer: slhdsa.SHAKE_128f})
+	client := h.lego(t)
+	if err := client.Challenge.SetHTTP01Provider(http01.NewProviderServer("127.0.0.1", strconv.Itoa(port))); err != nil {
+		t.Fatal(err)
+	}
+	key, resource := legoObtain(t, client, testHost)
+	order := h.verify(t, resource.Certificate, &key.PublicKey, []string{testHost}, acmeserver.ChallengeHTTP01)
+	if !bytes.Contains(resource.IssuerCertificate, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: h.ca.issuer.Raw})) {
+		t.Fatal("lego did not keep the SLH-DSA issuer certificate")
+	}
+	reason := uint(4)
+	if err := client.Certificate.RevokeWithReason(resource.Certificate, &reason); err != nil {
+		t.Fatalf("revocation: %v", err)
+	}
+	h.verifyRevoked(t, order, 4)
+	t.Log(clientLabel("lego") + " HTTP-01 issuance from an SLH-DSA CA and revocation passed")
 }
 
 // Issues through lego while the CA answers Pending for two seconds.

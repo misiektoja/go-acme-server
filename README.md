@@ -73,8 +73,9 @@ The API may still change before v1.0.0 as described in the
 
 Certificate requests may carry post-quantum ML-DSA-44, ML-DSA-65 or ML-DSA-87 keys, or composite
 ML-DSA keys from draft-ietf-lamps-pq-composite-sigs-19, which pair ML-DSA with a classical
-algorithm. The host CA may also sign with a composite ML-DSA key. The server checks composite
-signatures in requests and in returned chains itself. Account keys stay classical.
+algorithm. SLH-DSA keys from RFC 9909 are accepted in all 12 FIPS 205 parameter sets. The host CA
+may also sign with a composite ML-DSA or SLH-DSA key. The server checks composite and SLH-DSA
+signatures in requests and returned chains itself. Account keys stay classical.
 
 ### Limitations
 

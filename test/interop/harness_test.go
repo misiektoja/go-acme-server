@@ -9,6 +9,8 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/asn1"
 	"encoding/base64"
 	"encoding/pem"
 	"errors"
@@ -28,6 +30,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cloudflare/circl/sign/slhdsa"
 	"github.com/mholt/acmez/v3"
 	"github.com/mholt/acmez/v3/acme"
 	compositemldsa "github.com/misiektoja/go-composite-mldsa"
@@ -35,6 +38,7 @@ import (
 
 	acmeserver "github.com/misiektoja/go-acme-server"
 	"github.com/misiektoja/go-acme-server/challenge"
+	"github.com/misiektoja/go-acme-server/internal/slhdsaspki"
 	"github.com/misiektoja/go-acme-server/nonce"
 	"github.com/misiektoja/go-acme-server/test/interop/sqlitestore"
 	"github.com/misiektoja/go-acme-server/test/interop/testutil"
@@ -120,8 +124,12 @@ type harnessOptions struct {
 	ipIdentifiers bool
 	// Issues from a composite ML-DSA CA of this algorithm. HTTPS keeps the classical root.
 	compositeIssuer compositemldsa.Algorithm
+	// Issues from a self-signed SLH-DSA CA of this parameter set. HTTPS keeps the classical root.
+	slhdsaIssuer slhdsa.ID
 	// Offers the interopProfiles certificate profiles.
 	profiles bool
+	// Bounds request bodies. Zero keeps the library default.
+	maxRequestBody int64
 }
 
 // Returns the MAC key for a configured external account identifier.
@@ -155,6 +163,9 @@ func newHarness(t *testing.T, options harnessOptions) *harness {
 	createCA(t, directory)
 	if options.compositeIssuer != 0 {
 		createCompositeIssuer(t, directory, options.compositeIssuer)
+	}
+	if options.slhdsaIssuer != 0 {
+		createSLHDSAIssuer(t, directory, options.slhdsaIssuer)
 	}
 	ca := openCA(t, directory)
 	ca.delay = options.delay
@@ -240,6 +251,11 @@ func configuredServer(t *testing.T, baseURL string, options harnessOptions, stor
 		Issuer: ca, Revoker: ca, Validators: validators, RenewalInfo: acmeserver.LifetimeRenewal{RetryAfter: time.Hour},
 		Workers: acmeserver.WorkerConfig{External: options.external, PollInterval: 10 * time.Millisecond, RetryDelay: 10 * time.Millisecond,
 			TaskTimeout: time.Second, Lease: 2 * time.Second}}
+	if options.slhdsaIssuer != 0 {
+		// A small-set SLH-DSA signature takes about a third of a second and several times that on
+		// a loaded machine, so the one-second phase limit would make the issuer retry forever.
+		config.Workers.TaskTimeout, config.Workers.Lease = 10*time.Second, 20*time.Second
+	}
 	if options.eab != nil {
 		config.ExternalAccounts = eabKeys(options.eab)
 		config.SingleUseExternalAccounts = true
@@ -250,6 +266,7 @@ func configuredServer(t *testing.T, baseURL string, options harnessOptions, stor
 		config.TokenAuthority = tokenAuthorityURL
 	}
 	config.IPIdentifiers = options.ipIdentifiers
+	config.MaxRequestBody = options.maxRequestBody
 	if options.profiles {
 		config.Profiles, config.DefaultProfile = interopProfiles, interopDefaultProfile
 	}
@@ -350,7 +367,12 @@ func (h *harness) verifyLeaf(t *testing.T, chainPEM []byte, key crypto.PublicKey
 	if issuer == nil || len(bytes.TrimSpace(trailing)) != 0 || !bytes.Equal(issuer.Bytes, h.ca.issuer.Raw) {
 		t.Fatal("unexpected chain")
 	}
-	publicKey, err := compositex509.MarshalPKIXPublicKey(key)
+	var publicKey []byte
+	if slhKey, isSLHDSA := key.(slhdsa.PublicKey); isSLHDSA {
+		publicKey, err = slhdsaspki.Marshal(slhKey)
+	} else {
+		publicKey, err = compositex509.MarshalPKIXPublicKey(key)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -374,23 +396,31 @@ func (h *harness) verifyLeaf(t *testing.T, chainPEM []byte, key crypto.PublicKey
 	}
 	roots := x509.NewCertPool()
 	roots.AddCert(h.ca.issuer)
-	// crypto/x509 cannot check a composite ML-DSA signature, so that link is checked directly and
-	// the names and validity separately.
+	// crypto/x509 cannot check a composite ML-DSA or SLH-DSA signature, so that link is checked
+	// directly and the names and validity separately.
 	_, composite, err := compositex509.SignatureAlgorithm(leaf.Raw)
 	if err != nil {
 		t.Fatal(err)
 	}
+	issuerKey, slhdsaIssuer, err := slhdsaspki.Parse(h.ca.issuer.RawSubjectPublicKeyInfo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	direct := composite || slhdsaIssuer
 	if composite {
-		if err := compositex509.CheckSignatureFrom(leaf, h.ca.issuer); err != nil {
-			t.Fatal(err)
-		}
-		if now := time.Now(); now.Before(leaf.NotBefore) || now.After(leaf.NotAfter) {
-			t.Fatal("leaf certificate is outside its validity period")
-		}
+		err = compositex509.CheckSignatureFrom(leaf, h.ca.issuer)
+	} else if slhdsaIssuer {
+		err = checkSLHDSASignature(leaf, issuerKey)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if now := time.Now(); direct && (now.Before(leaf.NotBefore) || now.After(leaf.NotAfter)) {
+		t.Fatal("leaf certificate is outside its validity period")
 	}
 	for _, name := range names {
 		host := strings.Replace(name, "*.", "host.", 1)
-		if composite {
+		if direct {
 			err = leaf.VerifyHostname(host)
 		} else {
 			_, err = leaf.Verify(x509.VerifyOptions{Roots: roots, DNSName: host})
@@ -564,10 +594,42 @@ func mustCSR(t *testing.T, der []byte) *x509.CertificateRequest {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// crypto/x509 and compositex509 cannot check SLH-DSA, so its pure signature is checked here.
+	key, isSLHDSA, err := slhdsaspki.Parse(csr.RawSubjectPublicKeyInfo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if isSLHDSA {
+		if !slhdsa.Verify(&key, slhdsa.NewMessage(csr.RawTBSCertificateRequest), csr.Signature, nil) {
+			t.Fatal("SLH-DSA CSR signature verification failed")
+		}
+		return csr
+	}
 	if err := compositex509.CheckCertificateRequestSignature(csr); err != nil {
 		t.Fatal(err)
 	}
 	return csr
+}
+
+// Checks that the SLH-DSA issuer key signed cert in pure mode with an empty context, under the
+// RFC 9909 algorithm identifier for its parameter set with absent parameters.
+func checkSLHDSASignature(cert *x509.Certificate, issuer slhdsa.PublicKey) error {
+	var outer struct {
+		TBS       asn1.RawValue
+		Algorithm pkix.AlgorithmIdentifier
+		Signature asn1.BitString
+	}
+	if rest, err := asn1.Unmarshal(cert.Raw, &outer); err != nil || len(rest) != 0 {
+		return errors.New("malformed certificate")
+	}
+	oid, ok := slhdsaspki.OID(issuer.ID)
+	if !ok || !outer.Algorithm.Algorithm.Equal(oid) || len(outer.Algorithm.Parameters.FullBytes) != 0 {
+		return errors.New("certificate signature algorithm does not match the SLH-DSA issuer key")
+	}
+	if !slhdsa.Verify(&issuer, slhdsa.NewMessage(cert.RawTBSCertificate), cert.Signature, nil) {
+		return errors.New("SLH-DSA certificate signature verification failed")
+	}
+	return nil
 }
 
 // Extracts the opaque account ID from the client-facing URL.

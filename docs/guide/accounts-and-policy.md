@@ -191,4 +191,4 @@ by key thumbprint.
 | `MaxIdentifiers` | 100 | Cap the size of one order for your CA |
 | `OrderLifetime` | 7 days | How long a client has to complete validation and finalization |
 | `AuthorizationLifetime` | 30 days | How long a validated authorization stays valid, which matters for revocation by another account |
-| `MaxRequestBody` | 64 KiB | Raise only if a policy accepts unusually large CSRs |
+| `MaxRequestBody` | 64 KiB | Set 128 KiB when CSR keys or the CA use SLH-DSA SHA2-256f or SHAKE-256f. Otherwise raise only if a policy accepts unusually large CSRs |

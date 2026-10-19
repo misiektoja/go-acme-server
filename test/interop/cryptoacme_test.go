@@ -14,11 +14,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cloudflare/circl/sign/slhdsa"
 	compositemldsa "github.com/misiektoja/go-composite-mldsa"
 	"github.com/misiektoja/go-composite-mldsa/compositex509"
 	"golang.org/x/crypto/acme"
 
 	acmeserver "github.com/misiektoja/go-acme-server"
+	"github.com/misiektoja/go-acme-server/internal/slhdsatest"
 )
 
 // Returns a Go crypto/acme client bound to the harness directory with explicit HTTPS trust.
@@ -116,7 +118,12 @@ func (h *harness) cryptoIssue(ctx context.Context, t *testing.T, client *acme.Cl
 	if len(subjectKeys) == 1 {
 		certKey = subjectKeys[0]
 	}
-	csr, err := compositex509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{DNSNames: []string{testHost}}, certKey)
+	var csr []byte
+	if slhKey, ok := certKey.(slhdsa.PrivateKey); ok {
+		csr, err = slhdsatest.CreateCertificateRequest(&x509.CertificateRequest{DNSNames: []string{testHost}}, slhKey)
+	} else {
+		csr, err = compositex509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{DNSNames: []string{testHost}}, certKey)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,6 +213,41 @@ func TestCryptoACMECompositeIssuer(t *testing.T) {
 		}
 		h.verifyRevoked(t, order, int(acme.CRLReasonUnspecified))
 		t.Logf("%s issuer: crypto/acme issuance and account-authorized revocation passed", alg)
+	}
+}
+
+// Issues from SLH-DSA CAs, whose largest chains crypto/acme must receive whole, and revokes. The
+// 256f case also certifies a 256f key, so every signature is SLH-DSA.
+func TestCryptoACMESLHDSAIssuer(t *testing.T) {
+	for _, tc := range []struct {
+		id slhdsa.ID
+		// Zero certifies a P-256 key.
+		subject slhdsa.ID
+		// Finalize and revocation requests carry a CSR or certificate base64-encoded twice. With
+		// the 50 KB signature of a 256f key either exceeds the 64 KiB default.
+		maxRequestBody int64
+	}{
+		{id: slhdsa.SHA2_128s},
+		{id: slhdsa.SHAKE_192f},
+		{id: slhdsa.SHA2_256f, subject: slhdsa.SHAKE_256f, maxRequestBody: 128 << 10},
+	} {
+		solver, port := newSolver(t, false)
+		h := newHarness(t, harnessOptions{httpPort: port, slhdsaIssuer: tc.id, maxRequestBody: tc.maxRequestBody})
+		client, _ := h.cryptoAccount(t.Context(), t)
+		var subjectKeys []crypto.Signer
+		if tc.subject != 0 {
+			_, key, err := slhdsa.GenerateKey(rand.Reader, tc.subject)
+			if err != nil {
+				t.Fatal(err)
+			}
+			subjectKeys = append(subjectKeys, key)
+		}
+		chain, _, order := h.cryptoIssue(t.Context(), t, client, solver, subjectKeys...)
+		if err := client.RevokeCert(t.Context(), nil, chain[0], acme.CRLReasonUnspecified); err != nil {
+			t.Fatal(err)
+		}
+		h.verifyRevoked(t, order, int(acme.CRLReasonUnspecified))
+		t.Logf("%s issuer: crypto/acme issuance of a %d-byte chain and account-authorized revocation passed", tc.id, len(chain[0])+len(chain[1]))
 	}
 }
 

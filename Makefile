@@ -73,7 +73,8 @@ FUZZ_TIME ?= 20s
 FUZZ_MINIMIZE_TIME ?= 0
 FUZZ_TARGETS := ./internal/jws:FuzzParse ./internal/jws:FuzzParseProfiles ./internal/jws:FuzzParseCompact \
 	./internal/jws:FuzzParseJWK ./internal/jws:FuzzUnmarshalStrict ./internal/jws:FuzzUnmarshalStrictMemberNames \
-	.:FuzzIdentifierNormalize ./challenge:FuzzDNSResponse ./challenge:FuzzALPNProof
+	.:FuzzIdentifierNormalize ./challenge:FuzzDNSResponse ./challenge:FuzzALPNProof \
+	.:FuzzCheckCSR .:FuzzCheckChain ./internal/slhdsaspki:FuzzParse
 
 .PHONY: fuzz
 fuzz: ## Fuzz every parsing target for FUZZ_TIME each. Failing inputs are saved under testdata.
@@ -116,22 +117,27 @@ RELEASE_CHECKSUMS = dist/go-acme-server-$(VERSION)_SHA256SUMS.txt
 require-version:
 	@test -n "$(VERSION)" || { echo "Set VERSION, for example VERSION=v0.1.0" >&2; exit 1; }
 
+# A go.work above the checkout or the check directory would replace the module's own requirements.
+release-check sbom: export GOWORK = off
+# The export step sets -e itself because make 3.81, the macOS default, ignores .SHELLFLAGS. Its steps
+# are separate commands because -e does not stop at a failure inside an && list.
 .PHONY: release-check
 release-check: test-scratch ## Build, vet and test an export of HEAD and import it from a separate module. Set VERSION to check the release notes heading.
 	@if grep -q '^replace ' go.mod; then echo "error: go.mod has a replace directive"; exit 1; fi
 	@if [ -n "$(VERSION)" ]; then \
 		version="$(VERSION)"; version="$${version#v}"; \
 		grep -q "^## \[$$version\] - " RELEASE_NOTES.md || { echo "error: RELEASE_NOTES.md has no heading for $$version"; exit 1; }; \
+		if grep -q "^## \[$$version\] - TBD" RELEASE_NOTES.md; then echo "error: RELEASE_NOTES.md still dates $$version TBD"; exit 1; fi; \
 		if grep -qi '^## \[Unreleased' RELEASE_NOTES.md; then echo "error: RELEASE_NOTES.md still has an Unreleased section"; exit 1; fi; \
 	fi
-	@export="$(ACME_TEST_SCRATCH)/release-check"; \
+	@set -e; export="$(ACME_TEST_SCRATCH)/release-check"; \
 	if [ -e "$$export" ]; then echo "error: $$export exists, move it aside first"; exit 1; fi; \
 	mkdir -p "$$export/export" "$$export/consumer"; \
 	git archive --format=tar HEAD | tar -x -C "$$export/export"; \
-	cd "$$export/export" && go mod verify && go build ./... && go vet ./... && go test -count=1 ./...; \
-	cd "$$export/consumer" && printf 'module example.com/consumer\n\ngo %s\n\nrequire github.com/misiektoja/go-acme-server v0.0.0\n\nreplace github.com/misiektoja/go-acme-server => ../export\n' "$(GO_VERSION)" > go.mod; \
+	cd "$$export/export"; go mod verify; go build ./...; go vet ./...; go test -count=1 ./...; \
+	cd "$$export/consumer"; printf 'module example.com/consumer\n\ngo %s\n\nrequire github.com/misiektoja/go-acme-server v0.0.0\n\nreplace github.com/misiektoja/go-acme-server => ../export\n' "$(GO_VERSION)" > go.mod; \
 	printf 'package main\n\nimport (\n\t"log"\n\n\tacmeserver "github.com/misiektoja/go-acme-server"\n\t"github.com/misiektoja/go-acme-server/memstore"\n\t"github.com/misiektoja/go-acme-server/nonce"\n)\n\nfunc main() {\n\t_, err := acmeserver.New(acmeserver.Config{Store: memstore.New(), Nonces: nonce.New(nonce.Options{})})\n\tlog.Println(err)\n}\n' > main.go; \
-	go mod tidy && go build ./... && go run .; \
+	go mod tidy; go build ./...; go run .; \
 	echo "release check passed for $$(git -C "$(CURDIR)" rev-parse --short HEAD)"
 
 .PHONY: release-body

@@ -16,12 +16,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cloudflare/circl/sign/slhdsa"
 	"github.com/mholt/acmez/v3"
 	"github.com/mholt/acmez/v3/acme"
 	compositemldsa "github.com/misiektoja/go-composite-mldsa"
 	"github.com/misiektoja/go-composite-mldsa/compositex509"
 
 	acmeserver "github.com/misiektoja/go-acme-server"
+	"github.com/misiektoja/go-acme-server/internal/slhdsatest"
 )
 
 // Obtains and retrieves a certificate through the independent acmez implementation.
@@ -154,6 +156,68 @@ func TestCertbotCompositeCSR(t *testing.T) {
 	h.certbot(ctx, t, executable, "certbot-composite-revoke-output.txt", "revoke", "--cert-path", certPath, "--no-delete-after-revoke")
 	h.verifyRevoked(t, order, 0)
 	t.Log(certbotVersion + " composite ML-DSA CSR issuance and account revocation passed")
+}
+
+// Finalizes an SLH-DSA CSR through Certbot and revokes the certificate with the account, because
+// Certbot handles the CSR without reading its key.
+func TestCertbotSLHDSACSR(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+	defer cancel()
+	executable := certbotExecutable(ctx, t)
+	h := newHarness(t, harnessOptions{httpPort: availablePort(t)})
+	_, key, err := slhdsa.GenerateKey(rand.Reader, slhdsa.SHA2_128s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	csr, err := slhdsatest.CreateCertificateRequest(&x509.CertificateRequest{DNSNames: []string{testHost}}, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	csrPath := filepath.Join(h.directory, "client.csr")
+	writePrivate(t, csrPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csr}))
+	certPath, fullchain := filepath.Join(h.directory, "cert.pem"), filepath.Join(h.directory, "fullchain.pem")
+	h.certbot(ctx, t, executable, "certbot-slh-dsa-output.txt", "certonly", "--standalone", "--preferred-challenges", "http",
+		"--http-01-address", "127.0.0.1", "--http-01-port", strconv.Itoa(h.options.httpPort), "--csr", csrPath,
+		"--cert-path", certPath, "--chain-path", filepath.Join(h.directory, "chain.pem"),
+		"--fullchain-path", fullchain, "--agree-tos", "--register-unsafely-without-email", "--no-directory-hooks")
+	order := h.verify(t, readFile(t, fullchain), key.PublicKey(), []string{testHost}, acmeserver.ChallengeHTTP01)
+	if !bytes.Equal(order.CSR, csr) {
+		t.Fatal("Certbot changed the supplied CSR")
+	}
+	h.certbot(ctx, t, executable, "certbot-slh-dsa-revoke-output.txt", "revoke", "--cert-path", certPath, "--no-delete-after-revoke")
+	h.verifyRevoked(t, order, 0)
+	t.Log(certbotVersion + " SLH-DSA CSR issuance and account revocation passed")
+}
+
+// Finalizes an SLH-DSA CSR through Certbot under an SLH-DSA CA of the same parameter set, so every
+// signature in the chain is SLH-DSA, and revokes the certificate with the account.
+func TestCertbotSLHDSAIssuer(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
+	defer cancel()
+	executable := certbotExecutable(ctx, t)
+	h := newHarness(t, harnessOptions{httpPort: availablePort(t), slhdsaIssuer: slhdsa.SHA2_192s})
+	_, key, err := slhdsa.GenerateKey(rand.Reader, slhdsa.SHA2_192s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	csr, err := slhdsatest.CreateCertificateRequest(&x509.CertificateRequest{DNSNames: []string{testHost}}, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	csrPath := filepath.Join(h.directory, "client.csr")
+	writePrivate(t, csrPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csr}))
+	certPath, fullchain := filepath.Join(h.directory, "cert.pem"), filepath.Join(h.directory, "fullchain.pem")
+	h.certbot(ctx, t, executable, "certbot-slh-dsa-issuer-output.txt", "certonly", "--standalone", "--preferred-challenges", "http",
+		"--http-01-address", "127.0.0.1", "--http-01-port", strconv.Itoa(h.options.httpPort), "--csr", csrPath,
+		"--cert-path", certPath, "--chain-path", filepath.Join(h.directory, "chain.pem"),
+		"--fullchain-path", fullchain, "--agree-tos", "--register-unsafely-without-email", "--no-directory-hooks")
+	order := h.verify(t, readFile(t, fullchain), key.PublicKey(), []string{testHost}, acmeserver.ChallengeHTTP01)
+	if !bytes.Equal(order.CSR, csr) {
+		t.Fatal("Certbot changed the supplied CSR")
+	}
+	h.certbot(ctx, t, executable, "certbot-slh-dsa-issuer-revoke-output.txt", "revoke", "--cert-path", certPath, "--no-delete-after-revoke")
+	h.verifyRevoked(t, order, 0)
+	t.Log(certbotVersion + " SLH-DSA CSR issuance from an SLH-DSA CA and account revocation passed")
 }
 
 // Certbot passes the wildcard identifier itself, so the hooks strip that label to reach the TXT

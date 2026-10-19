@@ -25,6 +25,10 @@ ML-DSA-44, ML-DSA-65 and ML-DSA-87 certificate requests are accepted. Account ke
 
 Composite ML-DSA certificate requests are accepted too. The server checks both component signatures itself because `crypto/x509` cannot, and `CSR.PublicKey` is nil for these keys. Read the key with `compositex509.ParsePKIXPublicKey` from `CSR.RawSubjectPublicKeyInfo` and certify it with `compositex509.CreateCertificate`. Revoke these certificates through an authorized account as well.
 
+SLH-DSA certificate requests from [RFC 9909](https://www.rfc-editor.org/rfc/rfc9909.html) are accepted in all 12 FIPS 205 parameter sets. The signature must use pure mode with an empty context and the parameter set of the CSR key. HashSLH-DSA is refused. `CSR.PublicKey` is nil for these keys, so certify `CSR.RawSubjectPublicKeyInfo` unchanged. Revoke through an authorized account, because an SLH-DSA key cannot sign the JWS of a certificate-key revocation.
+
+The host CA may sign with an SLH-DSA key too, and the server checks those signatures in the returned chain. With a SHA2-256f or SHAKE-256f key, in the CSR or at the CA, a finalize or revocation request is about 90 KB because it carries a 50 KB CSR or certificate encoded twice in base64. Set `MaxRequestBody` to 128 KiB for these sets. The 64 KiB default refuses such requests with HTTP 413.
+
 ## The request
 
 | Field | Meaning |

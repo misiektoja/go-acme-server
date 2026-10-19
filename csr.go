@@ -13,6 +13,7 @@ import (
 	"errors"
 	"slices"
 
+	"github.com/cloudflare/circl/sign/slhdsa"
 	compositemldsa "github.com/misiektoja/go-composite-mldsa"
 	"github.com/misiektoja/go-composite-mldsa/compositex509"
 
@@ -37,27 +38,29 @@ func checkCSR(der []byte, order *Order, account *Account, granted []Identifier) 
 	if err != nil {
 		return nil, NewProblem(ErrorBadCSR, "CSR could not be parsed")
 	}
-	if err := compositex509.CheckCertificateRequestSignature(csr); err != nil {
+	if err := checkCSRSignature(csr); err != nil {
 		return nil, NewProblem(ErrorBadCSR, "CSR signature is invalid")
 	}
-	// crypto/x509 leaves PublicKey nil for a composite ML-DSA key, so the key is parsed here.
-	key, err := compositex509.ParsePKIXPublicKey(csr.RawSubjectPublicKeyInfo)
+	key, err := parseCSRKey(csr.RawSubjectPublicKeyInfo)
 	if err != nil {
 		return nil, NewProblem(ErrorBadCSR, "CSR key could not be read")
 	}
 	if p := checkCSRKey(key); p != nil {
 		return nil, p
 	}
-	accountKey, err := x509.MarshalPKIXPublicKey(account.Key)
-	if err != nil {
-		return nil, NewProblem(ErrorServerInternal, "account key could not be read")
-	}
-	csrKey, err := compositex509.MarshalPKIXPublicKey(key)
-	if err != nil {
-		return nil, NewProblem(ErrorBadCSR, "CSR key could not be read")
-	}
-	if bytes.Equal(csrKey, accountKey) {
-		return nil, NewProblem(ErrorBadCSR, "CSR key must not be the account key")
+	// An account key signs JWS, which SLH-DSA cannot, so only other key types can be reused.
+	if _, isSLHDSA := key.(slhdsa.PublicKey); !isSLHDSA {
+		accountKey, err := x509.MarshalPKIXPublicKey(account.Key)
+		if err != nil {
+			return nil, NewProblem(ErrorServerInternal, "account key could not be read")
+		}
+		csrKey, err := compositex509.MarshalPKIXPublicKey(key)
+		if err != nil {
+			return nil, NewProblem(ErrorBadCSR, "CSR key could not be read")
+		}
+		if bytes.Equal(csrKey, accountKey) {
+			return nil, NewProblem(ErrorBadCSR, "CSR key must not be the account key")
+		}
 	}
 	if err := checkSANExtensions(csr.Extensions); err != nil {
 		return nil, NewProblem(ErrorBadCSR, "CSR requests unsupported subject alternative name types")
@@ -103,7 +106,7 @@ func checkCSRKey(key any) *Problem {
 		if k.Curve != elliptic.P256() && k.Curve != elliptic.P384() && k.Curve != elliptic.P521() {
 			return NewProblem(ErrorBadCSR, "CSR EC key uses an unsupported curve")
 		}
-	case ed25519.PublicKey, *mldsa.PublicKey, *compositemldsa.PublicKey:
+	case ed25519.PublicKey, *mldsa.PublicKey, *compositemldsa.PublicKey, slhdsa.PublicKey:
 	default:
 		return NewProblem(ErrorBadCSR, "CSR key type is not supported")
 	}

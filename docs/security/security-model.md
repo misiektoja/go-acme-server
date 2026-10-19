@@ -42,8 +42,8 @@ before the payload is read and a nonce is valid exactly once. `newAccount` requi
 key and every other resource requires a `kid`, as RFC 8555 section 6.2 demands.
 
 **Key policy.** Account keys must be ES256, ES384, ES512, RS256 or EdDSA keys and CSR keys must be
-RSA 2048 to 4096 bits, P-256, P-384, P-521, Ed25519, ML-DSA-44, ML-DSA-65, ML-DSA-87 or composite ML-DSA. The CSR key must differ from the account key. Issuer signatures in the returned chain may be
-composite ML-DSA. The server verifies both halves of a composite CSR signature.
+RSA 2048 to 4096 bits, P-256, P-384, P-521, Ed25519, ML-DSA-44, ML-DSA-65, ML-DSA-87, any SLH-DSA parameter set or composite ML-DSA. The CSR key must differ from the account key. Issuer signatures in the returned chain may be
+composite ML-DSA or SLH-DSA. The server verifies both halves of a composite signature and checks SLH-DSA CSR and chain signatures in pure mode only.
 
 **Authorization before issuance.** A certificate is issued only for an order whose every
 authorization is valid, whose CSR requests exactly the order's identifiers and whose CA basic
@@ -58,7 +58,7 @@ The rules are in [Challenge validators](../guide/validators.md).
 **Bounded parsing.** JSON is limited in size, nesting depth and duplicate members. Member names
 are exact, so a name that matches a known member only when case is ignored is refused. JWS, JWK, DNS
 responses, TLS handshakes and TLS-ALPN proofs are parsed with explicit limits. Those parsers
-have fuzz targets that CI runs.
+have fuzz targets that CI runs, as do the CSR and chain signature checks.
 
 **Publication checks.** A chain from the CA is served only if the leaf key, identifiers, validity,
 CA constraint and chain signatures match what was authorized. Anything else is retained for the

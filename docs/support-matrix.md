@@ -44,9 +44,9 @@ identifier has no usable challenge type is refused.
 | Account keys | RSA 2048 to 4096 bits, ECDSA P-256, P-384 and P-521, Ed25519 |
 | Account contacts | `mailto` with one bare address, at most ten contacts |
 
-CSR keys also accept ML-DSA-44, ML-DSA-65 and ML-DSA-87 and every composite ML-DSA key from draft-ietf-lamps-pq-composite-sigs-19 that [go-composite-mldsa](https://github.com/misiektoja/go-composite-mldsa) supports. The CSR key must differ from the account key. ML-DSA and composite account signatures and certificate-key revocation signatures are not supported. Revoke these certificates through an authorized classical account.
+CSR keys also accept ML-DSA-44, ML-DSA-65 and ML-DSA-87 and every composite ML-DSA key from draft-ietf-lamps-pq-composite-sigs-19 that [go-composite-mldsa](https://github.com/misiektoja/go-composite-mldsa) supports. They also accept SLH-DSA keys from [RFC 9909](https://www.rfc-editor.org/rfc/rfc9909.html) in all 12 FIPS 205 parameter sets, signed in pure mode with an empty context. The CSR key must differ from the account key. ML-DSA, SLH-DSA and composite account signatures and certificate-key revocation signatures are not supported. Revoke these certificates through an authorized classical account.
 
-Issuer chains may use composite ML-DSA signatures.
+Issuer chains may use composite ML-DSA signatures and SLH-DSA signatures in all 12 parameter sets, in pure mode with an empty context. A SHA2-256f or SHAKE-256f key, in the CSR or at the CA, needs a larger `MaxRequestBody`, as [Limits worth setting](guide/accounts-and-policy.md#limits-worth-setting) explains.
 
 ## Host interfaces
 

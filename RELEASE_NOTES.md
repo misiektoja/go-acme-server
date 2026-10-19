@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.7.0] - 19 Oct 2026
+
+This release adds **SLH-DSA keys** (FIPS 205, RFC 9909) for all twelve parameter sets. Clients can order certificates for SLH-DSA keys and revoke them through an authorized account. The host CA can sign with an SLH-DSA key and the server checks those signatures in the chain it returns. The CA must certify these keys from `CSR.RawSubjectPublicKeyInfo`. Hosts that accept or sign with the SHA2-256f or SHAKE-256f sets must raise `MaxRequestBody` to 128 KiB. It works with Certbot 5.8.0, lego v4.35.2 and Go crypto/acme v0.58.0. The library now depends on `github.com/cloudflare/circl` for SLH-DSA.
+
+### Protocol
+
+* **SLH-DSA certificate requests** from RFC 9909 are accepted in all 12 FIPS 205 parameter sets. The CSR must be signed in pure mode with an empty context and the key's own parameter set. HashSLH-DSA requests are refused with `badCSR`. Revoke these certificates through an authorized account.
+* **SLH-DSA issuer chains.** The host CA may sign with an SLH-DSA key in any of the 12 parameter sets. The server checks each such signature in the returned chain in pure mode with an empty context, together with the issuer's CA flag and certificate signing key usage.
+
+### Host integration
+
+* **`CSR.PublicKey` is nil for SLH-DSA keys.** Certify `CSR.RawSubjectPublicKeyInfo` unchanged.
+* **Set `MaxRequestBody` to 128 KiB for the SHA2-256f and SHAKE-256f sets.** A finalize request for such a key and a revocation request for a certificate such a CA signed are about 90 KB. The 64 KiB default refuses them with HTTP 413.
+* **Dependencies.** github.com/cloudflare/circl v1.6.5 checks SLH-DSA signatures. golang.org/x/crypto v0.58.0 is now a direct dependency and golang.org/x/sys v0.49.0 an indirect one.
+
+### Verification
+
+* **Certbot 5.8.0** obtains and revokes certificates for an SLH-DSA-SHA2-128s CSR and for an SLH-DSA-SHA2-192s CSR from an SLH-DSA-SHA2-192s CA.
+* **lego v4.35.2** and **Go crypto/acme v0.58.0** obtain and revoke certificates from SLH-DSA CAs, up to an SLH-DSA-SHAKE-256f key from an SLH-DSA-SHA2-256f CA.
+
 ## [0.6.0] - 16 Oct 2026
 
 Adds certificate profiles, 5G network function certificates and hooks that let the host pre-approve names, limit request rates and record refused requests. Failed validations are retried with their cause shown. Several RFC checks are stricter. Custom stores need an update.
