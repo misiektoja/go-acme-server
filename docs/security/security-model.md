@@ -58,7 +58,7 @@ The rules are in [Challenge validators](../guide/validators.md).
 **Bounded parsing.** JSON is limited in size, nesting depth and duplicate members. Member names
 are exact, so a name that matches a known member only when case is ignored is refused. JWS, JWK, DNS
 responses, TLS handshakes and TLS-ALPN proofs are parsed with explicit limits. Those parsers
-have fuzz targets that CI runs.
+have fuzz targets that CI runs, as do the CSR and chain signature checks.
 
 **Publication checks.** A chain from the CA is served only if the leaf key, identifiers, validity,
 CA constraint and chain signatures match what was authorized. Anything else is retained for the

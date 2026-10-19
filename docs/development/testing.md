@@ -23,9 +23,11 @@ make fuzz
 make fuzz FUZZ_TIME=2m
 ```
 
-Fuzzes the JWS, JWK, strict JSON, identifier, DNS response and TLS-ALPN proof parsers for
-`FUZZ_TIME` each. CI runs 30 seconds per target on every push. Go writes a failing input under the
-package's `testdata/fuzz` directory. Commit that input with the fix so it stays a regression test.
+Fuzzes the JWS, JWK, strict JSON, identifier, DNS response, TLS-ALPN proof and SLH-DSA public key
+parsers for `FUZZ_TIME` each. The CSR and chain signature checks are fuzzed the same way and their
+SLH-DSA verdicts are compared with a separate decoding of the same DER. CI runs 30 seconds per
+target on every push. Go writes a failing input under the package's `testdata/fuzz` directory.
+Commit that input with the fix so it stays a regression test.
 
 The target passes `-fuzzminimizetime 0`, so Go does not minimize inputs. Minimization stalls the
 workers for seconds at a time and a worker that is still busy when `FUZZ_TIME` expires makes Go
