@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.7.0] - TBD
+
+Certificate requests can carry SLH-DSA keys.
+
+### Protocol
+
+* **SLH-DSA certificate requests** from RFC 9909 are accepted in all 12 FIPS 205 parameter sets. The CSR must be signed in pure mode with an empty context and the key's own parameter set. HashSLH-DSA requests are refused with `badCSR`. Revoke these certificates through an authorized account. Chains signed with SLH-DSA are not supported.
+
+### Host integration
+
+* **`CSR.PublicKey` is nil for SLH-DSA keys.** Certify `CSR.RawSubjectPublicKeyInfo` unchanged.
+* **Dependencies.** github.com/cloudflare/circl v1.6.5 checks SLH-DSA signatures. golang.org/x/crypto v0.58.0 is now a direct dependency and golang.org/x/sys v0.49.0 an indirect one.
+
+### Verification
+
+* **Certbot 5.8.0** obtains and revokes a certificate for an SLH-DSA-SHA2-128s CSR.
+
 ## [0.6.0] - 16 Oct 2026
 
 Adds certificate profiles, 5G network function certificates and hooks that let the host pre-approve names, limit request rates and record refused requests. Failed validations are retried with their cause shown. Several RFC checks are stricter. Custom stores need an update.
