@@ -23,7 +23,7 @@ The result is an `http.Handler` you mount behind your HTTPS origin and a worker 
 Standard ACME clients such as Certbot, lego, acmez and cert-manager then obtain certificates from your CA.
 
 Certificates can carry **post-quantum ML-DSA** keys, **SLH-DSA** keys or **composite ML-DSA** keys,
-which pair ML-DSA with a classical algorithm. Your CA can also sign with a composite ML-DSA key. The [support matrix](support-matrix.md) lists
+which pair ML-DSA with a classical algorithm. Your CA can also sign with a composite ML-DSA or SLH-DSA key. The [support matrix](support-matrix.md) lists
 what is covered.
 
 ## Install
