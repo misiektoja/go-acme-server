@@ -24,6 +24,12 @@ roots picks one chain in its `Issuer` and clients cannot ask for another.
 `onion` or device identifiers are not implemented. Unknown identifier types are refused with
 `unsupportedIdentifier` and unknown directory or order members are ignored.
 
+### SLH-DSA issuer signatures are refused
+
+Certificate requests may carry SLH-DSA keys, but every certificate in the returned chain must be
+signed with a classical, ML-DSA or composite ML-DSA key. A chain with an SLH-DSA signature fails the
+chain check and the order does not become valid.
+
 ### Contacts are mailto only
 
 An account contact must be a single `mailto` address without parameters. Other schemes are refused

@@ -10,7 +10,7 @@ and its versions are separate from the library. `make test-interop` is a release
 | Client | Version | Scenarios |
 | --- | --- | --- |
 | [acmez](https://github.com/mholt/acmez) | v3.1.7 | HTTP-01, DNS-01 with a wildcard and its base name, TLS-ALPN-01, an IP identifier next to a DNS name, renewal information and `replaces` |
-| [Certbot](https://certbot.eff.org/) | 5.8.0 | Standalone HTTP-01, manual DNS-01 for a wildcard pair, revocation through the account, waiting out a pending order, a composite ML-DSA CSR, `--required-profile` and a `--preferred-profile` the directory does not list |
+| [Certbot](https://certbot.eff.org/) | 5.8.0 | Standalone HTTP-01, manual DNS-01 for a wildcard pair, revocation through the account, waiting out a pending order, a composite ML-DSA CSR, an SLH-DSA-SHA2-128s CSR, `--required-profile` and a `--preferred-profile` the directory does not list |
 | [lego](https://go-acme.github.io/lego/) | v4.35.2 | HTTP-01, DNS-01 for a wildcard pair, TLS-ALPN-01, revocation with a reason code and `alreadyRevoked` on repeat, renewal information and `replaces`, waiting out a pending order, a composite ML-DSA issuer, a requested profile, the default profile and `invalidProfile` |
 | Go [crypto/acme](https://pkg.go.dev/golang.org/x/crypto/acme) | v0.58.0 | Contact update, key rollover, HTTP-01, ML-DSA-44/65/87 and composite ML-DSA certificate requests with account-authorized revocation, classical certificate-key revocation, composite ML-DSA issuers and account deactivation |
 | [go-jose](https://github.com/go-jose/go-jose) raw client | v4.1.5 | Every signature algorithm, thumbprint cross-check, key change, external account binding, refused signatures, `tkauth-01`, repeated and concurrent requests |
