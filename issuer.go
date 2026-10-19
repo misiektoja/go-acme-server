@@ -16,7 +16,8 @@ type IssueRequest struct {
 	// The parsed certificate request and its DER encoding. The signature and the identifier
 	// set were already checked against the order. CSR.PublicKey is nil for a composite ML-DSA
 	// key. Read that key with compositex509.ParsePKIXPublicKey from CSR.RawSubjectPublicKeyInfo
-	// and certify it with compositex509.CreateCertificate.
+	// and certify it with compositex509.CreateCertificate. CSR.PublicKey is also nil for an
+	// SLH-DSA key (RFC 9909), which the issuer certifies with RawSubjectPublicKeyInfo unchanged.
 	CSR    *x509.CertificateRequest
 	CSRDER []byte
 	// The normalized identifiers the order covers.
