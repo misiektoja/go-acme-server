@@ -52,3 +52,39 @@ func checkCSRSignature(csr *x509.CertificateRequest) error {
 	}
 	return nil
 }
+
+// Checks that parent signed cert. A parent with an SLH-DSA key must sign in pure mode with an empty
+// context. Other signatures go to compositex509, which passes classical ones to crypto/x509.
+func checkSignatureFrom(cert, parent *x509.Certificate) error {
+	key, isSLHDSA, err := slhdsaspki.Parse(parent.RawSubjectPublicKeyInfo)
+	if err != nil {
+		return err
+	}
+	if !isSLHDSA {
+		return compositex509.CheckSignatureFrom(cert, parent)
+	}
+	// The basic constraints and key usage rules of RFC 5280 that crypto/x509 applies to every issuer.
+	if parent.Version == 3 && !parent.BasicConstraintsValid || parent.BasicConstraintsValid && !parent.IsCA {
+		return x509.ConstraintViolationError{}
+	}
+	if parent.KeyUsage != 0 && parent.KeyUsage&x509.KeyUsageCertSign == 0 {
+		return x509.ConstraintViolationError{}
+	}
+	s := cryptobyte.String(cert.Raw)
+	var signed cryptobyte.String
+	if !s.ReadASN1(&signed, cbasn1.SEQUENCE) || !signed.SkipASN1(cbasn1.SEQUENCE) {
+		return errors.New("malformed certificate")
+	}
+	oid, absent, ok := slhdsaspki.ReadAlgorithm(&signed)
+	id, isSLHDSASignature := slhdsaspki.FromOID(oid)
+	if !ok || !isSLHDSASignature || id != key.ID {
+		return errors.New("certificate is not signed with the SLH-DSA key of its issuer")
+	}
+	if !absent {
+		return errors.New("SLH-DSA signature parameters must be absent")
+	}
+	if !slhdsa.Verify(&key, slhdsa.NewMessage(cert.RawTBSCertificate), cert.Signature, nil) {
+		return errors.New("SLH-DSA signature verification failed")
+	}
+	return nil
+}

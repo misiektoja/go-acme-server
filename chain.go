@@ -9,8 +9,6 @@ import (
 	"net/netip"
 	"slices"
 	"time"
-
-	"github.com/misiektoja/go-composite-mldsa/compositex509"
 )
 
 // Rejects SAN forms that no identifier covers: anything but DNS names, URIs and IP addresses.
@@ -178,10 +176,10 @@ func checkChain(chain [][]byte, csr *x509.CertificateRequest, order *Order, now 
 	if err := checkLeafCACertificate(leaf, csr, order); err != nil {
 		return nil, err
 	}
-	// crypto/x509 cannot check composite ML-DSA signatures, so each link goes through a checker
-	// that handles them and passes every other signature to crypto/x509.
+	// crypto/x509 cannot check SLH-DSA or composite ML-DSA signatures, so each link goes through a
+	// checker that handles them and passes every other signature to crypto/x509.
 	for i := 0; i+1 < len(certs); i++ {
-		if err := compositex509.CheckSignatureFrom(certs[i], certs[i+1]); err != nil {
+		if err := checkSignatureFrom(certs[i], certs[i+1]); err != nil {
 			return nil, fmt.Errorf("chain element %d is not signed by element %d: %w", i, i+1, err)
 		}
 	}
