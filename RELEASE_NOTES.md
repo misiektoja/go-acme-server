@@ -2,9 +2,9 @@
 
 All notable changes to this project are documented in this file.
 
-## [0.7.0] - TBD
+## [0.7.0] - 19 Oct 2026
 
-Certificate requests can carry SLH-DSA keys and the host CA can sign with one.
+This release adds **SLH-DSA keys** (FIPS 205, RFC 9909) for all twelve parameter sets. Clients can order certificates for SLH-DSA keys and revoke them through an authorized account. The host CA can sign with an SLH-DSA key and the server checks those signatures in the chain it returns. The CA must certify these keys from `CSR.RawSubjectPublicKeyInfo`. Hosts that accept or sign with the SHA2-256f or SHAKE-256f sets must raise `MaxRequestBody` to 128 KiB. It works with Certbot 5.8.0, lego v4.35.2 and Go crypto/acme v0.58.0. The library now depends on `github.com/cloudflare/circl` for SLH-DSA.
 
 ### Protocol
 
