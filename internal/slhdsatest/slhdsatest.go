@@ -39,7 +39,7 @@ func CreateCertificateRequest(template *x509.CertificateRequest, key slhdsa.Priv
 		return nil, err
 	}
 	// version and subject come before subjectPKInfo.
-	info, err := replaceSPKI(laid.RawTBSCertificateRequest, 2, spki)
+	info, err := replaceField(laid.RawTBSCertificateRequest, 2, spki)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func CreateCertificate(template, parent *x509.Certificate, spki []byte, issuerKe
 		return nil, errors.New("issuer key must be an ECDSA P-256 key")
 	}
 	// version [0], serialNumber, signature, issuer, validity and subject come first.
-	tbs, err := replaceSPKI(laid.RawTBSCertificate, 6, spki)
+	tbs, err := replaceField(laid.RawTBSCertificate, 6, spki)
 	if err != nil {
 		return nil, err
 	}
@@ -101,9 +101,57 @@ func CreateCertificate(template, parent *x509.Certificate, spki []byte, issuerKe
 	return b.Bytes()
 }
 
-// Returns a signed structure's to-be-signed part with the SubjectPublicKeyInfo that follows its
-// first before fields replaced by spki.
-func replaceSPKI(tbs []byte, before int, spki []byte) ([]byte, error) {
+// Works like CreateCertificate but signs with the SLH-DSA key issuer in pure mode with an empty
+// context. A self-signed certificate passes its template as parent.
+func CreateCertificateSignedBy(template, parent *x509.Certificate, spki []byte, issuer slhdsa.PrivateKey) ([]byte, error) {
+	oid, ok := slhdsaspki.OID(issuer.ID)
+	if !ok {
+		return nil, errors.New("unknown SLH-DSA parameter set")
+	}
+	placeholder, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, parent, &placeholder.PublicKey, placeholder)
+	if err != nil {
+		return nil, err
+	}
+	laid, err := x509.ParseCertificate(der)
+	if err != nil {
+		return nil, err
+	}
+	var alg cryptobyte.Builder
+	alg.AddASN1(cbasn1.SEQUENCE, func(b *cryptobyte.Builder) {
+		b.AddASN1ObjectIdentifier(oid)
+	})
+	algorithm, err := alg.Bytes()
+	if err != nil {
+		return nil, err
+	}
+	// version [0] and serialNumber come before the signature algorithm.
+	tbs, err := replaceField(laid.RawTBSCertificate, 2, algorithm)
+	if err != nil {
+		return nil, err
+	}
+	if tbs, err = replaceField(tbs, 6, spki); err != nil {
+		return nil, err
+	}
+	signature, err := issuer.Sign(rand.Reader, tbs, crypto.Hash(0))
+	if err != nil {
+		return nil, err
+	}
+	var b cryptobyte.Builder
+	b.AddASN1(cbasn1.SEQUENCE, func(b *cryptobyte.Builder) {
+		b.AddBytes(tbs)
+		b.AddBytes(algorithm)
+		b.AddASN1BitString(signature)
+	})
+	return b.Bytes()
+}
+
+// Returns a signed structure's to-be-signed part with the field that follows its first before
+// fields replaced by value.
+func replaceField(tbs []byte, before int, value []byte) ([]byte, error) {
 	s := cryptobyte.String(tbs)
 	var fields cryptobyte.String
 	if !s.ReadASN1(&fields, cbasn1.SEQUENCE) {
@@ -121,11 +169,13 @@ func replaceSPKI(tbs []byte, before int, spki []byte) ([]byte, error) {
 			}
 			b.AddBytes(field)
 		}
-		if !fields.SkipASN1(cbasn1.SEQUENCE) {
-			err = errors.New("missing subjectPublicKeyInfo")
+		var skipped cryptobyte.String
+		var tag cbasn1.Tag
+		if !fields.ReadAnyASN1Element(&skipped, &tag) {
+			err = errors.New("missing field to replace")
 			return
 		}
-		b.AddBytes(spki)
+		b.AddBytes(value)
 		b.AddBytes(fields)
 	})
 	if err != nil {
