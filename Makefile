@@ -73,7 +73,8 @@ FUZZ_TIME ?= 20s
 FUZZ_MINIMIZE_TIME ?= 0
 FUZZ_TARGETS := ./internal/jws:FuzzParse ./internal/jws:FuzzParseProfiles ./internal/jws:FuzzParseCompact \
 	./internal/jws:FuzzParseJWK ./internal/jws:FuzzUnmarshalStrict ./internal/jws:FuzzUnmarshalStrictMemberNames \
-	.:FuzzIdentifierNormalize ./challenge:FuzzDNSResponse ./challenge:FuzzALPNProof
+	.:FuzzIdentifierNormalize ./challenge:FuzzDNSResponse ./challenge:FuzzALPNProof \
+	.:FuzzCheckCSR .:FuzzCheckChain ./internal/slhdsaspki:FuzzParse
 
 .PHONY: fuzz
 fuzz: ## Fuzz every parsing target for FUZZ_TIME each. Failing inputs are saved under testdata.
