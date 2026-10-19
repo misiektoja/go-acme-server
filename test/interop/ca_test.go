@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cloudflare/circl/sign/slhdsa"
 	compositemldsa "github.com/misiektoja/go-composite-mldsa"
 	"github.com/misiektoja/go-composite-mldsa/compositex509"
 
@@ -36,7 +37,7 @@ import (
 type durableCA struct {
 	key  *ecdsa.PrivateKey
 	root *x509.Certificate
-	// Signs issued certificates. It is the root unless a composite issuer was created.
+	// Signs issued certificates. It is the root unless a composite ML-DSA or SLH-DSA issuer was created.
 	issuer    *x509.Certificate
 	issuerKey crypto.Signer
 	db        *sql.DB
@@ -110,31 +111,71 @@ func createCompositeIssuer(t *testing.T, directory string, alg compositemldsa.Al
 	writePrivate(t, filepath.Join(directory, "issuer-cert.der"), der)
 }
 
-// Loads the composite issuing CA when one was created and otherwise issues from the root.
+// Generates a self-signed SLH-DSA issuing CA next to the classical HTTPS root.
+func createSLHDSAIssuer(t *testing.T, directory string, id slhdsa.ID) {
+	t.Helper()
+	public, key, err := slhdsa.GenerateKey(rand.Reader, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spki, err := slhdsaspki.Marshal(public)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().Truncate(time.Second)
+	issuer := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "ACME interoperability SLH-DSA issuer"},
+		NotBefore: now.Add(-time.Hour), NotAfter: now.Add(24 * time.Hour), IsCA: true, BasicConstraintsValid: true,
+		KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageCRLSign}
+	der, err := slhdsatest.CreateCertificateSignedBy(issuer, issuer, spki, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyBytes, err := key.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	writePrivate(t, filepath.Join(directory, "issuer-key.slhdsa"), keyBytes)
+	writePrivate(t, filepath.Join(directory, "issuer-cert.der"), der)
+}
+
+// Loads the composite ML-DSA or SLH-DSA issuing CA when one was created and otherwise issues from
+// the root.
 func openIssuer(t *testing.T, directory string, ca *durableCA) {
 	t.Helper()
 	ca.issuer, ca.issuerKey = ca.root, ca.key
-	keyDER, err := os.ReadFile(filepath.Join(directory, "issuer-key.p8"))
+	der, err := os.ReadFile(filepath.Join(directory, "issuer-cert.der"))
 	if errors.Is(err, os.ErrNotExist) {
 		return
 	}
 	if err != nil {
 		t.Fatal(err)
 	}
-	key, err := compositex509.ParsePKCS8PrivateKey(keyDER)
+	if ca.issuer, err = x509.ParseCertificate(der); err != nil {
+		t.Fatal(err)
+	}
+	// The SLH-DSA private key encoding does not name its parameter set, so the certificate does.
+	public, isSLHDSA, err := slhdsaspki.Parse(ca.issuer.RawSubjectPublicKeyInfo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if isSLHDSA {
+		key := slhdsa.PrivateKey{ID: public.ID}
+		if err := key.UnmarshalBinary(readFile(t, filepath.Join(directory, "issuer-key.slhdsa"))); err != nil {
+			t.Fatal(err)
+		}
+		if !key.PublicKey().Equal(public) {
+			t.Fatal("SLH-DSA issuer key does not match its certificate")
+		}
+		ca.issuerKey = key
+		return
+	}
+	key, err := compositex509.ParsePKCS8PrivateKey(readFile(t, filepath.Join(directory, "issuer-key.p8")))
 	if err != nil {
 		t.Fatal(err)
 	}
 	signer, ok := key.(crypto.Signer)
 	if !ok {
 		t.Fatalf("issuer key %T cannot sign", key)
-	}
-	der, err := os.ReadFile(filepath.Join(directory, "issuer-cert.der"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if ca.issuer, err = x509.ParseCertificate(der); err != nil {
-		t.Fatal(err)
 	}
 	ca.issuerKey = signer
 }
@@ -288,6 +329,10 @@ func (ca *durableCA) sign(req acmeserver.IssueRequest) ([]byte, error) {
 		default:
 			return nil, errors.New("unsupported identifier type " + string(id.Type))
 		}
+	}
+	// An SLH-DSA issuer signs any subject key, which is copied from the CSR unchanged.
+	if key, ok := ca.issuerKey.(slhdsa.PrivateKey); ok {
+		return slhdsatest.CreateCertificateSignedBy(leaf, ca.issuer, req.CSR.RawSubjectPublicKeyInfo, key)
 	}
 	// crypto/x509 leaves CSR.PublicKey nil for composite ML-DSA and SLH-DSA keys.
 	if _, isSLHDSA, err := slhdsaspki.Parse(req.CSR.RawSubjectPublicKeyInfo); isSLHDSA || err != nil {
