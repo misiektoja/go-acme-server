@@ -28,6 +28,8 @@ import (
 	"github.com/misiektoja/go-composite-mldsa/compositex509"
 
 	acmeserver "github.com/misiektoja/go-acme-server"
+	"github.com/misiektoja/go-acme-server/internal/slhdsaspki"
+	"github.com/misiektoja/go-acme-server/internal/slhdsatest"
 )
 
 // Keeps signing keys and idempotent issuance results across worker process deaths.
@@ -287,7 +289,13 @@ func (ca *durableCA) sign(req acmeserver.IssueRequest) ([]byte, error) {
 			return nil, errors.New("unsupported identifier type " + string(id.Type))
 		}
 	}
-	// crypto/x509 leaves CSR.PublicKey nil for a composite ML-DSA key.
+	// crypto/x509 leaves CSR.PublicKey nil for composite ML-DSA and SLH-DSA keys.
+	if _, isSLHDSA, err := slhdsaspki.Parse(req.CSR.RawSubjectPublicKeyInfo); isSLHDSA || err != nil {
+		if err != nil {
+			return nil, err
+		}
+		return slhdsatest.CreateCertificate(leaf, ca.issuer, req.CSR.RawSubjectPublicKeyInfo, ca.issuerKey)
+	}
 	key, err := compositex509.ParsePKIXPublicKey(req.CSR.RawSubjectPublicKeyInfo)
 	if err != nil {
 		return nil, err

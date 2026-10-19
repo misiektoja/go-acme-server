@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cloudflare/circl/sign/slhdsa"
 	"github.com/mholt/acmez/v3"
 	"github.com/mholt/acmez/v3/acme"
 	compositemldsa "github.com/misiektoja/go-composite-mldsa"
@@ -35,6 +36,7 @@ import (
 
 	acmeserver "github.com/misiektoja/go-acme-server"
 	"github.com/misiektoja/go-acme-server/challenge"
+	"github.com/misiektoja/go-acme-server/internal/slhdsaspki"
 	"github.com/misiektoja/go-acme-server/nonce"
 	"github.com/misiektoja/go-acme-server/test/interop/sqlitestore"
 	"github.com/misiektoja/go-acme-server/test/interop/testutil"
@@ -350,7 +352,12 @@ func (h *harness) verifyLeaf(t *testing.T, chainPEM []byte, key crypto.PublicKey
 	if issuer == nil || len(bytes.TrimSpace(trailing)) != 0 || !bytes.Equal(issuer.Bytes, h.ca.issuer.Raw) {
 		t.Fatal("unexpected chain")
 	}
-	publicKey, err := compositex509.MarshalPKIXPublicKey(key)
+	var publicKey []byte
+	if slhKey, isSLHDSA := key.(slhdsa.PublicKey); isSLHDSA {
+		publicKey, err = slhdsaspki.Marshal(slhKey)
+	} else {
+		publicKey, err = compositex509.MarshalPKIXPublicKey(key)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -563,6 +570,17 @@ func mustCSR(t *testing.T, der []byte) *x509.CertificateRequest {
 	csr, err := x509.ParseCertificateRequest(der)
 	if err != nil {
 		t.Fatal(err)
+	}
+	// crypto/x509 and compositex509 cannot check SLH-DSA, so its pure signature is checked here.
+	key, isSLHDSA, err := slhdsaspki.Parse(csr.RawSubjectPublicKeyInfo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if isSLHDSA {
+		if !slhdsa.Verify(&key, slhdsa.NewMessage(csr.RawTBSCertificateRequest), csr.Signature, nil) {
+			t.Fatal("SLH-DSA CSR signature verification failed")
+		}
+		return csr
 	}
 	if err := compositex509.CheckCertificateRequestSignature(csr); err != nil {
 		t.Fatal(err)

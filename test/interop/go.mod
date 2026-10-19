@@ -3,6 +3,7 @@ module github.com/misiektoja/go-acme-server/test/interop
 go 1.27.2
 
 require (
+	github.com/cloudflare/circl v1.6.5
 	github.com/go-acme/lego/v4 v4.35.2
 	github.com/go-jose/go-jose/v4 v4.1.5
 	github.com/mholt/acmez/v3 v3.1.7
