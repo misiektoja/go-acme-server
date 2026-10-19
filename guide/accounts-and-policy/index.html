@@ -1767,7 +1767,7 @@ by key thumbprint.</p>
 <tr>
 <td><code>MaxRequestBody</code></td>
 <td>64 KiB</td>
-<td>Raise only if a policy accepts unusually large CSRs</td>
+<td>Set 128 KiB when CSR keys or the CA use SLH-DSA SHA2-256f or SHAKE-256f. Otherwise raise only if a policy accepts unusually large CSRs</td>
 </tr>
 </tbody>
 </table>
