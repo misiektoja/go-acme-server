@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented in this file.
 
-## [0.8.0] - TBD
+## [0.8.0] - 26 Oct 2026
 
 This release stops one account from monopolizing the validation workers and closes two ways for anonymous clients to spend server resources without a limit. **`Config.MaxPendingValidations`** bounds the validations an account may have waiting or running. The `Limiter` is asked about **challenge responses**, **renewal information lookups** and the nonces that **error answers** hand out. **`Ready`** no longer fails because clients keep the workers busy. Custom stores need two new counting methods. The module now requires Go 1.27.3.
 
