@@ -65,4 +65,5 @@ verification takes `--bundle` and the provenance file.
 The documentation workflow publishes this site from the default branch to GitHub Pages whenever
 `docs/` or `mkdocs.yml` changes there. Pull requests and pushes to `dev` run the strict build
 without publishing. The site therefore always describes `main`, which is the latest release plus
-any fixes merged since.
+any fixes merged since. The build job runs with read access and passes the rendered site to the
+publish job as an artifact, so only git runs with the token that writes `gh-pages`.
