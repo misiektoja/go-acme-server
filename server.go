@@ -269,6 +269,7 @@ func (c WorkerConfig) withDefaults() (WorkerConfig, error) {
 
 // Routes a request to the resource named by its path.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	r = r.WithContext(context.WithValue(r.Context(), requestStateKey{}, &requestState{client: clientAddr(r)}))
 	rel, ok := strings.CutPrefix(r.URL.Path, s.basePath)
 	if !ok {
 		s.writeProblem(r.Context(), w, notFound())
@@ -440,8 +441,9 @@ func (s *Server) serveNewNonce(w http.ResponseWriter, r *http.Request) {
 	}
 	nonce, err := s.nonces.Issue(r.Context())
 	if err != nil {
+		// The manager just failed, so the answer does not try for a second nonce.
 		s.logError(r.Context(), "nonce issuance failed", err)
-		s.writeProblem(r.Context(), w, NewProblem(ErrorServerInternal, "nonce issuance failed"))
+		s.writeProblemWithoutNonce(w, NewProblem(ErrorServerInternal, "nonce issuance failed"))
 		return
 	}
 	s.setCommonHeaders(w)
@@ -459,13 +461,26 @@ func (s *Server) writeMethodNotAllowed(ctx context.Context, w http.ResponseWrite
 	s.writeProblem(ctx, w, NewProblem(ErrorMalformed, "method not allowed").WithStatus(http.StatusMethodNotAllowed))
 }
 
-// Writes a problem document with a fresh nonce and the index link.
+// Writes a problem document with the index link and a fresh nonce. A request that spent no
+// nonce, such as one for an unknown resource or with an unparsable JWS, gets the nonce only when
+// the Limiter allows a newNonce for the client, so error answers cannot hand out nonces without
+// bound. A refused badNonce answer becomes the Limiter's problem, because RFC 8555 section 6.5
+// requires a nonce on every badNonce answer.
 func (s *Server) writeProblem(ctx context.Context, w http.ResponseWriter, p *Problem) {
+	if st := requestStateFrom(ctx); st != nil && !st.nonceSpent {
+		if refusal := s.checkLimit(ctx, LimitRequest{Kind: LimitNewNonce, Client: st.client}); refusal != nil {
+			if p.Type == ErrorBadNonce {
+				p = refusal
+			}
+			s.writeProblemWithoutNonce(w, p)
+			return
+		}
+	}
 	s.addNonce(ctx, w)
 	s.writeProblemWithoutNonce(w, p)
 }
 
-// Writes a problem document with the index link and no nonce, for a refused newNonce request.
+// Writes a problem document with the index link and no nonce, for a request the Limiter refused.
 func (s *Server) writeProblemWithoutNonce(w http.ResponseWriter, p *Problem) {
 	s.setCommonHeaders(w)
 	if p.RetryAfter > 0 {

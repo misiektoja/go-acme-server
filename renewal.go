@@ -103,6 +103,11 @@ func (s *Server) serveRenewalInfo(w http.ResponseWriter, r *http.Request, id str
 		s.writeProblem(ctx, w, notFound())
 		return
 	}
+	// A refused client gets no nonce either, so the Limiter is asked once per request.
+	if p := s.checkLimit(ctx, LimitRequest{Kind: LimitRenewalInfo, Client: clientAddr(r)}); p != nil {
+		s.writeProblemWithoutNonce(w, p)
+		return
+	}
 	cert, err := s.store.CertificateByRenewalID(ctx, id)
 	if err != nil {
 		s.writeProblem(ctx, w, s.storeProblem(ctx, err, "certificate"))
