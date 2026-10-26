@@ -39,9 +39,10 @@ updates:
         patterns:
           - "*"
 
-  # The documentation toolchain is pinned in docs/requirements.txt and the site build runs with
-  # --strict, so a MkDocs or theme release that changes a warning into an error breaks the build. That
-  # is worth learning from a pull request rather than from the first push after a release.
+  # The documentation toolchain is pinned in docs/requirements.in and compiled with hashes into
+  # docs/requirements.txt. The site build runs with --strict, so a MkDocs or theme release that
+  # changes a warning into an error breaks the build. That is worth learning from a pull request
+  # rather than from the first push after a release.
   - package-ecosystem: pip
     directory: "/docs"
     target-branch: dev
