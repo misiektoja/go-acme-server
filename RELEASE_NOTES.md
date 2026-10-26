@@ -4,16 +4,19 @@ All notable changes to this project are documented in this file.
 
 ## [0.8.0] - TBD
 
-This release stops one account from monopolizing the validation workers. **`Config.MaxPendingValidations`** bounds the validations an account may have waiting or running, the `Limiter` is asked about **challenge responses** and **`Ready`** no longer fails because clients keep the workers busy. Custom stores need two new counting methods. The module now requires Go 1.27.3.
+This release stops one account from monopolizing the validation workers and closes two ways for anonymous clients to spend server resources without a limit. **`Config.MaxPendingValidations`** bounds the validations an account may have waiting or running. The `Limiter` is asked about **challenge responses**, **renewal information lookups** and the nonces that **error answers** hand out. **`Ready`** no longer fails because clients keep the workers busy. Custom stores need two new counting methods. The module now requires Go 1.27.3.
 
 ### Protocol
 
+* **Error answers hand out nonces within the `newNonce` limit.** An answer to a request that spent no valid nonce, such as one for an unknown resource, with a wrong method, an unparsable JWS or a bad nonce, asks the `Limiter` about `newNonce` first and carries no nonce when refused. A refused `badNonce` answer becomes the limiter's problem, because RFC 8555 requires a nonce on every `badNonce` answer. Earlier versions put a nonce on every error answer, so a client refused at `newNonce` could still collect nonces from error answers and push other clients' nonces out of the nonce manager.
+* **External account binding key identifiers are at most 256 bytes.** A longer `kid` is refused with `malformed` before the host is asked for its key.
 * **Challenge responses are bounded per account.** A response is refused with `rateLimited` and a `Retry-After` of `WorkerConfig.TaskTimeout` once the account has `MaxPendingValidations` validations waiting or running, `MaxIdentifiers` by default. The challenge stays `pending`, so the client can respond again later. Earlier versions accepted any number of responses. An account whose names pointed at destinations that never answered could delay every other account's validations for as long as it kept responding.
 
 ### Host integration
 
 * **`Config.MaxPendingValidations`** sets the bound. Zero selects `MaxIdentifiers`, which lets one full order validate at once.
 * **`LimitChallengeResponse`** is a new `Limiter` kind, asked before a validation is enqueued with the account, the identifier of the authorization and the account's `PendingValidations`. A limiter that allows unknown kinds keeps working unchanged.
+* **`LimitRenewalInfo`** is a new `Limiter` kind, asked with the client address before a `renewalInfo` certificate lookup. A refused request gets the limiter's problem and no nonce. Earlier versions looked up every well-formed identifier without asking.
 * **`Ready` passes while any task is leased.** It fails only when work has waited longer than `StaleAfter` and no worker holds a lease, so a deep queue behind busy workers no longer trips readiness probes. A worker that died holding leases is reported once they expire, at most `WorkerConfig.Lease` later.
 * **Stores gain `LeasedTasks` and `AccountValidations`.** The first counts tasks under a lease, the second the unfinished validation tasks of an account. `storetest` checks both, so run it again. The SQLite example store indexes tasks by account and kind.
 * **Go 1.27.3** is the minimum, which carries the crypto/x509 fix for GO-2026-6809.
