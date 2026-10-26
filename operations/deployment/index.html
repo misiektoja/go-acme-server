@@ -1634,13 +1634,17 @@ must be valid exactly once. Check a shared manager with <code>noncetest.Run</cod
 <p><strong>Store connections.</strong> Every replica needs its own connection to the same database. The store
 contract already handles concurrency.</p>
 <h2 id="health-checks">Health checks<a class="headerlink" href="#health-checks" title="Permanent link">&para;</a></h2>
-<p><code>Server.Ready</code> reports whether accepted work is being claimed. Wire it into a readiness probe:</p>
+<p><code>Server.Ready</code> reports whether accepted work is being claimed. It fails when tasks have waited
+longer than <code>WorkerConfig.StaleAfter</code> while no task is leased. Busy workers hold leases, so a deep
+queue passes and clients cannot fail the probe by starting many validations. A worker that died
+holding leases is reported once they expire, at most <code>WorkerConfig.Lease</code> later. Wire it into a
+readiness probe:</p>
 <ul>
 <li>In a single-process layout, a failing <code>Ready</code> means the worker is stuck or dead. Restart the process.</li>
 <li>In a split layout, <code>Ready</code> in a handler process reports the state of the workers. Route the alert accordingly rather than restarting the handler.</li>
 </ul>
 <p><code>WorkerConfig.StaleAfter</code> decides how long a task may wait before <code>Ready</code> fails, one minute by
-default. Set it above the longest expected queue delay under load.</p>
+default.</p>
 <p>The directory endpoint is a cheap liveness check for the HTTP path. It needs no signature and
 touches no store.</p>
 <h2 id="timeouts">Timeouts<a class="headerlink" href="#timeouts" title="Permanent link">&para;</a></h2>

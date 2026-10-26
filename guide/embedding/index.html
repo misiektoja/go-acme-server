@@ -1690,10 +1690,11 @@ and the staleness threshold. The defaults are listed in
 <span class="p">})</span>
 </code></pre></div>
 <p><code>Ready</code> counts tasks that have waited longer than <code>WorkerConfig.StaleAfter</code> without being claimed.
-It returns an error when there are any, which means no worker is picking up work. It reports the
-state of the store, so it is correct in the handler process even when the worker runs elsewhere.
-Wire it into the readiness or liveness probe of whichever process should be restarted when work
-stalls.</p>
+It returns an error when there are any and no task is leased, which means no worker is picking up
+work. A queue that is deep because workers are busy passes, so client load cannot fail the probe.
+It reports the state of the store, so it is correct in the handler process even when the worker
+runs elsewhere. Wire it into the readiness or liveness probe of whichever process should be
+restarted when work stalls.</p>
 <h2 id="logging">Logging<a class="headerlink" href="#logging" title="Permanent link">&para;</a></h2>
 <p><code>Config.Logger</code> takes a <code>*slog.Logger</code>. Without one, nothing is logged. The server logs failed
 store, validator and CA calls at error level with the resource and operation IDs involved, and

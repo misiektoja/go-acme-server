@@ -1661,7 +1661,7 @@ database.</p>
 </tr>
 <tr>
 <td><code>WorkStore</code></td>
-<td><code>AcceptChallenge</code>, <code>FinalizeOrder</code>, <code>BeginIssuance</code>, <code>ClaimTask</code>, <code>RescheduleTask</code>, <code>RetryValidation</code>, <code>FinishTask</code>, <code>CompleteValidation</code>, <code>CompleteIssuance</code>, <code>PendingTasks</code></td>
+<td><code>AcceptChallenge</code>, <code>FinalizeOrder</code>, <code>BeginIssuance</code>, <code>ClaimTask</code>, <code>RescheduleTask</code>, <code>RetryValidation</code>, <code>FinishTask</code>, <code>CompleteValidation</code>, <code>CompleteIssuance</code>, <code>PendingTasks</code>, <code>LeasedTasks</code>, <code>AccountValidations</code></td>
 <td>Combines resource updates with task changes in one transaction</td>
 </tr>
 </tbody>
@@ -1691,7 +1691,10 @@ fence, returning <code>ErrRevisionMismatch</code> when another claim superseded 
 that lost its lease from committing a stale result.</p>
 <p><code>RescheduleTask</code> releases the lease and stores the new <code>RunAt</code>. <code>FinishTask</code> removes the task
 without touching any resource. <code>PendingTasks</code> counts tasks that were runnable at or before a time
-and hold no lease past it, which <code>Ready</code> uses to detect that no worker is active.</p>
+and hold no lease past it. <code>LeasedTasks</code> counts tasks whose lease ends after a time. <code>Ready</code> reads
+both to tell a dead worker from a busy one. <code>AccountValidations</code> counts the validation
+tasks of one account that have not finished, leased or not, which bounds the validations an
+account may start. Index tasks by account and kind for it.</p>
 <h2 id="composite-operations">Composite operations<a class="headerlink" href="#composite-operations" title="Permanent link">&para;</a></h2>
 <table>
 <thead>

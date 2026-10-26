@@ -1596,7 +1596,7 @@ revocation if the host deduplicates as the contract requires.</p>
 </tr>
 <tr>
 <td>Rate limits and abuse controls</td>
-<td>A <code>Limiter</code> for nonces, new accounts and new orders, plus <code>Policy</code> and <code>IssuancePolicy</code>. The library has no built-in limits</td>
+<td>A <code>Limiter</code> for nonces, new accounts, new orders, challenge responses and renewal information lookups, plus <code>Policy</code> and <code>IssuancePolicy</code>. The only built-in limit is <code>MaxPendingValidations</code> per account</td>
 </tr>
 <tr>
 <td>CAA and name policy</td>
@@ -1651,7 +1651,15 @@ revocation if the host deduplicates as the contract requires.</p>
 </tr>
 <tr>
 <td>Resource exhaustion through requests</td>
-<td>Body size, JSON depth, identifier count, contact count and DNS or TLS read limits. Rate limits come from the host's <code>Limiter</code></td>
+<td>Body size, JSON depth, identifier count, contact count, external account key identifier length and DNS or TLS read limits. Rate limits come from the host's <code>Limiter</code></td>
+</tr>
+<tr>
+<td>Nonce flooding through error answers</td>
+<td>An error answer to a request that spent no nonce gets one only within the host's <code>newNonce</code> limit, so unauthenticated errors cannot push other clients' nonces out of the manager</td>
+</tr>
+<tr>
+<td>Worker starvation through validations of unresponsive destinations</td>
+<td>A bound on the validations one account may have in progress, a <code>Limiter</code> kind for challenge responses and a <code>Ready</code> that passes while workers hold leases</td>
 </tr>
 <tr>
 <td>Double issuance after a crash</td>

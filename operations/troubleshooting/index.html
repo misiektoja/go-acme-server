@@ -1712,7 +1712,7 @@ are on the host side of the contracts, so start with the integration rather than
 <p>The client posted its response and nothing happens. The challenge shows <code>processing</code> with a
 <code>Retry-After</code> and never changes.</p>
 <ul>
-<li><strong>No worker is running.</strong> <code>Run</code> must be active in this or another process on the same store. Call <code>Ready</code>, which fails once tasks have waited longer than <code>WorkerConfig.StaleAfter</code>. The handler logs <code>work accepted while Run is not active in this process</code> unless <code>WorkerConfig.External</code> is set.</li>
+<li><strong>No worker is running.</strong> <code>Run</code> must be active in this or another process on the same store. Call <code>Ready</code>, which fails once tasks have waited longer than <code>WorkerConfig.StaleAfter</code> while no task is leased. The handler logs <code>work accepted while Run is not active in this process</code> unless <code>WorkerConfig.External</code> is set.</li>
 <li><strong>The worker runs against another store.</strong> With <code>memstore</code> every process has its own store, so a handler and a worker in different processes never meet. Use a shared durable store.</li>
 <li><strong>The validator is slow.</strong> Each attempt takes up to <code>NetworkOptions.Timeout</code> and a transport failure is retried with backoff up to <code>WorkerConfig.MaxAttempts</code>. Look for <code>validation will be retried</code> in the log with the error.</li>
 </ul>
@@ -1744,7 +1744,7 @@ port and trailing slash. Common causes:</p>
 in the response. Persistent <code>badNonce</code>:</p>
 <ul>
 <li><strong>Several handler replicas</strong> with in-memory nonces. See <a href="../deployment/#replicas">Deployment</a>.</li>
-<li><strong>Nonce capacity exceeded.</strong> <code>nonce.Options.Capacity</code> bounds outstanding nonces and the oldest are dropped. Raise it or shorten the TTL.</li>
+<li><strong>Nonce capacity exceeded.</strong> <code>nonce.Options.Capacity</code> bounds outstanding nonces and the oldest are dropped. Raise it, shorten the TTL or limit <code>newNonce</code> with a <code>Limiter</code>, which also bounds the nonces that error answers hand out.</li>
 </ul>
 <h2 id="the-account-is-gone-after-a-restart">The account is gone after a restart<a class="headerlink" href="#the-account-is-gone-after-a-restart" title="Permanent link">&para;</a></h2>
 <p>The store forgot the account. <code>memstore</code> keeps nothing across restarts. The client keeps its account
@@ -1814,9 +1814,11 @@ after the order was created. The client has to order again.</p>
 it. The operation ID and reason are already stored on the certificate, so the client's retry calls
 <code>Revoke</code> again with the same <code>OperationID</code>.</p>
 <h2 id="ready-fails-in-a-healthy-system">Ready fails in a healthy system<a class="headerlink" href="#ready-fails-in-a-healthy-system" title="Permanent link">&para;</a></h2>
-<p><code>Ready</code> counts tasks that were runnable more than <code>WorkerConfig.StaleAfter</code> ago and are not leased.
-A queue that is deeper than the workers drain within a minute trips it. Raise <code>Concurrency</code>, add
-worker processes or raise <code>StaleAfter</code> to match the expected queue delay.</p>
+<p><code>Ready</code> fails when tasks were runnable more than <code>WorkerConfig.StaleAfter</code> ago and no task is
+leased. Busy workers hold leases, so a deep queue alone does not trip it. If it fails with work
+waiting, no worker claimed anything within <code>StaleAfter</code> and the last leases have expired: <code>Run</code> is
+not active on this store or its workers are stuck. A worker that stops while holding leases is
+reported after they expire, so a failure right after a restart can lag by up to <code>WorkerConfig.Lease</code>.</p>
 <h2 id="getting-help">Getting help<a class="headerlink" href="#getting-help" title="Permanent link">&para;</a></h2>
 <p><a href="https://github.com/misiektoja/go-acme-server/blob/main/SUPPORT.md">SUPPORT.md</a> lists where to ask.
 Include the library and Go versions, the client and its version, the challenge type, which host

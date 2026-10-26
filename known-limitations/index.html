@@ -1659,10 +1659,13 @@ roots picks one chain in its <code>Issuer</code> and clients cannot ask for anot
 with <code>unsupportedContact</code>.</p>
 <h2 id="host-responsibilities">Host responsibilities<a class="headerlink" href="#host-responsibilities" title="Permanent link">&para;</a></h2>
 <h3 id="no-built-in-rate-limits">No built-in rate limits<a class="headerlink" href="#no-built-in-rate-limits" title="Permanent link">&para;</a></h3>
-<p>The library never answers <code>rateLimited</code> on its own. A host sets <code>Config.Limits</code> to limit nonces,
-new accounts and new orders. <code>Policy</code> and <code>IssuancePolicy</code> can refuse other work. See
+<p>The library answers <code>rateLimited</code> on its own only when an account exceeds
+<code>Config.MaxPendingValidations</code>, the validations it may have waiting or running at once. A host
+sets <code>Config.Limits</code> to limit nonces, new accounts, new orders, challenge responses and renewal
+information lookups. <code>Policy</code> and <code>IssuancePolicy</code> can refuse other work. See
 <a href="../guide/accounts-and-policy/#rate-limits">Rate limits</a>. The limiter is not asked about other
-requests. An error response to any request carries a fresh nonce.</p>
+requests. An error answer to a request that spent no nonce counts as a <code>newNonce</code>. Without a
+limiter every error answer carries a fresh nonce.</p>
 <h3 id="no-tls-termination-ca-or-durable-storage">No TLS termination, CA or durable storage<a class="headerlink" href="#no-tls-termination-ca-or-durable-storage" title="Permanent link">&para;</a></h3>
 <p>The host serves the handler behind its HTTPS origin, signs with its own CA and supplies durable
 storage. <code>memstore</code> keeps everything in memory and forgets it on restart. The <code>nonce</code> package

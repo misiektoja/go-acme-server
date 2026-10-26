@@ -1511,7 +1511,7 @@ base URL. Resource IDs are opaque random strings.</p>
 <tr>
 <td><code>chall/&lt;id&gt;</code></td>
 <td>POST</td>
-<td>Challenge status and the client's response</td>
+<td>Challenge status and the client's response. A response beyond <code>MaxPendingValidations</code> or one the <code>Limiter</code> refuses gets <code>rateLimited</code> with <code>Retry-After</code> and the challenge stays pending</td>
 </tr>
 <tr>
 <td><code>cert/&lt;id&gt;</code></td>
@@ -1521,7 +1521,7 @@ base URL. Resource IDs are opaque random strings.</p>
 <tr>
 <td><code>renewal-info/&lt;id&gt;</code></td>
 <td>GET, HEAD</td>
-<td>RFC 9773 renewal information, only with <code>Config.RenewalInfo</code></td>
+<td>RFC 9773 renewal information, only with <code>Config.RenewalInfo</code>. A request the <code>Limiter</code> refuses gets its problem and no nonce</td>
 </tr>
 <tr>
 <td><code>profiles/&lt;name&gt;</code></td>

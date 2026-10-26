@@ -677,6 +677,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#validations-in-progress" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validations in progress
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#pre-approved-identifiers" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1521,6 +1532,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#validations-in-progress" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validations in progress
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#pre-approved-identifiers" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1602,7 +1624,8 @@ issued out of band under a key identifier.</p>
 </code></pre></div>
 <p>Implement it over your key registry and set <code>Config.ExternalAccounts</code>. Return <code>ErrNotFound</code> for an
 unknown identifier, which becomes an <code>unauthorized</code> problem. Return any other error for a lookup
-failure. HS256, HS384 and HS512 are accepted. RFC 7518 section 3.2 requires a key at least as long
+failure. A key identifier longer than 256 bytes is refused with <code>malformed</code> before the lookup.
+HS256, HS384 and HS512 are accepted. RFC 7518 section 3.2 requires a key at least as long
 as the hash, so a 256-bit key works with HS256 only and a 512-bit key with all three. A binding
 whose algorithm needs a longer key is refused with <code>badSignatureAlgorithm</code> listing the algorithms
 the key allows. A key shorter than 256 bits is refused with <code>unauthorized</code> and logged. Issue keys of
@@ -1646,8 +1669,9 @@ for example to cap the requested validity. Any other change, or a <code>NotAfter
 <p>A returned <code>*Problem</code> is sent to the client. Any other error is logged and answered with
 <code>serverInternal</code>.</p>
 <h2 id="rate-limits">Rate limits<a class="headerlink" href="#rate-limits" title="Permanent link">&para;</a></h2>
-<p><code>Config.Limits</code> takes a <code>Limiter</code>, which decides how often clients may get nonces, create accounts
-and place orders. Without one nothing is limited.</p>
+<p><code>Config.Limits</code> takes a <code>Limiter</code>, which decides how often clients may get nonces, create accounts,
+place orders, start validations and look up renewal information. Without one only the bound on
+<a href="#validations-in-progress">validations in progress</a> applies.</p>
 <div class="highlight"><pre><span></span><code><span class="kd">type</span><span class="w"> </span><span class="nx">Limiter</span><span class="w"> </span><span class="kd">interface</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="nx">Allow</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="w"> </span><span class="nx">LimitRequest</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span>
 <span class="p">}</span>
@@ -1664,7 +1688,7 @@ and place orders. Without one nothing is limited.</p>
 <tbody>
 <tr>
 <td><code>LimitNewNonce</code></td>
-<td>Before a nonce is issued</td>
+<td>Before a nonce is issued to a request that spent none: a <code>newNonce</code> request or an error answer to a request for an unknown resource, with a wrong method, an unparsable JWS or a bad nonce</td>
 <td><code>Client</code></td>
 </tr>
 <tr>
@@ -1677,14 +1701,33 @@ and place orders. Without one nothing is limited.</p>
 <td>After the identifiers, profile and <code>replaces</code> were checked, before <code>Policy.NewOrder</code></td>
 <td><code>Client</code>, <code>Account</code>, <code>Identifiers</code> (normalized), <code>Replaces</code></td>
 </tr>
+<tr>
+<td><code>LimitChallengeResponse</code></td>
+<td>After a response to a pending challenge was checked and counted against <code>MaxPendingValidations</code>, before the validation is enqueued. A repeated response to a challenge that is already processing is not asked about</td>
+<td><code>Client</code>, <code>Account</code>, <code>Identifiers</code> (the one identifier of the authorization, with its wildcard prefix), <code>PendingValidations</code></td>
+</tr>
+<tr>
+<td><code>LimitRenewalInfo</code></td>
+<td>Before the certificate lookup of a <code>renewalInfo</code> request with a well-formed identifier</td>
+<td><code>Client</code></td>
+</tr>
 </tbody>
 </table>
 <p>Count the request when you return nil. To refuse, return a <code>rateLimited</code> problem with
 <code>WithRetryAfter</code>. The client gets status 429 and a <code>Retry-After</code> header in whole seconds, rounded
-up. A refused <code>newNonce</code> answer carries no <code>Replay-Nonce</code>. Refused <code>newAccount</code> and <code>newOrder</code>
-answers carry one, like every other error. Any other error is logged and answered with
-<code>serverInternal</code>. Return nil on errors instead if clients should keep working while your limit
-store is unavailable. New kinds may be added in later versions, so allow kinds you do not know.</p>
+up. Refused <code>newNonce</code> and <code>renewalInfo</code> answers carry no <code>Replay-Nonce</code>. Refused <code>newAccount</code>,
+<code>newOrder</code> and challenge response answers carry one, since those requests spent a nonce. A refused
+challenge response leaves the challenge <code>pending</code>, so the client can respond again later. Any
+other error is logged and answered with <code>serverInternal</code>. Return nil on errors instead if clients
+should keep working while your limit store is unavailable. New kinds may be added in later
+versions, so allow kinds you do not know.</p>
+<p>Every error answer carries a nonce, as RFC 8555 section 6.5 recommends. An answer to a request
+that spent no valid nonce, such as 404, 405, 415, an unparsable JWS or <code>badNonce</code>, asks about
+<code>LimitNewNonce</code> first. When refused, the answer keeps its status and carries no nonce. A refused
+<code>badNonce</code> answer becomes the limiter's problem instead, because the RFC requires a nonce on every
+<code>badNonce</code> answer. An answer to a request that spent its nonce carries the replacement without
+asking. Without a limiter every error answer carries a nonce, so a client can collect nonces
+faster than it uses them and push older nonces of other clients out of <code>nonce.Options.Capacity</code>.</p>
 <div class="highlight"><pre><span></span><code><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">l</span><span class="w"> </span><span class="nx">limits</span><span class="p">)</span><span class="w"> </span><span class="nx">Allow</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="w"> </span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">LimitRequest</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">Kind</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="nx">acmeserver</span><span class="p">.</span><span class="nx">LimitNewOrder</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">Replaces</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="s">""</span><span class="w"> </span><span class="p">{</span>
 <span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="c1">// renewals that name their predecessor are never held back</span>
@@ -1706,6 +1749,18 @@ per-address limits on the prefix rather than the full address.</p>
 <p><code>Replaces</code> is set only after the server has checked that the replaced certificate belongs to the
 account and shares an identifier with the order, so a client cannot claim to renew someone else's
 certificate to escape a limit.</p>
+<h2 id="validations-in-progress">Validations in progress<a class="headerlink" href="#validations-in-progress" title="Permanent link">&para;</a></h2>
+<p>Every accepted challenge response becomes a validation task. A validation of a destination that
+accepts connections and never answers holds a worker for the whole <code>NetworkOptions.Timeout</code> on
+each attempt. <code>Config.MaxPendingValidations</code> bounds how many validations one account may have
+waiting or running at the same time. It defaults to <code>MaxIdentifiers</code>, so one full order can
+always be validated at once. A response beyond the bound is refused with <code>rateLimited</code> and a
+<code>Retry-After</code> of <code>WorkerConfig.TaskTimeout</code>, by which time at least one attempt of an earlier
+validation has ended. The challenge stays <code>pending</code> and the client responds again later.</p>
+<p>The bound is per account. Use <code>LimitChallengeResponse</code>, which reports the account's
+<code>PendingValidations</code>, together with limits on new accounts and orders to decide how much
+validation work a client may start over time. Concurrent responses may pass the bound together,
+so it is exact only up to the number of requests in flight.</p>
 <h2 id="pre-approved-identifiers">Pre-approved identifiers<a class="headerlink" href="#pre-approved-identifiers" title="Permanent link">&para;</a></h2>
 <p>Some CAs let an administrator approve names in advance for an external account binding, because
 the CA cannot reach internal hosts and the team cannot publish DNS records. A policy that also

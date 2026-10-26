@@ -1535,7 +1535,7 @@
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Go at the version <code>go.mod</code> declares. Every Make target runs with exactly that toolchain, which Go downloads on first use when the installed version differs.</li>
-<li>Python 3 with the pinned MkDocs dependencies for the documentation site, installed by <code>make docs-deps</code>.</li>
+<li>Python 3 with the MkDocs dependencies for the documentation site, installed by <code>make docs-deps</code> from distributions pinned by hash.</li>
 <li>Python 3.14 for the Certbot environment of the interoperability tests. See <a href="../testing/">Testing</a>.</li>
 <li>Docker, kind and kubectl only for the cert-manager scenario.</li>
 </ul>
@@ -1610,6 +1610,11 @@ make<span class="w"> </span>docs-serve<span class="w"> </span><span class="nv">P
 <p><code>make docs-build</code> runs with <code>--strict</code>, so a broken link, a missing anchor or a page absent from
 the navigation fails the build. CI runs the same build on every change to the documentation and
 publishes the site from the default branch.</p>
+<p><code>docs/requirements.in</code> names the direct dependencies. <code>docs/requirements.txt</code> is compiled from it
+with every distribution pinned by hash and <code>make docs-deps</code> installs nothing else. After changing
+a pin, recompile it with pip-tools:</p>
+<div class="highlight"><pre><span></span><code>pip-compile<span class="w"> </span>--generate-hashes<span class="w"> </span>--strip-extras<span class="w"> </span>docs/requirements.in
+</code></pre></div>
 <p>Package documentation on <a href="https://pkg.go.dev/github.com/misiektoja/go-acme-server">pkg.go.dev</a>
 comes from the Go doc comments. Every exported identifier and every configuration field has one.
 User-facing behavior changes belong in both places: the doc comment for the API and the relevant
