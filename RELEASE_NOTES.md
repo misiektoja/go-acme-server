@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.8.0] - TBD
+
+This release stops one account from monopolizing the validation workers. **`Config.MaxPendingValidations`** bounds the validations an account may have waiting or running, the `Limiter` is asked about **challenge responses** and **`Ready`** no longer fails because clients keep the workers busy. Custom stores need two new counting methods. The module now requires Go 1.27.3.
+
+### Protocol
+
+* **Challenge responses are bounded per account.** A response is refused with `rateLimited` and a `Retry-After` of `WorkerConfig.TaskTimeout` once the account has `MaxPendingValidations` validations waiting or running, `MaxIdentifiers` by default. The challenge stays `pending`, so the client can respond again later. Earlier versions accepted any number of responses. An account whose names pointed at destinations that never answered could delay every other account's validations for as long as it kept responding.
+
+### Host integration
+
+* **`Config.MaxPendingValidations`** sets the bound. Zero selects `MaxIdentifiers`, which lets one full order validate at once.
+* **`LimitChallengeResponse`** is a new `Limiter` kind, asked before a validation is enqueued with the account, the identifier of the authorization and the account's `PendingValidations`. A limiter that allows unknown kinds keeps working unchanged.
+* **`Ready` passes while any task is leased.** It fails only when work has waited longer than `StaleAfter` and no worker holds a lease, so a deep queue behind busy workers no longer trips readiness probes. A worker that died holding leases is reported once they expire, at most `WorkerConfig.Lease` later.
+* **Stores gain `LeasedTasks` and `AccountValidations`.** The first counts tasks under a lease, the second the unfinished validation tasks of an account. `storetest` checks both, so run it again. The SQLite example store indexes tasks by account and kind.
+* **Go 1.27.3** is the minimum, which carries the crypto/x509 fix for GO-2026-6809.
+
 ## [0.7.0] - 19 Oct 2026
 
 This release adds **SLH-DSA keys** (FIPS 205, RFC 9909) for all twelve parameter sets. Clients can order certificates for SLH-DSA keys and revoke them through an authorized account. The host CA can sign with an SLH-DSA key and the server checks those signatures in the chain it returns. The CA must certify these keys from `CSR.RawSubjectPublicKeyInfo`. Hosts that accept or sign with the SHA2-256f or SHAKE-256f sets must raise `MaxRequestBody` to 128 KiB. It works with Certbot 5.8.0, lego v4.35.2 and Go crypto/acme v0.58.0. The library now depends on `github.com/cloudflare/circl` for SLH-DSA.
