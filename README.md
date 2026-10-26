@@ -31,6 +31,7 @@ from the host CA.
 * [Scope](#scope)
 * [Getting started](#getting-started)
 * [Documentation](#documentation)
+* [Limitations](#limitations)
 * [Support](#support)
 * [License](#license)
 
@@ -76,24 +77,6 @@ ML-DSA keys from draft-ietf-lamps-pq-composite-sigs-19, which pair ML-DSA with a
 algorithm. SLH-DSA keys from RFC 9909 are accepted in all 12 FIPS 205 parameter sets. The host CA
 may also sign with a composite ML-DSA or SLH-DSA key. The server checks composite and SLH-DSA
 signatures in requests and returned chains itself. Account keys stay classical.
-
-### Limitations
-
-* No pre-authorization. The directory omits `newAuthz` and every order receives fresh
-  authorizations, so clients validate each identifier again for every order. A `PreApprover`
-  can skip validation for names the host approved in advance.
-* No alternate chains. The certificate response carries one chain and no `rel="alternate"` link.
-* No `dns-account-01`, short-term automatic renewal, delegation, subdomain authorizations or
-  email, onion and device identifiers.
-* No built-in rate limits beyond a bound on the validations one account may have in progress.
-  The host supplies a `Limiter` for nonces, new accounts, new orders, challenge responses and
-  renewal information lookups.
-  `Policy` and `IssuancePolicy` can refuse other work.
-* No TLS termination or CA. The host serves the handler behind its HTTPS origin, signs with its
-  own CA and supplies durable storage. `memstore` keeps everything in memory.
-
-[Known limitations](https://misiektoja.github.io/go-acme-server/known-limitations/) explains the
-consequences of each gap.
 
 ## Getting started
 
@@ -155,6 +138,24 @@ describes every exported type. Repository files:
 * [SECURITY.md](SECURITY.md) explains how to report a vulnerability.
 * [DEPENDENCIES.md](DEPENDENCIES.md) lists third-party code and licenses.
 * [RELEASE_NOTES.md](RELEASE_NOTES.md) records user-visible changes per release.
+
+## Limitations
+
+* No pre-authorization. The directory omits `newAuthz` and every order receives fresh
+  authorizations, so clients validate each identifier again for every order. A `PreApprover`
+  can skip validation for names the host approved in advance.
+* No alternate chains. The certificate response carries one chain and no `rel="alternate"` link.
+* No `dns-account-01`, short-term automatic renewal, delegation, subdomain authorizations or
+  email, onion and device identifiers.
+* No built-in rate limits beyond a bound on the validations one account may have in progress.
+  The host supplies a `Limiter` for nonces, new accounts, new orders, challenge responses and
+  renewal information lookups.
+  `Policy` and `IssuancePolicy` can refuse other work.
+* No TLS termination or CA. The host serves the handler behind its HTTPS origin, signs with its
+  own CA and supplies durable storage. `memstore` keeps everything in memory.
+
+[Known limitations](https://misiektoja.github.io/go-acme-server/known-limitations/) explains the
+consequences of each gap.
 
 ## Support
 
