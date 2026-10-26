@@ -40,7 +40,7 @@ from the host CA.
 go get github.com/misiektoja/go-acme-server
 ```
 
-The module needs Go 1.27.2 or newer. The root package is imported as `acmeserver`, the bundled
+The module needs Go 1.27.3 or newer. The root package is imported as `acmeserver`, the bundled
 validators live in `challenge`, the in-memory store in `memstore` and the single-process nonce
 manager in `nonce`:
 
@@ -85,8 +85,9 @@ signatures in requests and returned chains itself. Account keys stay classical.
 * No alternate chains. The certificate response carries one chain and no `rel="alternate"` link.
 * No `dns-account-01`, short-term automatic renewal, delegation, subdomain authorizations or
   email, onion and device identifiers.
-* No built-in rate limits. The host supplies a `Limiter` for nonces, new accounts and new
-  orders. `Policy` and `IssuancePolicy` can refuse other work.
+* No built-in rate limits beyond a bound on the validations one account may have in progress.
+  The host supplies a `Limiter` for nonces, new accounts, new orders and challenge responses.
+  `Policy` and `IssuancePolicy` can refuse other work.
 * No TLS termination or CA. The host serves the handler behind its HTTPS origin, signs with its
   own CA and supplies durable storage. `memstore` keeps everything in memory.
 
@@ -97,7 +98,7 @@ consequences of each gap.
 
 Create a `Server`, mount it under its base URL and run its worker. Both the handler and `Run` are
 required. Without `Run`, challenges are never validated and orders are never issued. `Ready`
-reports work that has waited too long for a worker.
+reports work that has waited too long while no worker holds a lease.
 
 ```go
 srv, err := acmeserver.New(acmeserver.Config{

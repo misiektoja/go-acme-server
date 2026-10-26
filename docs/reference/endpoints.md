@@ -16,7 +16,7 @@ base URL. Resource IDs are opaque random strings.
 | `order/<id>` | POST | Order status and POST-as-GET |
 | `order/<id>/finalize` | POST | Finalization with a CSR |
 | `authz/<id>` | POST | Authorization status, deactivation and POST-as-GET |
-| `chall/<id>` | POST | Challenge status and the client's response |
+| `chall/<id>` | POST | Challenge status and the client's response. A response beyond `MaxPendingValidations` or one the `Limiter` refuses gets `rateLimited` with `Retry-After` and the challenge stays pending |
 | `cert/<id>` | POST | The certificate chain as `application/pem-certificate-chain` |
 | `renewal-info/<id>` | GET, HEAD | RFC 9773 renewal information, only with `Config.RenewalInfo` |
 | `profiles/<name>` | GET, HEAD | The plain-text description of a profile configured with a `Description` |

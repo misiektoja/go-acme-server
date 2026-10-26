@@ -33,8 +33,10 @@ with `unsupportedContact`.
 
 ### No built-in rate limits
 
-The library never answers `rateLimited` on its own. A host sets `Config.Limits` to limit nonces,
-new accounts and new orders. `Policy` and `IssuancePolicy` can refuse other work. See
+The library answers `rateLimited` on its own only when an account exceeds
+`Config.MaxPendingValidations`, the validations it may have waiting or running at once. A host
+sets `Config.Limits` to limit nonces, new accounts, new orders and challenge responses. `Policy`
+and `IssuancePolicy` can refuse other work. See
 [Rate limits](guide/accounts-and-policy.md#rate-limits). The limiter is not asked about other
 requests. An error response to any request carries a fresh nonce.
 

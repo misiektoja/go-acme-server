@@ -59,13 +59,17 @@ contract already handles concurrency.
 
 ## Health checks
 
-`Server.Ready` reports whether accepted work is being claimed. Wire it into a readiness probe:
+`Server.Ready` reports whether accepted work is being claimed. It fails when tasks have waited
+longer than `WorkerConfig.StaleAfter` while no task is leased. Busy workers hold leases, so a deep
+queue passes and clients cannot fail the probe by starting many validations. A worker that died
+holding leases is reported once they expire, at most `WorkerConfig.Lease` later. Wire it into a
+readiness probe:
 
 * In a single-process layout, a failing `Ready` means the worker is stuck or dead. Restart the process.
 * In a split layout, `Ready` in a handler process reports the state of the workers. Route the alert accordingly rather than restarting the handler.
 
 `WorkerConfig.StaleAfter` decides how long a task may wait before `Ready` fails, one minute by
-default. Set it above the longest expected queue delay under load.
+default.
 
 The directory endpoint is a cheap liveness check for the HTTP path. It needs no signature and
 touches no store.

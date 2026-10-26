@@ -95,8 +95,9 @@ A returned `*Problem` is sent to the client. Any other error is logged and answe
 
 ## Rate limits
 
-`Config.Limits` takes a `Limiter`, which decides how often clients may get nonces, create accounts
-and place orders. Without one nothing is limited.
+`Config.Limits` takes a `Limiter`, which decides how often clients may get nonces, create accounts,
+place orders and start validations. Without one only the bound on
+[validations in progress](#validations-in-progress) applies.
 
 ```go
 type Limiter interface {
@@ -111,11 +112,13 @@ type Limiter interface {
 | `LimitNewNonce` | Before a nonce is issued | `Client` |
 | `LimitNewAccount` | After the contacts, terms of service and external account binding were checked, before `Policy.NewAccount`. A request that finds an existing account is not asked about | `Client`, `Account` (not yet stored) |
 | `LimitNewOrder` | After the identifiers, profile and `replaces` were checked, before `Policy.NewOrder` | `Client`, `Account`, `Identifiers` (normalized), `Replaces` |
+| `LimitChallengeResponse` | After a response to a pending challenge was checked and counted against `MaxPendingValidations`, before the validation is enqueued. A repeated response to a challenge that is already processing is not asked about | `Client`, `Account`, `Identifiers` (the one identifier of the authorization, with its wildcard prefix), `PendingValidations` |
 
 Count the request when you return nil. To refuse, return a `rateLimited` problem with
 `WithRetryAfter`. The client gets status 429 and a `Retry-After` header in whole seconds, rounded
-up. A refused `newNonce` answer carries no `Replay-Nonce`. Refused `newAccount` and `newOrder`
-answers carry one, like every other error. Any other error is logged and answered with
+up. A refused `newNonce` answer carries no `Replay-Nonce`. Refused `newAccount`, `newOrder` and
+challenge response answers carry one, like every other error. A refused challenge response leaves
+the challenge `pending`, so the client can respond again later. Any other error is logged and answered with
 `serverInternal`. Return nil on errors instead if clients should keep working while your limit
 store is unavailable. New kinds may be added in later versions, so allow kinds you do not know.
 
@@ -143,6 +146,21 @@ per-address limits on the prefix rather than the full address.
 `Replaces` is set only after the server has checked that the replaced certificate belongs to the
 account and shares an identifier with the order, so a client cannot claim to renew someone else's
 certificate to escape a limit.
+
+## Validations in progress
+
+Every accepted challenge response becomes a validation task. A validation of a destination that
+accepts connections and never answers holds a worker for the whole `NetworkOptions.Timeout` on
+each attempt. `Config.MaxPendingValidations` bounds how many validations one account may have
+waiting or running at the same time. It defaults to `MaxIdentifiers`, so one full order can
+always be validated at once. A response beyond the bound is refused with `rateLimited` and a
+`Retry-After` of `WorkerConfig.TaskTimeout`, by which time at least one attempt of an earlier
+validation has ended. The challenge stays `pending` and the client responds again later.
+
+The bound is per account. Use `LimitChallengeResponse`, which reports the account's
+`PendingValidations`, together with limits on new accounts and orders to decide how much
+validation work a client may start over time. Concurrent responses may pass the bound together,
+so it is exact only up to the number of requests in flight.
 
 ## Pre-approved identifiers
 
