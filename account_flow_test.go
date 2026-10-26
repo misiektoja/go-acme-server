@@ -210,6 +210,35 @@ func TestExternalAccountKeyLength(t *testing.T) {
 		http.StatusForbidden, acmeserver.ErrorUnauthorized)
 }
 
+// Refuses a key identifier longer than 256 bytes before the host is asked for its key and
+// accepts one of exactly that length.
+func TestExternalAccountKeyIDLength(t *testing.T) {
+	mac := []byte("0123456789abcdef0123456789abcdef")
+	f := newFlow(t, func(c *acmeserver.Config) {
+		c.ExternalAccounts = eabFunc(func(_ context.Context, keyID string) ([]byte, error) {
+			if len(keyID) > 256 {
+				t.Errorf("the host was asked for a %d byte key identifier", len(keyID))
+			}
+			return mac, nil
+		})
+	})
+	newAccount := baseURL + "new-account"
+	c := f.newClient()
+	assertProblem(t, c.post(newAccount, map[string]any{"termsOfServiceAgreed": true,
+		"externalAccountBinding": binding(strings.Repeat("k", 257), mac, newAccount, publicJWK(t, &c.key.PublicKey), "HS256")}),
+		http.StatusBadRequest, acmeserver.ErrorMalformed)
+	longest := strings.Repeat("k", 256)
+	rec := c.post(newAccount, map[string]any{"termsOfServiceAgreed": true,
+		"externalAccountBinding": binding(longest, mac, newAccount, publicJWK(t, &c.key.PublicKey), "HS256")})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("new-account with a 256 byte kid = %d %s", rec.Code, rec.Body.String())
+	}
+	account, err := f.store.Account(t.Context(), strings.TrimPrefix(rec.Header().Get("Location"), baseURL+"acct/"))
+	if err != nil || account.ExternalAccountID != longest {
+		t.Fatalf("stored account = %+v, %v", account, err)
+	}
+}
+
 // Binds each external account key identifier to one account when configured.
 func TestSingleUseExternalAccount(t *testing.T) {
 	const kid = "kid-1"

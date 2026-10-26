@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -144,22 +145,9 @@ func TestLimiterRefusalsReachTheClient(t *testing.T) {
 	limits := &scriptedLimiter{}
 	f := newFlow(t, func(c *acmeserver.Config) { c.Limits = limits })
 	c := f.newClient()
-	limited := func(kind acmeserver.LimitKind) func(acmeserver.LimitRequest) error {
-		return func(req acmeserver.LimitRequest) error {
-			if req.Kind != kind {
-				return nil
-			}
-			return acmeserver.NewProblem(acmeserver.ErrorRateLimited, "too many requests").WithRetryAfter(2500 * time.Millisecond)
-		}
-	}
 	assertLimited := func(rec *httptest.ResponseRecorder, nonce bool) {
 		t.Helper()
-		if rec.Code != http.StatusTooManyRequests || rec.Header().Get("Retry-After") != "3" {
-			t.Fatalf("limited answer = %d, Retry-After %q", rec.Code, rec.Header().Get("Retry-After"))
-		}
-		if got := rec.Header().Get("Replay-Nonce") != ""; got != nonce {
-			t.Fatalf("limited answer carries a nonce: %v", got)
-		}
+		assertRefused(t, rec, nonce)
 	}
 
 	limits.script(limited(acmeserver.LimitNewNonce))
@@ -210,6 +198,167 @@ func TestLimiterRefusalsReachTheClient(t *testing.T) {
 // Returns the ID of the client's account from its URL.
 func accountID(c *client) string {
 	return strings.TrimPrefix(c.kid, baseURL+"acct/")
+}
+
+// Returns a scripted decision that refuses one kind with a 2.5 second Retry-After.
+func limited(kind acmeserver.LimitKind) func(acmeserver.LimitRequest) error {
+	return func(req acmeserver.LimitRequest) error {
+		if req.Kind != kind {
+			return nil
+		}
+		return acmeserver.NewProblem(acmeserver.ErrorRateLimited, "too many requests").WithRetryAfter(2500 * time.Millisecond)
+	}
+}
+
+// Checks the answer to a request the limiter refused and whether it carries a nonce.
+func assertRefused(t *testing.T, rec *httptest.ResponseRecorder, nonce bool) {
+	t.Helper()
+	if rec.Code != http.StatusTooManyRequests || rec.Header().Get("Retry-After") != "3" {
+		t.Fatalf("limited answer = %d, Retry-After %q", rec.Code, rec.Header().Get("Retry-After"))
+	}
+	if got := rec.Header().Get("Replay-Nonce") != ""; got != nonce {
+		t.Fatalf("limited answer carries a nonce: %v", got)
+	}
+}
+
+// Asks the newNonce limiter before an error answer to a request that spent no nonce and omits
+// the nonce when refused. A refused badNonce answer becomes the limiter's problem, since RFC 8555
+// requires a nonce on badNonce. A request that spent its nonce gets its replacement without asking.
+func TestErrorAnswersAskTheNonceLimiter(t *testing.T) {
+	limits := &scriptedLimiter{}
+	f := newFlow(t, func(c *acmeserver.Config) { c.Limits = limits })
+	client := netip.MustParseAddr("192.0.2.1")
+	c := f.newClient()
+	c.register()
+	newOrder := baseURL + "new-order"
+	plain := func(method, url, contentType string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, url, strings.NewReader("{"))
+		if contentType != "" {
+			r.Header.Set("Content-Type", contentType)
+		}
+		return f.do(r)
+	}
+	unspent := []struct {
+		name   string
+		send   func() *httptest.ResponseRecorder
+		status int
+		typ    acmeserver.ErrorType
+	}{
+		{"unknown resource", func() *httptest.ResponseRecorder { return plain(http.MethodGet, baseURL+"nothing", "") },
+			http.StatusNotFound, acmeserver.ErrorMalformed},
+		{"wrong method", func() *httptest.ResponseRecorder { return plain(http.MethodGet, newOrder, "") },
+			http.StatusMethodNotAllowed, acmeserver.ErrorMalformed},
+		{"wrong content type", func() *httptest.ResponseRecorder { return plain(http.MethodPost, newOrder, "text/plain") },
+			http.StatusUnsupportedMediaType, acmeserver.ErrorMalformed},
+		{"unparsable JWS", func() *httptest.ResponseRecorder { return plain(http.MethodPost, newOrder, "application/jose+json") },
+			http.StatusBadRequest, acmeserver.ErrorMalformed},
+		{"bad nonce", func() *httptest.ResponseRecorder {
+			return c.send(newOrder, signECDSA(t, c.key, map[string]any{"nonce": "stale", "url": newOrder, "kid": c.kid}, []byte("{}")))
+		}, http.StatusBadRequest, acmeserver.ErrorBadNonce},
+	}
+	spent := func() *httptest.ResponseRecorder {
+		return c.send(newOrder, c.signed(newOrder, map[string]any{"identifiers": []map[string]string{}}))
+	}
+
+	limits.take(acmeserver.LimitNewNonce)
+	for _, tc := range unspent {
+		rec := tc.send()
+		assertProblem(t, rec, tc.status, tc.typ)
+		if rec.Header().Get("Replay-Nonce") == "" {
+			t.Fatalf("%s: allowed answer carries no nonce", tc.name)
+		}
+		if asked := limits.take(acmeserver.LimitNewNonce); len(asked) != 1 || asked[0].Client != client || asked[0].Account != nil {
+			t.Fatalf("%s: nonce requests = %+v", tc.name, asked)
+		}
+	}
+	signed := c.signed(newOrder, map[string]any{"identifiers": []map[string]string{}})
+	limits.take(acmeserver.LimitNewNonce)
+	rec := spent()
+	assertProblem(t, rec, http.StatusBadRequest, acmeserver.ErrorMalformed)
+	if rec.Header().Get("Replay-Nonce") == "" {
+		t.Fatal("a failed signed request got no replacement nonce")
+	}
+	if asked := limits.take(acmeserver.LimitNewNonce); len(asked) != 1 {
+		t.Fatalf("a failed signed request asked beyond its own newNonce: %+v", asked)
+	}
+
+	limits.script(limited(acmeserver.LimitNewNonce))
+	for _, tc := range unspent {
+		rec := tc.send()
+		if tc.typ == acmeserver.ErrorBadNonce {
+			assertRefused(t, rec, false)
+			assertProblem(t, rec, http.StatusTooManyRequests, acmeserver.ErrorRateLimited)
+			continue
+		}
+		assertProblem(t, rec, tc.status, tc.typ)
+		if rec.Header().Get("Replay-Nonce") != "" || rec.Header().Get("Retry-After") != "" {
+			t.Fatalf("%s: refused answer carries a nonce or Retry-After", tc.name)
+		}
+	}
+	rec = c.send(newOrder, signed)
+	assertProblem(t, rec, http.StatusBadRequest, acmeserver.ErrorMalformed)
+	if rec.Header().Get("Replay-Nonce") == "" {
+		t.Fatal("a failed signed request got no replacement nonce while newNonce was refused")
+	}
+}
+
+// Counts renewal lookups that reach the store.
+type renewalCountingStore struct {
+	acmeserver.Store
+	lookups atomic.Int32
+}
+
+// Counts the lookup and forwards it.
+func (s *renewalCountingStore) CertificateByRenewalID(ctx context.Context, id string) (*acmeserver.Certificate, error) {
+	s.lookups.Add(1)
+	return s.Store.CertificateByRenewalID(ctx, id)
+}
+
+// Asks the limiter about renewalInfo lookups with the client address before the store is read. A
+// refused request gets the limiter's problem and no nonce. A malformed identifier is not asked about.
+func TestLimiterIsAskedAboutRenewalInfo(t *testing.T) {
+	limits := &scriptedLimiter{}
+	store := &renewalCountingStore{}
+	f := newFlow(t, func(c *acmeserver.Config) {
+		c.Limits = limits
+		c.RenewalInfo = acmeserver.LifetimeRenewal{}
+		store.Store = c.Store
+		c.Store = store
+	})
+	f.runWorker()
+	client := netip.MustParseAddr("192.0.2.1")
+	c := f.newClient()
+	c.register()
+	id := ariID(t, c.issue("a.test"))
+	if asked := limits.take(acmeserver.LimitRenewalInfo); len(asked) != 0 {
+		t.Fatalf("issuance asked about renewal information: %+v", asked)
+	}
+
+	if rec := f.renewalInfo(id); rec.Code != http.StatusOK {
+		t.Fatalf("renewal-info = %d %s", rec.Code, rec.Body.String())
+	}
+	if asked := limits.take(acmeserver.LimitRenewalInfo); len(asked) != 1 || asked[0].Client != client || asked[0].Account != nil {
+		t.Fatalf("renewal-info requests = %+v", asked)
+	}
+	assertProblem(t, f.renewalInfo("no-dot"), http.StatusNotFound, acmeserver.ErrorMalformed)
+	if asked := limits.take(acmeserver.LimitRenewalInfo); len(asked) != 0 {
+		t.Fatalf("a malformed identifier asked the limiter: %+v", asked)
+	}
+	if n := store.lookups.Load(); n != 1 {
+		t.Fatalf("store lookups = %d, want 1", n)
+	}
+
+	limits.take(acmeserver.LimitNewNonce)
+	limits.script(limited(acmeserver.LimitRenewalInfo))
+	rec := f.renewalInfo(id)
+	assertRefused(t, rec, false)
+	assertProblem(t, rec, http.StatusTooManyRequests, acmeserver.ErrorRateLimited)
+	if n := store.lookups.Load(); n != 1 {
+		t.Fatalf("a refused request reached the store: %d lookups", n)
+	}
+	if asked := limits.take(acmeserver.LimitNewNonce); len(asked) != 0 {
+		t.Fatalf("a refused renewal-info request asked about a nonce: %+v", asked)
+	}
 }
 
 // Refuses a challenge response once the account has MaxPendingValidations validations waiting or
