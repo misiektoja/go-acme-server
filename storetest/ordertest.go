@@ -367,6 +367,83 @@ func testClaimTask(t *testing.T, store acmeserver.Store) {
 	}
 }
 
+// Checks the lease and per-account validation counts across the life of a task. Validation
+// tasks count for their account from acceptance until they finish, leased or not, while issuance
+// tasks never count. A lease counts until the time it ends.
+func testTaskCounts(t *testing.T, store acmeserver.Store) {
+	ctx := context.Background()
+	order, _, challenges := seedOrder(t, store)
+	requireCounts := func(what string, leasedAt time.Time, wantLeased, wantValidations int) {
+		t.Helper()
+		leased, err := store.LeasedTasks(ctx, leasedAt)
+		if err != nil || leased != wantLeased {
+			t.Fatalf("%s: LeasedTasks = %d, %v; want %d", what, leased, err, wantLeased)
+		}
+		validations, err := store.AccountValidations(ctx, "acct-1")
+		if err != nil || validations != wantValidations {
+			t.Fatalf("%s: AccountValidations = %d, %v; want %d", what, validations, err, wantValidations)
+		}
+		if other, err := store.AccountValidations(ctx, "acct-2"); err != nil || other != 0 {
+			t.Fatalf("%s: AccountValidations(other) = %d, %v; want 0", what, other, err)
+		}
+	}
+	requireCounts("empty", testNow, 0, 0)
+	for i, ch := range challenges {
+		ch.Status = acmeserver.ChallengeProcessing
+		task := newTask(fmt.Sprintf("validate-%d", i), acmeserver.TaskValidate, ch.ID, testNow)
+		if err := store.AcceptChallenge(ctx, ch, task); err != nil {
+			t.Fatalf("AcceptChallenge: %v", err)
+		}
+	}
+	// The issuance task runs much later, so the claims below always pick validation tasks.
+	issue := newTask("issue", acmeserver.TaskIssue, order.ID, testNow.Add(time.Hour))
+	if err := store.FinalizeOrder(ctx, order, issue); err != nil {
+		t.Fatalf("FinalizeOrder: %v", err)
+	}
+	requireCounts("accepted", testNow, 0, 2)
+	lease := testNow.Add(2 * time.Minute)
+	claimed, err := store.ClaimTask(ctx, testNow, lease)
+	if err != nil {
+		t.Fatalf("ClaimTask: %v", err)
+	}
+	requireCounts("one lease", testNow, 1, 2)
+	requireCounts("at lease end", lease, 0, 2)
+	claimed.RunAt = testNow.Add(time.Minute)
+	if err := store.RescheduleTask(ctx, claimed); err != nil {
+		t.Fatalf("RescheduleTask: %v", err)
+	}
+	requireCounts("rescheduled", testNow, 0, 2)
+	claimed, err = store.ClaimTask(ctx, testNow.Add(time.Minute), lease)
+	if err != nil {
+		t.Fatalf("ClaimTask(other validation): %v", err)
+	}
+	if err := store.FinishTask(ctx, claimed); err != nil {
+		t.Fatalf("FinishTask: %v", err)
+	}
+	requireCounts("one finished", testNow, 0, 1)
+	remaining, err := store.ClaimTask(ctx, testNow.Add(time.Minute), lease)
+	if err != nil || remaining.Kind != acmeserver.TaskValidate {
+		t.Fatalf("ClaimTask(remaining) = %+v, %v", remaining, err)
+	}
+	ch, err := store.Challenge(ctx, remaining.TargetID)
+	if err != nil {
+		t.Fatalf("Challenge: %v", err)
+	}
+	ch.Status = acmeserver.ChallengeValid
+	authz, err := store.Authorization(ctx, ch.AuthorizationID)
+	if err != nil {
+		t.Fatalf("Authorization: %v", err)
+	}
+	authz.Status = acmeserver.AuthorizationValid
+	if order, err = store.Order(ctx, order.ID); err != nil {
+		t.Fatalf("Order: %v", err)
+	}
+	if err := store.CompleteValidation(ctx, remaining, ch, authz, order); err != nil {
+		t.Fatalf("CompleteValidation: %v", err)
+	}
+	requireCounts("all validations finished", testNow, 0, 0)
+}
+
 // Checks that racing claims hand each task to exactly one worker.
 func testConcurrentClaim(t *testing.T, store acmeserver.Store) {
 	ctx := context.Background()

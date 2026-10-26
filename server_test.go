@@ -62,6 +62,7 @@ func TestNewValidatesConfig(t *testing.T) {
 		"negative lifetime":    func(c *Config) { c.OrderLifetime = -1 },
 		"negative workers":     func(c *Config) { c.Workers.Concurrency = -1 },
 		"negative detached":    func(c *Config) { c.DetachedWriteTimeout = -1 },
+		"negative validations": func(c *Config) { c.MaxPendingValidations = -1 },
 		"default no profiles":  func(c *Config) { c.DefaultProfile = "classic" },
 		"tnauthlist no tkauth": func(c *Config) { c.TNAuthListIdentifiers = true },
 		"nf ids no tkauth":     func(c *Config) { c.NfInstanceIDIdentifiers = true },
@@ -131,6 +132,27 @@ func TestNewValidatesConfig(t *testing.T) {
 }
 
 // Accepts profile names that stay safe in URLs and loosely parsed directories.
+// Bounds pending validations per account by MaxIdentifiers unless the host sets its own bound.
+func TestMaxPendingValidationsDefault(t *testing.T) {
+	store, nonces := newTestStore(), nonce.New(nonce.Options{})
+	cases := map[string]struct{ identifiers, validations, want int }{
+		"defaults":        {0, 0, DefaultMaxIdentifiers},
+		"identifiers set": {7, 0, 7},
+		"both set":        {7, 3, 3},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			cfg := stubConfig(store, nonces)
+			cfg.ExternalAccounts = nil
+			cfg.MaxIdentifiers, cfg.MaxPendingValidations = tc.identifiers, tc.validations
+			s, err := New(cfg)
+			if err != nil || s.maxValidations != tc.want {
+				t.Fatalf("maxValidations = %d, %v; want %d", s.maxValidations, err, tc.want)
+			}
+		})
+	}
+}
+
 func TestValidProfileName(t *testing.T) {
 	for name, want := range map[string]bool{
 		"classic": true, "tls-server": true, "short.lived_2": true, "7d": true, strings.Repeat("a", 64): true,

@@ -103,6 +103,41 @@ func TestLimiterIsAskedAboutNoncesAccountsAndOrders(t *testing.T) {
 	}
 }
 
+// Asks the limiter about challenge responses with the client address, the account, the identifier
+// of the authorization as the order named it and the validations already in progress. A repeated
+// response to a challenge that is already processing starts nothing and is not asked about.
+func TestLimiterIsAskedAboutChallengeResponses(t *testing.T) {
+	limits := &scriptedLimiter{}
+	f := newFlow(t, func(c *acmeserver.Config) { c.Limits = limits })
+	client := netip.MustParseAddr("192.0.2.1")
+	c := f.newClient()
+	c.register()
+	// No worker runs, so every accepted validation stays in progress and counts for the next.
+	_, order := c.newOrder("a.test", "*.b.test")
+	var authz authzBody
+	for i, want := range []acmeserver.Identifier{
+		{Type: acmeserver.IdentifierDNS, Value: "a.test"},
+		{Type: acmeserver.IdentifierDNS, Value: "*.b.test"},
+	} {
+		c.get(order.Authorizations[i], &authz)
+		if rec := c.post(authz.Challenges[0].URL, map[string]any{}); rec.Code != http.StatusOK {
+			t.Fatalf("response for %s = %d %s", want.Value, rec.Code, rec.Body.String())
+		}
+		responses := limits.take(acmeserver.LimitChallengeResponse)
+		if len(responses) != 1 || responses[0].Client != client || responses[0].Account == nil ||
+			responses[0].Account.ID != accountID(c) || len(responses[0].Identifiers) != 1 ||
+			responses[0].Identifiers[0] != want || responses[0].PendingValidations != i {
+			t.Fatalf("challenge response requests for %s = %+v", want.Value, responses)
+		}
+	}
+	if rec := c.post(authz.Challenges[0].URL, map[string]any{}); rec.Code != http.StatusOK {
+		t.Fatalf("repeated response = %d %s", rec.Code, rec.Body.String())
+	}
+	if responses := limits.take(acmeserver.LimitChallengeResponse); len(responses) != 0 {
+		t.Fatalf("a repeated response asked the limiter: %+v", responses)
+	}
+}
+
 // Sends the limiter's problem with Retry-After. A refused newNonce request gets no nonce, while
 // refused account and order requests get one as every ACME error does.
 func TestLimiterRefusalsReachTheClient(t *testing.T) {
@@ -154,6 +189,75 @@ func TestLimiterRefusalsReachTheClient(t *testing.T) {
 	if len(orders.Orders) != 0 {
 		t.Fatalf("a refused order was stored: %v", orders.Orders)
 	}
+
+	limits.script(nil)
+	_, order := c.newOrder("a.test")
+	limits.script(limited(acmeserver.LimitChallengeResponse))
+	var authz authzBody
+	c.get(order.Authorizations[0], &authz)
+	rec = c.post(authz.Challenges[0].URL, map[string]any{})
+	assertLimited(rec, true)
+	assertProblem(t, rec, http.StatusTooManyRequests, acmeserver.ErrorRateLimited)
+	c.get(order.Authorizations[0], &authz)
+	if authz.Challenges[0].Status != statusPending {
+		t.Fatalf("challenge after a refused response is %q, want pending", authz.Challenges[0].Status)
+	}
+	if n, err := f.store.AccountValidations(t.Context(), accountID(c)); err != nil || n != 0 {
+		t.Fatalf("a refused response enqueued a validation: %d, %v", n, err)
+	}
+}
+
+// Returns the ID of the client's account from its URL.
+func accountID(c *client) string {
+	return strings.TrimPrefix(c.kid, baseURL+"acct/")
+}
+
+// Refuses a challenge response once the account has MaxPendingValidations validations waiting or
+// running, with a Retry-After of the task timeout. It accepts the response again once they finish.
+// Other accounts are not affected.
+func TestChallengeResponsesAreBoundedPerAccount(t *testing.T) {
+	f := newFlow(t, func(c *acmeserver.Config) { c.MaxPendingValidations = 2 })
+	// No worker runs yet, so accepted validations stay waiting and count against the bound.
+	c := f.newClient()
+	c.register()
+	location, order := c.newOrder("a.test", "b.test", "c.test")
+	var urls []string
+	for _, authzURL := range order.Authorizations {
+		var authz authzBody
+		c.get(authzURL, &authz)
+		for _, ch := range authz.Challenges {
+			if ch.Type == typeHTTP01 {
+				urls = append(urls, ch.URL)
+			}
+		}
+	}
+	for _, url := range urls[:2] {
+		if rec := c.post(url, map[string]any{}); rec.Code != http.StatusOK {
+			t.Fatalf("response within the bound = %d %s", rec.Code, rec.Body.String())
+		}
+	}
+	rec := c.post(urls[2], map[string]any{})
+	assertProblem(t, rec, http.StatusTooManyRequests, acmeserver.ErrorRateLimited)
+	if rec.Header().Get("Retry-After") != "1" || rec.Header().Get("Replay-Nonce") == "" {
+		t.Fatalf("refused response headers = %v", rec.Header())
+	}
+	if n, _ := f.store.AccountValidations(t.Context(), accountID(c)); n != 2 {
+		t.Fatalf("validations after the refusal = %d, want 2", n)
+	}
+	other := f.newClient()
+	other.register()
+	_, otherOrder := other.newOrder("d.test")
+	other.respondHTTP01(otherOrder)
+
+	f.runWorker()
+	waitFor(t, "earlier validations to finish", func() bool {
+		n, _ := f.store.AccountValidations(t.Context(), accountID(c))
+		return n == 0
+	})
+	if rec := c.post(urls[2], map[string]any{}); rec.Code != http.StatusOK {
+		t.Fatalf("response after the earlier validations finished = %d %s", rec.Code, rec.Body.String())
+	}
+	c.waitOrder(location, statusReady)
 }
 
 // Answers serverInternal and logs the cause when the limiter fails with an error that is not a
