@@ -1,0 +1,5 @@
+# Direct dependencies of the documentation site. Compile docs/requirements.txt from this file:
+#   pip-compile --generate-hashes --strip-extras docs/requirements.in
+mkdocs==1.6.1
+mkdocs-material==9.7.7
+pymdown-extensions==12.3

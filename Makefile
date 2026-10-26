@@ -91,8 +91,8 @@ fuzz: ## Fuzz every parsing target for FUZZ_TIME each. Failing inputs are saved 
 PYTHON ?= python3
 
 .PHONY: docs-deps
-docs-deps: ## Install the pinned documentation build dependencies.
-	$(PYTHON) -m pip install -r docs/requirements.txt
+docs-deps: ## Install the documentation build dependencies, every distribution pinned by hash.
+	$(PYTHON) -m pip install --no-deps --require-hashes -r docs/requirements.txt
 
 .PHONY: docs-build
 docs-build: ## Build the documentation site into site/ and fail on any warning.
