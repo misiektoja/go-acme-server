@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        The [scope section](https://github.com/misiektoja/go-acme-server/blob/main/README.md#scope) of the README lists what is implemented and what is not, including pre-authorization, alternate chains and the ACME drafts.
+        The [scope](https://github.com/misiektoja/go-acme-server/blob/main/README.md#scope) and [limitations](https://github.com/misiektoja/go-acme-server/blob/main/README.md#limitations) sections of the README list what is implemented and what is not, including pre-authorization, alternate chains and the ACME drafts.
 
   - type: textarea
     id: problem
