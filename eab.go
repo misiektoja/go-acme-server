@@ -9,6 +9,11 @@ import (
 	"github.com/misiektoja/go-acme-server/internal/jws"
 )
 
+// Bounds the external account key identifier a client may present. Hosts issue short
+// identifiers, so a longer one is refused before it reaches the key lookup, the logs or the
+// account record.
+const maxExternalAccountKeyID = 256
+
 // Verifies an external account binding and returns its key identifier, see RFC 8555 section
 // 7.3.4. The binding must be signed with the MAC key of its kid over the account key.
 func (s *Server) verifyExternalAccountBinding(ctx context.Context, accountThumbprint string,
@@ -27,6 +32,9 @@ func (s *Server) verifyExternalAccountBinding(ctx context.Context, accountThumbp
 	}
 	if msg.Header.URL != s.resourceURL(resourceNewAccount) {
 		return "", NewProblem(ErrorMalformed, "externalAccountBinding url does not match the request URL")
+	}
+	if len(msg.Header.KeyID) > maxExternalAccountKeyID {
+		return "", Problemf(ErrorMalformed, "externalAccountBinding kid exceeds %d bytes", maxExternalAccountKeyID)
 	}
 	key, err := s.eabKeys.MACKey(ctx, msg.Header.KeyID)
 	if errors.Is(err, ErrNotFound) {
