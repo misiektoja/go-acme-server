@@ -18,7 +18,7 @@ base URL. Resource IDs are opaque random strings.
 | `authz/<id>` | POST | Authorization status, deactivation and POST-as-GET |
 | `chall/<id>` | POST | Challenge status and the client's response. A response beyond `MaxPendingValidations` or one the `Limiter` refuses gets `rateLimited` with `Retry-After` and the challenge stays pending |
 | `cert/<id>` | POST | The certificate chain as `application/pem-certificate-chain` |
-| `renewal-info/<id>` | GET, HEAD | RFC 9773 renewal information, only with `Config.RenewalInfo` |
+| `renewal-info/<id>` | GET, HEAD | RFC 9773 renewal information, only with `Config.RenewalInfo`. A request the `Limiter` refuses gets its problem and no nonce |
 | `profiles/<name>` | GET, HEAD | The plain-text description of a profile configured with a `Description` |
 
 Any other path below the base URL and any path outside it is answered with a `404` `malformed`

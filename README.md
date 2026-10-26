@@ -86,7 +86,8 @@ signatures in requests and returned chains itself. Account keys stay classical.
 * No `dns-account-01`, short-term automatic renewal, delegation, subdomain authorizations or
   email, onion and device identifiers.
 * No built-in rate limits beyond a bound on the validations one account may have in progress.
-  The host supplies a `Limiter` for nonces, new accounts, new orders and challenge responses.
+  The host supplies a `Limiter` for nonces, new accounts, new orders, challenge responses and
+  renewal information lookups.
   `Policy` and `IssuancePolicy` can refuse other work.
 * No TLS termination or CA. The host serves the handler behind its HTTPS origin, signs with its
   own CA and supplies durable storage. `memstore` keeps everything in memory.

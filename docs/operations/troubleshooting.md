@@ -45,7 +45,7 @@ A single `badNonce` is normal after a restart or when a nonce expires. Clients r
 in the response. Persistent `badNonce`:
 
 * **Several handler replicas** with in-memory nonces. See [Deployment](deployment.md#replicas).
-* **Nonce capacity exceeded.** `nonce.Options.Capacity` bounds outstanding nonces and the oldest are dropped. Raise it or shorten the TTL.
+* **Nonce capacity exceeded.** `nonce.Options.Capacity` bounds outstanding nonces and the oldest are dropped. Raise it, shorten the TTL or limit `newNonce` with a `Limiter`, which also bounds the nonces that error answers hand out.
 
 ## The account is gone after a restart
 

@@ -35,10 +35,11 @@ with `unsupportedContact`.
 
 The library answers `rateLimited` on its own only when an account exceeds
 `Config.MaxPendingValidations`, the validations it may have waiting or running at once. A host
-sets `Config.Limits` to limit nonces, new accounts, new orders and challenge responses. `Policy`
-and `IssuancePolicy` can refuse other work. See
+sets `Config.Limits` to limit nonces, new accounts, new orders, challenge responses and renewal
+information lookups. `Policy` and `IssuancePolicy` can refuse other work. See
 [Rate limits](guide/accounts-and-policy.md#rate-limits). The limiter is not asked about other
-requests. An error response to any request carries a fresh nonce.
+requests. An error answer to a request that spent no nonce counts as a `newNonce`. Without a
+limiter every error answer carries a fresh nonce.
 
 ### No TLS termination, CA or durable storage
 
