@@ -73,6 +73,7 @@ type Server struct {
 	orderLifetime     time.Duration
 	authzLifetime     time.Duration
 	maxIdentifiers    int
+	maxValidations    int
 	detachedWrite     time.Duration
 	workers           WorkerConfig
 	// The allowed revocation reason codes in ascending order and their names for refusals.
@@ -129,6 +130,7 @@ func New(cfg Config) (*Server, error) {
 		orderLifetime:     cfg.OrderLifetime,
 		authzLifetime:     cfg.AuthorizationLifetime,
 		maxIdentifiers:    cfg.MaxIdentifiers,
+		maxValidations:    cfg.MaxPendingValidations,
 		detachedWrite:     cfg.DetachedWriteTimeout,
 		workers:           workers,
 		wake:              make(chan struct{}, 1),
@@ -162,6 +164,9 @@ func New(cfg Config) (*Server, error) {
 	if s.maxIdentifiers == 0 {
 		s.maxIdentifiers = DefaultMaxIdentifiers
 	}
+	if s.maxValidations == 0 {
+		s.maxValidations = s.maxIdentifiers
+	}
 	if s.detachedWrite == 0 {
 		s.detachedWrite = DefaultDetachedWriteTimeout
 	}
@@ -188,7 +193,7 @@ func (cfg Config) validate() error {
 	case cfg.RequireTermsOfServiceAgreed && cfg.Meta.TermsOfService == "":
 		return errorf("Config.RequireTermsOfServiceAgreed needs Meta.TermsOfService")
 	case cfg.MaxRequestBody < 0 || cfg.OrderLifetime < 0 || cfg.AuthorizationLifetime < 0 ||
-		cfg.MaxIdentifiers < 0 || cfg.DetachedWriteTimeout < 0:
+		cfg.MaxIdentifiers < 0 || cfg.MaxPendingValidations < 0 || cfg.DetachedWriteTimeout < 0:
 		return errorf("Config limits must not be negative")
 	}
 	if err := cfg.validateAuthorityTokens(); err != nil {

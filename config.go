@@ -138,6 +138,11 @@ type Config struct {
 	AuthorizationLifetime time.Duration
 	// Bounds the identifiers of one order.
 	MaxIdentifiers int
+	// Bounds the validation tasks one account may have waiting or running at the same time. A
+	// challenge response beyond the bound is refused with rateLimited and a Retry-After header
+	// until earlier validations finish, so one account cannot occupy every worker for long. Zero
+	// selects the MaxIdentifiers in effect, which lets one full order validate at once.
+	MaxPendingValidations int
 	// Bounds a store write that has to finish after the client request it belongs to has ended,
 	// such as recording a revocation the Revoker already carried out. Zero selects
 	// DefaultDetachedWriteTimeout.

@@ -22,6 +22,9 @@ WHERE run_at <= ? AND lease_until <= ? ORDER BY run_at, sequence LIMIT 1`
 	insertCertificateSQL    = `INSERT INTO certificates(id, order_id, renewal_id, revision, data) VALUES (?, ?, ?, ?, ?)`
 	certificateByRenewalSQL = `SELECT id, revision, data FROM certificates WHERE renewal_id = ?`
 	pendingTasksSQL         = `SELECT count(*) FROM tasks WHERE run_at <= ? AND lease_until <= ?`
-	insertTaskSQL           = `INSERT INTO tasks(id, run_at, lease_until, fence, attempts, data) VALUES (?, ?, 0, 0, 0, ?)`
-	taskFenceSQL            = `SELECT fence FROM tasks WHERE id = ?`
+	leasedTasksSQL          = `SELECT count(*) FROM tasks WHERE lease_until > ?`
+	accountValidationsSQL   = `SELECT count(*) FROM tasks WHERE account_id = ? AND kind = ?`
+	insertTaskSQL           = `INSERT INTO tasks(id, kind, account_id, run_at, lease_until, fence, attempts, data)
+VALUES (?, ?, ?, ?, 0, 0, 0, ?)`
+	taskFenceSQL = `SELECT fence FROM tasks WHERE id = ?`
 )

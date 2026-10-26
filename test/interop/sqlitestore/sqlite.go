@@ -74,10 +74,12 @@ CREATE TABLE IF NOT EXISTS challenges (id TEXT PRIMARY KEY, authorization_id TEX
 authorizations(id), revision INTEGER NOT NULL, data BLOB NOT NULL);
 CREATE TABLE IF NOT EXISTS certificates (id TEXT PRIMARY KEY, order_id TEXT NOT NULL REFERENCES orders(id),
 renewal_id TEXT UNIQUE, revision INTEGER NOT NULL, data BLOB NOT NULL);
-CREATE TABLE IF NOT EXISTS tasks (sequence INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE NOT NULL, run_at
-INTEGER NOT NULL, lease_until INTEGER NOT NULL, fence INTEGER NOT NULL, attempts INTEGER NOT NULL, data BLOB
-NOT NULL);
+CREATE TABLE IF NOT EXISTS tasks (sequence INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE NOT NULL, kind
+TEXT NOT NULL, account_id TEXT NOT NULL, run_at INTEGER NOT NULL, lease_until INTEGER NOT NULL, fence INTEGER
+NOT NULL, attempts INTEGER NOT NULL, data BLOB NOT NULL);
 CREATE INDEX IF NOT EXISTS runnable_tasks ON tasks(run_at, lease_until, sequence);
+CREATE INDEX IF NOT EXISTS leased_tasks ON tasks(lease_until);
+CREATE INDEX IF NOT EXISTS account_tasks ON tasks(account_id, kind);
 `
 
 // Commits one consistent operation or rolls it back without exposing partial caller revisions.

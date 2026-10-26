@@ -220,6 +220,20 @@ func (s *Store) PendingTasks(ctx context.Context, before time.Time) (int, error)
 	return count, storageError(err)
 }
 
+// Counts tasks whose lease ends after the given time, which shows that a worker claimed recently.
+func (s *Store) LeasedTasks(ctx context.Context, now time.Time) (int, error) {
+	var count int
+	err := s.db.QueryRowContext(ctx, leasedTasksSQL, timestamp(now)).Scan(&count)
+	return count, storageError(err)
+}
+
+// Counts the validation tasks of an account that are waiting or leased.
+func (s *Store) AccountValidations(ctx context.Context, accountID string) (int, error) {
+	var count int
+	err := s.db.QueryRowContext(ctx, accountValidationsSQL, accountID, string(acmeserver.TaskValidate)).Scan(&count)
+	return count, storageError(err)
+}
+
 // Initializes task lease metadata without changing its identity or schedule.
 func resetTask(task *acmeserver.Task) {
 	task.Fence = 0
@@ -231,7 +245,7 @@ func resetTask(task *acmeserver.Task) {
 func insertTask(ctx context.Context, c *sql.Conn, task *acmeserver.Task) error {
 	copyOf := *task
 	resetTask(&copyOf)
-	return insert(ctx, c, insertTaskSQL, &copyOf, task.ID, timestamp(task.RunAt))
+	return insert(ctx, c, insertTaskSQL, &copyOf, task.ID, string(task.Kind), task.AccountID, timestamp(task.RunAt))
 }
 
 // Rejects stale workers after another process has reclaimed the lease.

@@ -622,6 +622,38 @@ func (s *Store) PendingTasks(ctx context.Context, before time.Time) (int, error)
 	return n, nil
 }
 
+// Counts tasks under a lease that ends after the given time.
+func (s *Store) LeasedTasks(ctx context.Context, now time.Time) (int, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	n := 0
+	for _, t := range s.tasks {
+		if t.LeaseUntil.After(now) {
+			n++
+		}
+	}
+	return n, nil
+}
+
+// Counts the unfinished validation tasks of an account.
+func (s *Store) AccountValidations(ctx context.Context, accountID string) (int, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	n := 0
+	for _, t := range s.tasks {
+		if t.Kind == acmeserver.TaskValidate && t.AccountID == accountID {
+			n++
+		}
+	}
+	return n, nil
+}
+
 // Checks that the order exists at the given revision.
 func (s *Store) checkOrder(order *acmeserver.Order) error {
 	stored, ok := s.orders[order.ID]
