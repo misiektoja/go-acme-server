@@ -39,7 +39,8 @@ type ExternalAccountKeys interface {
 
 Implement it over your key registry and set `Config.ExternalAccounts`. Return `ErrNotFound` for an
 unknown identifier, which becomes an `unauthorized` problem. Return any other error for a lookup
-failure. HS256, HS384 and HS512 are accepted. RFC 7518 section 3.2 requires a key at least as long
+failure. A key identifier longer than 256 bytes is refused with `malformed` before the lookup.
+HS256, HS384 and HS512 are accepted. RFC 7518 section 3.2 requires a key at least as long
 as the hash, so a 256-bit key works with HS256 only and a 512-bit key with all three. A binding
 whose algorithm needs a longer key is refused with `badSignatureAlgorithm` listing the algorithms
 the key allows. A key shorter than 256 bits is refused with `unauthorized` and logged. Issue keys of
@@ -95,8 +96,9 @@ A returned `*Problem` is sent to the client. Any other error is logged and answe
 
 ## Rate limits
 
-`Config.Limits` takes a `Limiter`, which decides how often clients may get nonces, create accounts
-and place orders. Without one nothing is limited.
+`Config.Limits` takes a `Limiter`, which decides how often clients may get nonces, create accounts,
+place orders, start validations and look up renewal information. Without one only the bound on
+[validations in progress](#validations-in-progress) applies.
 
 ```go
 type Limiter interface {
@@ -108,16 +110,28 @@ type Limiter interface {
 
 | `LimitRequest.Kind` | Asked | Fields set |
 | --- | --- | --- |
-| `LimitNewNonce` | Before a nonce is issued | `Client` |
+| `LimitNewNonce` | Before a nonce is issued to a request that spent none: a `newNonce` request or an error answer to a request for an unknown resource, with a wrong method, an unparsable JWS or a bad nonce | `Client` |
 | `LimitNewAccount` | After the contacts, terms of service and external account binding were checked, before `Policy.NewAccount`. A request that finds an existing account is not asked about | `Client`, `Account` (not yet stored) |
 | `LimitNewOrder` | After the identifiers, profile and `replaces` were checked, before `Policy.NewOrder` | `Client`, `Account`, `Identifiers` (normalized), `Replaces` |
+| `LimitChallengeResponse` | After a response to a pending challenge was checked and counted against `MaxPendingValidations`, before the validation is enqueued. A repeated response to a challenge that is already processing is not asked about | `Client`, `Account`, `Identifiers` (the one identifier of the authorization, with its wildcard prefix), `PendingValidations` |
+| `LimitRenewalInfo` | Before the certificate lookup of a `renewalInfo` request with a well-formed identifier | `Client` |
 
 Count the request when you return nil. To refuse, return a `rateLimited` problem with
 `WithRetryAfter`. The client gets status 429 and a `Retry-After` header in whole seconds, rounded
-up. A refused `newNonce` answer carries no `Replay-Nonce`. Refused `newAccount` and `newOrder`
-answers carry one, like every other error. Any other error is logged and answered with
-`serverInternal`. Return nil on errors instead if clients should keep working while your limit
-store is unavailable. New kinds may be added in later versions, so allow kinds you do not know.
+up. Refused `newNonce` and `renewalInfo` answers carry no `Replay-Nonce`. Refused `newAccount`,
+`newOrder` and challenge response answers carry one, since those requests spent a nonce. A refused
+challenge response leaves the challenge `pending`, so the client can respond again later. Any
+other error is logged and answered with `serverInternal`. Return nil on errors instead if clients
+should keep working while your limit store is unavailable. New kinds may be added in later
+versions, so allow kinds you do not know.
+
+Every error answer carries a nonce, as RFC 8555 section 6.5 recommends. An answer to a request
+that spent no valid nonce, such as 404, 405, 415, an unparsable JWS or `badNonce`, asks about
+`LimitNewNonce` first. When refused, the answer keeps its status and carries no nonce. A refused
+`badNonce` answer becomes the limiter's problem instead, because the RFC requires a nonce on every
+`badNonce` answer. An answer to a request that spent its nonce carries the replacement without
+asking. Without a limiter every error answer carries a nonce, so a client can collect nonces
+faster than it uses them and push older nonces of other clients out of `nonce.Options.Capacity`.
 
 ```go
 func (l limits) Allow(ctx context.Context, req acmeserver.LimitRequest) error {
@@ -143,6 +157,21 @@ per-address limits on the prefix rather than the full address.
 `Replaces` is set only after the server has checked that the replaced certificate belongs to the
 account and shares an identifier with the order, so a client cannot claim to renew someone else's
 certificate to escape a limit.
+
+## Validations in progress
+
+Every accepted challenge response becomes a validation task. A validation of a destination that
+accepts connections and never answers holds a worker for the whole `NetworkOptions.Timeout` on
+each attempt. `Config.MaxPendingValidations` bounds how many validations one account may have
+waiting or running at the same time. It defaults to `MaxIdentifiers`, so one full order can
+always be validated at once. A response beyond the bound is refused with `rateLimited` and a
+`Retry-After` of `WorkerConfig.TaskTimeout`, by which time at least one attempt of an earlier
+validation has ended. The challenge stays `pending` and the client responds again later.
+
+The bound is per account. Use `LimitChallengeResponse`, which reports the account's
+`PendingValidations`, together with limits on new accounts and orders to decide how much
+validation work a client may start over time. Concurrent responses may pass the bound together,
+so it is exact only up to the number of requests in flight.
 
 ## Pre-approved identifiers
 

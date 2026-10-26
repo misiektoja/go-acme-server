@@ -2,7 +2,10 @@
 #
 # The site is served from the `gh-pages` branch. Every push and pull request that touches the
 # documentation runs the strict build, so a broken link or a page missing from the navigation is
-# reported before it reaches the default branch. Only the default branch publishes.
+# reported before it reaches the default branch. Only the default branch publishes. The build job
+# runs with read access and hands the rendered site to the publish job as an artifact, so the
+# documentation toolchain installed from PyPI never runs with the token that can push to the
+# published branch.
 name: Documentation
 
 on:
@@ -42,15 +45,26 @@ jobs:
           persist-credentials: false
 
       - name: Setup Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.13"
 
       - name: Install the documentation dependencies
         run: make docs-deps
 
+      - name: Check the documentation dependencies
+        run: python3 -m pip check
+
       - name: Build the documentation
         run: make docs-build
+
+      - name: Keep the rendered site
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: site
+          path: site/
+          if-no-files-found: error
+          retention-days: 7
 
   publish:
     name: Publish to GitHub Pages
@@ -66,21 +80,12 @@ jobs:
       group: gh-pages
       cancel-in-progress: false
     steps:
-      - name: Clone the code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The publish job needs no checkout: it only pushes the site the build job rendered.
+      - name: Download the rendered site
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          persist-credentials: false
-
-      - name: Setup Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.13"
-
-      - name: Install the documentation dependencies
-        run: make docs-deps
-
-      - name: Build the documentation
-        run: make docs-build
+          name: site
+          path: site
 
       - name: Fetch the published branch
         env:

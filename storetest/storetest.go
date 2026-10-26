@@ -36,6 +36,7 @@ func Run(t *testing.T, open func(t *testing.T) acmeserver.Store) {
 	t.Run("AcceptChallenge", func(t *testing.T) { testAcceptChallenge(t, open(t)) })
 	t.Run("ClaimTask", func(t *testing.T) { testClaimTask(t, open(t)) })
 	t.Run("ConcurrentClaim", func(t *testing.T) { testConcurrentClaim(t, open(t)) })
+	t.Run("TaskCounts", func(t *testing.T) { testTaskCounts(t, open(t)) })
 	t.Run("RetryValidation", func(t *testing.T) { testRetryValidation(t, open(t)) })
 	t.Run("CompleteValidation", func(t *testing.T) { testCompleteValidation(t, open(t)) })
 	t.Run("FinalizeAndIssue", func(t *testing.T) { testFinalizeAndIssue(t, open(t)) })

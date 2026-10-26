@@ -549,7 +549,7 @@ func (s *Server) serveChallenge(w http.ResponseWriter, r *http.Request, id strin
 			s.writeProblem(ctx, w, p)
 			return
 		}
-		ch, p = s.acceptChallenge(ctx, ch, req.Account, payload)
+		ch, p = s.acceptChallenge(ctx, ch, req.Account, clientAddr(r), payload)
 		if p != nil {
 			s.writeProblem(ctx, w, p)
 			return
@@ -560,8 +560,10 @@ func (s *Server) serveChallenge(w http.ResponseWriter, r *http.Request, id strin
 
 // Moves a pending challenge to processing and enqueues its validation. A challenge that is no
 // longer pending is returned unchanged without reading the payload, so repeated responses are
-// harmless whatever they carry.
-func (s *Server) acceptChallenge(ctx context.Context, ch *Challenge, account *Account,
+// harmless whatever they carry. The account's validations that are waiting or running are bounded
+// by Config.MaxPendingValidations before the Limiter is asked, so one account cannot fill the
+// worker queue with validations of destinations that never answer.
+func (s *Server) acceptChallenge(ctx context.Context, ch *Challenge, account *Account, client netip.Addr,
 	payload challengeResponseJSON) (*Challenge, *Problem) {
 	if ch.Status != ChallengePending {
 		return ch, nil
@@ -577,6 +579,22 @@ func (s *Server) acceptChallenge(ctx context.Context, ch *Challenge, account *Ac
 	now := s.clock.Now()
 	if status := effectiveAuthzStatus(authz, now); status != AuthorizationPending {
 		return nil, Problemf(ErrorMalformed, "authorization is %s", string(status))
+	}
+	pending, err := s.store.AccountValidations(ctx, account.ID)
+	if err != nil {
+		s.logError(ctx, "validation count failed", err)
+		return nil, NewProblem(ErrorServerInternal, "validation count failed")
+	}
+	if pending >= s.maxValidations {
+		// Concurrent responses may pass this check together, so the bound is approximate by the
+		// number of requests in flight. The current attempt of any counted validation ends within
+		// TaskTimeout, which makes it the earliest useful time to try again.
+		return nil, Problemf(ErrorRateLimited, "the account has %d validations waiting or running, the limit is %d",
+			pending, s.maxValidations).WithRetryAfter(s.workers.TaskTimeout)
+	}
+	if p := s.checkLimit(ctx, LimitRequest{Kind: LimitChallengeResponse, Client: client, Account: account,
+		Identifiers: []Identifier{authz.orderIdentifier()}, PendingValidations: pending}); p != nil {
+		return nil, p
 	}
 	taskID, err := newID()
 	if err != nil {

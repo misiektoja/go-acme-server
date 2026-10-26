@@ -104,6 +104,15 @@ type Authorization struct {
 	Revision    uint64
 }
 
+// Returns the identifier as the order named it, with the wildcard prefix restored.
+func (a *Authorization) orderIdentifier() Identifier {
+	id := a.Identifier
+	if a.Wildcard {
+		id.Value = "*." + id.Value
+	}
+	return id
+}
+
 // A stored challenge resource.
 type Challenge struct {
 	ID              string

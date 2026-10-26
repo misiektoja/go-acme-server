@@ -94,10 +94,11 @@ mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 ```
 
 `Ready` counts tasks that have waited longer than `WorkerConfig.StaleAfter` without being claimed.
-It returns an error when there are any, which means no worker is picking up work. It reports the
-state of the store, so it is correct in the handler process even when the worker runs elsewhere.
-Wire it into the readiness or liveness probe of whichever process should be restarted when work
-stalls.
+It returns an error when there are any and no task is leased, which means no worker is picking up
+work. A queue that is deep because workers are busy passes, so client load cannot fail the probe.
+It reports the state of the store, so it is correct in the handler process even when the worker
+runs elsewhere. Wire it into the readiness or liveness probe of whichever process should be
+restarted when work stalls.
 
 ## Logging
 

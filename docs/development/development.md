@@ -6,7 +6,7 @@ How to build, check and change the library. Contribution rules are in
 ## Prerequisites
 
 * Go at the version `go.mod` declares. Every Make target runs with exactly that toolchain, which Go downloads on first use when the installed version differs.
-* Python 3 with the pinned MkDocs dependencies for the documentation site, installed by `make docs-deps`.
+* Python 3 with the MkDocs dependencies for the documentation site, installed by `make docs-deps` from distributions pinned by hash.
 * Python 3.14 for the Certbot environment of the interoperability tests. See [Testing](testing.md).
 * Docker, kind and kubectl only for the cert-manager scenario.
 
@@ -57,6 +57,14 @@ make docs-serve PYTHON=.venv/bin/python
 `make docs-build` runs with `--strict`, so a broken link, a missing anchor or a page absent from
 the navigation fails the build. CI runs the same build on every change to the documentation and
 publishes the site from the default branch.
+
+`docs/requirements.in` names the direct dependencies. `docs/requirements.txt` is compiled from it
+with every distribution pinned by hash and `make docs-deps` installs nothing else. After changing
+a pin, recompile it with pip-tools:
+
+```bash
+pip-compile --generate-hashes --strip-extras docs/requirements.in
+```
 
 Package documentation on [pkg.go.dev](https://pkg.go.dev/github.com/misiektoja/go-acme-server)
 comes from the Go doc comments. Every exported identifier and every configuration field has one.

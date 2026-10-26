@@ -32,7 +32,7 @@ what is covered.
 go get github.com/misiektoja/go-acme-server
 ```
 
-The module needs Go 1.27.2 or newer. The root package is imported as `acmeserver`. The bundled
+The module needs Go 1.27.3 or newer. The root package is imported as `acmeserver`. The bundled
 validators are in `challenge`, the in-memory store in `memstore`, the single-process nonce manager
 in `nonce` and the contract suites for stores and nonce managers in `storetest` and `noncetest`.
 

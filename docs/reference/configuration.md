@@ -35,9 +35,10 @@ problem. Zero values select the defaults below. Negative limits are refused.
 | `OrderLifetime` | 7 days | How long a new order and its pending authorizations stay valid |
 | `AuthorizationLifetime` | 30 days | How long a validated authorization stays valid |
 | `MaxIdentifiers` | 100 | Bounds the identifiers of one order |
+| `MaxPendingValidations` | `MaxIdentifiers` | Bounds the validations one account may have waiting or running. A challenge response beyond it is refused with `rateLimited`. See [Validations in progress](../guide/accounts-and-policy.md#validations-in-progress) |
 | `RevocationReasons` | 0, 1, 3, 4 and 5 | The RFC 5280 reason codes clients may request. May hold 0 to 5, 9 and 10. See [Revocation](../guide/revocation.md#reason-codes) |
 | `Refusals` | none | Learns about `finalize` and `revokeCert` requests the server refuses. See [Recording refusals](../guide/embedding.md#recording-refusals) |
-| `Limits` | none | Limits how often clients may get nonces, create accounts and place orders. See [Rate limits](../guide/accounts-and-policy.md#rate-limits) |
+| `Limits` | none | Limits how often clients may get nonces, create accounts, place orders, start validations and look up renewal information. See [Rate limits](../guide/accounts-and-policy.md#rate-limits) |
 | `DetachedWriteTimeout` | 30 seconds | Bounds a store write that finishes after the client request ended, such as recording a revocation the CA already carried out |
 | `RenewalInfo` | none | Serves RFC 9773 renewal information and accepts `replaces`. `LifetimeRenewal{}` is the built-in advisor |
 | `Profiles` | none | The certificate profiles advertised in the directory and accepted on new orders. See [Certificate profiles](../guide/certificate-profiles.md) |
@@ -74,7 +75,7 @@ configured. Configured profiles appear in it as `profiles`.
 | `TaskTimeout` | 30 seconds, or half of `Lease` if that is shorter | Bounds each phase of a task separately: one validator or issuer call, and each store operation that records its outcome. The lease bounds the whole run |
 | `MaxAttempts` | 5 | Limits validation and pre-dispatch policy retries. Issuance recovery is not limited |
 | `RetryDelay` | 5 seconds | The first retry delay, doubled on every further attempt up to 32 times the base |
-| `StaleAfter` | 1 minute | How long accepted work may wait unclaimed before `Ready` reports a problem |
+| `StaleAfter` | 1 minute | How long accepted work may wait unclaimed before `Ready` reports a problem, once no worker holds a lease |
 | `External` | `false` | Declares that `Run` is active in another process, which silences the warning logged when work is accepted while no local worker runs |
 
 ## Package defaults

@@ -59,18 +59,28 @@ func (s *Server) Run(ctx context.Context) error {
 }
 
 // Reports whether accepted work is being picked up. It returns an error when tasks have waited
-// longer than WorkerConfig.StaleAfter without a claim. Either no Run is active on the store or
-// every worker is busy or stuck.
+// longer than WorkerConfig.StaleAfter without a claim while no task is leased, which means no Run
+// is active on the store or every worker is stuck. A queue that is deep because clients keep the
+// workers busy is not an error, so client load cannot fail a readiness probe. A worker that died
+// holding leases is reported once they expire.
 func (s *Server) Ready(ctx context.Context) error {
-	n, err := s.store.PendingTasks(ctx, s.clock.Now().Add(-s.workers.StaleAfter))
+	now := s.clock.Now()
+	stale, err := s.store.PendingTasks(ctx, now.Add(-s.workers.StaleAfter))
 	if err != nil {
 		return fmt.Errorf("acmeserver: pending task count: %w", err)
 	}
-	if n > 0 {
-		return fmt.Errorf("acmeserver: %d tasks have waited longer than %s for a worker", n,
-			s.workers.StaleAfter)
+	if stale == 0 {
+		return nil
 	}
-	return nil
+	leased, err := s.store.LeasedTasks(ctx, now)
+	if err != nil {
+		return fmt.Errorf("acmeserver: leased task count: %w", err)
+	}
+	if leased > 0 {
+		return nil
+	}
+	return fmt.Errorf("acmeserver: %d tasks have waited longer than %s and no worker holds a lease",
+		stale, s.workers.StaleAfter)
 }
 
 // Wakes an in-process Run and warns when none is active.

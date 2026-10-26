@@ -28,7 +28,7 @@ database.
 | `AccountStore` | `CreateAccount`, `Account`, `AccountByKey`, `UpdateAccount` | Account ID, key thumbprint and a non-empty `ExternalAccountClaim` are each unique |
 | `OrderStore` | `CreateOrder`, `Order`, `OrderIDs`, `Authorization`, `UpdateAuthorization`, `AuthorizedFor`, `Challenge` | `CreateOrder` writes the order with all its authorizations and challenges |
 | `CertificateStore` | `Certificate`, `CertificateByRenewalID`, `UpdateCertificate` | A non-empty `RenewalID` is unique |
-| `WorkStore` | `AcceptChallenge`, `FinalizeOrder`, `BeginIssuance`, `ClaimTask`, `RescheduleTask`, `RetryValidation`, `FinishTask`, `CompleteValidation`, `CompleteIssuance`, `PendingTasks` | Combines resource updates with task changes in one transaction |
+| `WorkStore` | `AcceptChallenge`, `FinalizeOrder`, `BeginIssuance`, `ClaimTask`, `RescheduleTask`, `RetryValidation`, `FinishTask`, `CompleteValidation`, `CompleteIssuance`, `PendingTasks`, `LeasedTasks`, `AccountValidations` | Combines resource updates with task changes in one transaction |
 
 The Go documentation on each method states its exact semantics. The sections below explain the
 ones that carry the most weight.
@@ -63,7 +63,10 @@ that lost its lease from committing a stale result.
 
 `RescheduleTask` releases the lease and stores the new `RunAt`. `FinishTask` removes the task
 without touching any resource. `PendingTasks` counts tasks that were runnable at or before a time
-and hold no lease past it, which `Ready` uses to detect that no worker is active.
+and hold no lease past it. `LeasedTasks` counts tasks whose lease ends after a time. `Ready` reads
+both to tell a dead worker from a busy one. `AccountValidations` counts the validation
+tasks of one account that have not finished, leased or not, which bounds the validations an
+account may start. Index tasks by account and kind for it.
 
 ## Composite operations
 

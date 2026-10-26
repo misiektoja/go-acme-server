@@ -684,6 +684,57 @@ func TestReadyAndRunGuards(t *testing.T) {
 	}
 }
 
+// Keeps Ready passing while workers hold leases, however deep the queue behind them is, so client
+// load cannot fail a readiness probe.
+func TestReadyPassesWhileWorkersAreBusy(t *testing.T) {
+	validator := &stallingValidator{}
+	f := newFlow(t, func(cfg *acmeserver.Config) {
+		cfg.Validators = map[acmeserver.ChallengeType]acmeserver.Validator{acmeserver.ChallengeHTTP01: validator}
+		cfg.Workers = acmeserver.WorkerConfig{Concurrency: 1, PollInterval: 5 * time.Millisecond, Lease: 2 * time.Second,
+			TaskTimeout: time.Second, MaxAttempts: 1, RetryDelay: time.Millisecond, StaleAfter: 20 * time.Millisecond}
+	})
+	f.runWorker()
+	c := f.newClient()
+	c.register()
+	_, order := c.newOrder("a.test", "b.test", "c.test")
+	c.respondHTTP01(order)
+	waitFor(t, "a validation in progress", func() bool { return validator.calls.Load() >= 1 })
+	waitFor(t, "stale waiting work behind it", func() bool {
+		n, _ := f.store.PendingTasks(t.Context(), time.Now().Add(-20*time.Millisecond))
+		return n >= 1
+	})
+	if err := f.srv.Ready(t.Context()); err != nil {
+		t.Fatalf("Ready with a busy worker and waiting work: %v", err)
+	}
+}
+
+// Reports waiting work once the lease of a worker that stopped has expired.
+func TestReadyFailsOnceLeasesExpire(t *testing.T) {
+	var mu sync.Mutex
+	now := time.Now()
+	f := newFlow(t, func(cfg *acmeserver.Config) {
+		cfg.Clock = acmeserver.ClockFunc(func() time.Time { mu.Lock(); defer mu.Unlock(); return now })
+	})
+	advance := func(d time.Duration) { mu.Lock(); now = now.Add(d); mu.Unlock() }
+	c := f.newClient()
+	c.register()
+	_, order := c.newOrder("a.test", "b.test")
+	c.respondHTTP01(order)
+	// A worker claims one task and then stops without finishing it.
+	if _, err := f.store.ClaimTask(t.Context(), now, now.Add(2*time.Second)); err != nil {
+		t.Fatalf("ClaimTask: %v", err)
+	}
+	advance(100 * time.Millisecond)
+	if err := f.srv.Ready(t.Context()); err != nil {
+		t.Fatalf("Ready while the lease is held: %v", err)
+	}
+	advance(3 * time.Second)
+	err := f.srv.Ready(t.Context())
+	if err == nil || !strings.Contains(err.Error(), "2 tasks have waited longer than 50ms and no worker holds a lease") {
+		t.Fatalf("Ready after the lease expired = %v", err)
+	}
+}
+
 // Parses a PEM chain and checks the erratum 5983 layout of one newline after each block.
 func parsePEMChain(t *testing.T, body []byte) []*x509.Certificate {
 	t.Helper()

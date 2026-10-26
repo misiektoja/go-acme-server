@@ -9,7 +9,7 @@ the loopback address. It runs over HTTPS because ACME clients such as lego refus
 
 ## What you need
 
-* Go 1.27.2 or newer, the minimum the module declares
+* Go 1.27.3 or newer, the minimum the module declares
 * [lego](https://go-acme.github.io/lego/) as the client, run below with `go run`
 * Ports 4000 and 5002 free on the local machine
 
@@ -48,8 +48,8 @@ The program has four parts and each one is a seam where your own code goes later
 
 Two calls are required and easy to forget. `mux.Handle` serves the protocol and `srv.Run` processes
 the validation and issuance work. Without the worker, challenges stay pending forever and orders never
-issue. The `/healthz` handler calls `Ready`, which fails once accepted work has waited too long for a
-worker.
+issue. The `/healthz` handler calls `Ready`, which fails once accepted work has waited too long while no
+worker holds a lease.
 
 ## Step 2: run it
 

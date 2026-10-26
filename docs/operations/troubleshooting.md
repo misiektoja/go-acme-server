@@ -8,7 +8,7 @@ are on the host side of the contracts, so start with the integration rather than
 The client posted its response and nothing happens. The challenge shows `processing` with a
 `Retry-After` and never changes.
 
-* **No worker is running.** `Run` must be active in this or another process on the same store. Call `Ready`, which fails once tasks have waited longer than `WorkerConfig.StaleAfter`. The handler logs `work accepted while Run is not active in this process` unless `WorkerConfig.External` is set.
+* **No worker is running.** `Run` must be active in this or another process on the same store. Call `Ready`, which fails once tasks have waited longer than `WorkerConfig.StaleAfter` while no task is leased. The handler logs `work accepted while Run is not active in this process` unless `WorkerConfig.External` is set.
 * **The worker runs against another store.** With `memstore` every process has its own store, so a handler and a worker in different processes never meet. Use a shared durable store.
 * **The validator is slow.** Each attempt takes up to `NetworkOptions.Timeout` and a transport failure is retried with backoff up to `WorkerConfig.MaxAttempts`. Look for `validation will be retried` in the log with the error.
 
@@ -45,7 +45,7 @@ A single `badNonce` is normal after a restart or when a nonce expires. Clients r
 in the response. Persistent `badNonce`:
 
 * **Several handler replicas** with in-memory nonces. See [Deployment](deployment.md#replicas).
-* **Nonce capacity exceeded.** `nonce.Options.Capacity` bounds outstanding nonces and the oldest are dropped. Raise it or shorten the TTL.
+* **Nonce capacity exceeded.** `nonce.Options.Capacity` bounds outstanding nonces and the oldest are dropped. Raise it, shorten the TTL or limit `newNonce` with a `Limiter`, which also bounds the nonces that error answers hand out.
 
 ## The account is gone after a restart
 
@@ -100,9 +100,11 @@ it. The operation ID and reason are already stored on the certificate, so the cl
 
 ## Ready fails in a healthy system
 
-`Ready` counts tasks that were runnable more than `WorkerConfig.StaleAfter` ago and are not leased.
-A queue that is deeper than the workers drain within a minute trips it. Raise `Concurrency`, add
-worker processes or raise `StaleAfter` to match the expected queue delay.
+`Ready` fails when tasks were runnable more than `WorkerConfig.StaleAfter` ago and no task is
+leased. Busy workers hold leases, so a deep queue alone does not trip it. If it fails with work
+waiting, no worker claimed anything within `StaleAfter` and the last leases have expired: `Run` is
+not active on this store or its workers are stuck. A worker that stops while holding leases is
+reported after they expire, so a failure right after a restart can lag by up to `WorkerConfig.Lease`.
 
 ## Getting help
 

@@ -1,12 +1,14 @@
 package acmeserver
 
 import (
+	"context"
 	"crypto"
 	"errors"
 	"io"
 	"log/slog"
 	"mime"
 	"net/http"
+	"net/netip"
 	"strings"
 
 	"github.com/misiektoja/go-acme-server/internal/jws"
@@ -27,6 +29,25 @@ const (
 
 // Bounds the opaque resource IDs that appear in URLs.
 const maxIDLength = 64
+
+// Facts about the current request that the response writers need. ServeHTTP stores one in the
+// request context, so handlers reach it through any context derived from the request.
+type requestState struct {
+	// The address of the client connection, see clientAddr.
+	client netip.Addr
+	// Whether the request spent a valid nonce. Such a request has earned the replacement nonce
+	// that every answer carries, while any other request gets one only when the Limiter allows.
+	nonceSpent bool
+}
+
+// Keys the requestState in a context.
+type requestStateKey struct{}
+
+// Returns the context's requestState. It is nil for a context ServeHTTP did not prepare.
+func requestStateFrom(ctx context.Context) *requestState {
+	st, _ := ctx.Value(requestStateKey{}).(*requestState)
+	return st
+}
 
 // A verified ACME POST with its nonce consumed and signature checked.
 type signedRequest struct {
@@ -64,6 +85,9 @@ func (s *Server) readSignedRequest(r *http.Request, rel string, mode keyMode) (*
 		// ignores the problem type, so the detail keeps that phrase.
 		return nil, NewProblem(ErrorBadNonce,
 			"JWS has an invalid anti-replay nonce: it is unknown, expired or was already used")
+	}
+	if st := requestStateFrom(ctx); st != nil {
+		st.nonceSpent = true
 	}
 	expected := s.resourceURL(rel)
 	if r.URL.RawQuery != "" || r.URL.ForceQuery {

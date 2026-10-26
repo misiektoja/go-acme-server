@@ -105,6 +105,10 @@ type WorkStore interface {
 	CompleteIssuance(ctx context.Context, task *Task, order *Order, cert *Certificate) error
 	// Counts tasks that were runnable at or before the given time and hold no lease past it.
 	PendingTasks(ctx context.Context, before time.Time) (int, error)
+	// Counts tasks that hold a lease past the given time.
+	LeasedTasks(ctx context.Context, now time.Time) (int, error)
+	// Counts the validation tasks of an account that have not finished, waiting or leased.
+	AccountValidations(ctx context.Context, accountID string) (int, error)
 }
 
 // The persistence contract a host supplies. Operations must be free of side effects a retry

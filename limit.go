@@ -13,7 +13,10 @@ type LimitKind string
 // The requests a Limiter is asked about. More kinds may be added, so a Limiter should allow kinds
 // it does not know.
 const (
-	// A newNonce request. LimitRequest.Account is nil.
+	// A request that gets a nonce without having spent one: a newNonce request or an error
+	// answer to a request that spent no valid nonce, such as one for an unknown resource, with a
+	// wrong method, an unparsable JWS or a bad nonce. An error answer to a request that spent a
+	// nonce carries its replacement without asking. LimitRequest.Account is nil.
 	LimitNewNonce LimitKind = "newNonce"
 	// A newAccount request that creates an account, asked after the contacts, the terms of service
 	// agreement and any external account binding were checked. A request for an existing account
@@ -22,6 +25,14 @@ const (
 	// A newOrder request, asked after its identifiers, profile and replaces member were checked and
 	// before Policy.NewOrder.
 	LimitNewOrder LimitKind = "newOrder"
+	// A challenge response that starts a validation, asked after the response and the
+	// authorization were checked and the account's validations were counted against
+	// Config.MaxPendingValidations, before the validation is enqueued. A response to a challenge
+	// that is no longer pending is not asked about.
+	LimitChallengeResponse LimitKind = "challengeResponse"
+	// An unauthenticated renewalInfo request with a well-formed identifier, asked before the
+	// certificate is looked up. LimitRequest.Account is nil.
+	LimitRenewalInfo LimitKind = "renewalInfo"
 )
 
 // Describes a request a Limiter may refuse. The Limiter must not change Account.
@@ -32,21 +43,26 @@ type LimitRequest struct {
 	// headers are never read, because any client can set them. A host behind a trusted reverse
 	// proxy can rewrite RemoteAddr before the request reaches the handler.
 	Client netip.Addr
-	// For newAccount the account the request would create, not yet stored. For newOrder the
-	// account requesting the order.
+	// For newAccount the account the request would create, not yet stored. For newOrder and
+	// challengeResponse the account making the request.
 	Account *Account
-	// The normalized identifiers of a new order.
+	// For newOrder the normalized identifiers of the order. For challengeResponse the identifier
+	// of the authorization, with its wildcard prefix.
 	Identifiers []Identifier
 	// The certificate a new order replaces, checked against the account and the identifiers as
 	// RFC 9773 section 5 requires. Empty when the order replaces nothing.
 	Replaces string
+	// For challengeResponse the validations of the account that are waiting or running before
+	// this one. The server has already checked that it is below Config.MaxPendingValidations.
+	PendingValidations int
 }
 
-// Limits how often clients may get nonces, create accounts and place orders. Allow is asked once
-// for each such request and should count the request when it returns nil. A returned *Problem is
-// sent to the client, normally rateLimited with WithRetryAfter so the client knows when to try
-// again. Any other error is logged and answered with serverInternal, so a host that prefers to
-// serve clients while its limit store is unavailable returns nil instead.
+// Limits how often clients may get nonces, create accounts, place orders, start validations and
+// look up renewal information. Allow is asked once for each such request and should count the
+// request when it returns nil. A returned *Problem is sent to the client, normally rateLimited
+// with WithRetryAfter so the client knows when to try again. Any other error is logged and
+// answered with serverInternal, so a host that prefers to serve clients while its limit store is
+// unavailable returns nil instead.
 type Limiter interface {
 	Allow(ctx context.Context, req LimitRequest) error
 }
