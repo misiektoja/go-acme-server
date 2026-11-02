@@ -4,9 +4,9 @@ go 1.27.3
 
 require (
 	github.com/cloudflare/circl v1.6.5
-	github.com/misiektoja/go-composite-mldsa v0.2.1
+	github.com/misiektoja/go-composite-mldsa v0.2.2
 	golang.org/x/crypto v0.58.0
-	golang.org/x/net v0.61.0
+	golang.org/x/net v0.62.0
 )
 
 require (
