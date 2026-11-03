@@ -1537,7 +1537,9 @@ what it proves.</p>
 <div class="highlight"><pre><span></span><code>make<span class="w"> </span><span class="nb">test</span>
 </code></pre></div>
 <p>Runs <code>go vet</code> and every test under the race detector with coverage written to the scratch
-directory. The root package tests drive complete flows through the handler with <code>memstore</code>, a test
+directory. CI uploads that profile to <a href="https://app.codecov.io/gh/misiektoja/go-acme-server">Codecov</a>,
+which leaves out <code>examples/</code> and the <code>noncetest</code>, <code>storetest</code> and <code>internal/slhdsatest</code> helpers.
+The root package tests drive complete flows through the handler with <code>memstore</code>, a test
 CA and test validators, including account, order, renewal, revocation, timeout, recovery and
 <code>tkauth-01</code> scenarios. The <code>challenge</code> tests check proof and egress rules against local servers.
 <code>memstore</code> runs the <code>storetest</code> suite and <code>nonce</code> runs the <code>noncetest</code> suite.</p>
