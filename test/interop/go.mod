@@ -5,13 +5,13 @@ go 1.27.3
 require (
 	github.com/cloudflare/circl v1.6.5
 	github.com/go-acme/lego/v4 v4.35.2
-	github.com/go-jose/go-jose/v4 v4.1.6
+	github.com/go-jose/go-jose/v4 v4.1.9
 	github.com/mholt/acmez/v3 v3.1.7
 	github.com/misiektoja/go-acme-server v0.0.0
-	github.com/misiektoja/go-composite-mldsa v0.2.1
+	github.com/misiektoja/go-composite-mldsa v0.2.2
 	golang.org/x/crypto v0.58.0
-	golang.org/x/net v0.61.0
-	modernc.org/sqlite v1.61.0
+	golang.org/x/net v0.62.0
+	modernc.org/sqlite v1.61.1
 )
 
 require (
