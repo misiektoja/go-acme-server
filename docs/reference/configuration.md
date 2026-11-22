@@ -1,3 +1,7 @@
+---
+description: "Reference for the go-acme-server acmeserver.Config fields, DirectoryMeta, Profile and WorkerConfig, with defaults and validation errors."
+---
+
 # Configuration
 
 `acmeserver.Config` is passed to `New`, which validates it and returns an error naming the first

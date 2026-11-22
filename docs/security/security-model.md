@@ -1,3 +1,7 @@
+---
+description: "The go-acme-server security model: trust boundaries, what the library enforces, what the host must provide and how threats are treated."
+---
+
 # Security model
 
 This page states what the library protects against, what it assumes about the host and where the

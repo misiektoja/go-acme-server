@@ -1,3 +1,7 @@
+---
+description: "Set up a go-acme-server checkout, run the Make targets, build the documentation site and follow the repository layout and code style."
+---
+
 # Development
 
 How to build, check and change the library. Contribution rules are in

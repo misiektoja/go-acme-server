@@ -1,3 +1,7 @@
+---
+description: "Reference for the ACME resources go-acme-server serves under its base URL, with paths, HTTP methods and the headers the handler expects."
+---
+
 # Endpoints
 
 Every resource lives below `Config.BaseURL`. The table uses `https://ca.example.com/acme/` as the

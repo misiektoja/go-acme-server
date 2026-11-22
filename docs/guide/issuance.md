@@ -1,3 +1,7 @@
+---
+description: "Implement the go-acme-server Issuer interface that signs certificates for finalized ACME orders, with CSR checks, publication and recovery rules."
+---
+
 # Issuing certificates
 
 The `Issuer` interface is where the host CA signs certificates. This page explains what the server

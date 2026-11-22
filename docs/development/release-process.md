@@ -1,3 +1,7 @@
+---
+description: "How a go-acme-server release is cut from a version tag, with semantic versioning, release notes, published artifacts and documentation steps."
+---
+
 # Release process
 
 A release is started by pushing a version tag that is reachable from `main` and by nothing else.

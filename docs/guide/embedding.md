@@ -1,3 +1,7 @@
+---
+description: "Embed go-acme-server in your Go program: construct the Server, mount the HTTP handler, run the worker, check readiness and shut down cleanly."
+---
+
 # Embedding the server
 
 This page covers the pieces every host needs regardless of its CA or database: constructing the

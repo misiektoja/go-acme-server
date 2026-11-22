@@ -1,3 +1,7 @@
+---
+description: "Enable ACME Renewal Information (ARI, RFC 9773) in go-acme-server so clients learn their renewal window and can replace an existing certificate."
+---
+
 # Renewal information
 
 RFC 9773 lets a server tell each client when to renew a certificate and lets a client name the

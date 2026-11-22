@@ -1,3 +1,7 @@
+---
+description: "Reference for ACME problem documents (RFC 7807 and RFC 8555 section 6.7) that go-acme-server sends, with HTTP status and what triggers each type."
+---
+
 # Errors
 
 Clients receive problem documents of RFC 7807 with the ACME error types of RFC 8555 section 6.7,

@@ -1,3 +1,7 @@
+---
+description: "How go-acme-server turns ACME requests into stored orders, validated authorizations and issued certificates, with its components and order lifecycle."
+---
+
 # Architecture
 
 go-acme-server is a protocol layer. It turns ACME requests into stored resources and background

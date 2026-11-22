@@ -1,3 +1,7 @@
+---
+description: "Offer certificate profiles from the go-acme-server ACME directory and let clients or accounts choose one with draft-ietf-acme-profiles."
+---
+
 # Certificate profiles
 
 A certificate profile is a named kind of certificate the CA issues, such as a TLS server

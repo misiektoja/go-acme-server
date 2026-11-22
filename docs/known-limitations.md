@@ -1,3 +1,7 @@
+---
+description: "Known limitations of go-acme-server: no pre-authorization, one chain per certificate, mailto contacts only and no built-in rate limits or CA."
+---
+
 # Known limitations
 
 Behavior to plan around in the current release. Each item states what is missing and what it

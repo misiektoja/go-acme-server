@@ -1,3 +1,7 @@
+---
+description: "Build a complete local ACME server in one Go file with go-acme-server and issue a certificate with an independent ACME client in three steps."
+---
+
 # Getting started
 
 This page builds a complete local ACME server in one Go file and issues a certificate with an

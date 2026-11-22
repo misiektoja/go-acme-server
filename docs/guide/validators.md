@@ -1,3 +1,7 @@
+---
+description: "Configure ACME challenge validators in go-acme-server for HTTP-01, DNS-01 and TLS-ALPN-01, with resolver, egress policy and custom validators."
+---
+
 # Challenge validators
 
 A validator proves that the client controls one identifier. The server offers a challenge type

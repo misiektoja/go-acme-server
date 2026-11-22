@@ -1,3 +1,7 @@
+---
+description: "Implement the go-acme-server Revoker interface for ACME certificate revocation, with who may revoke, reason codes and CRL or OCSP publication."
+---
+
 # Revocation
 
 The `Revoker` interface is where the host CA records a revocation. The server decides who may

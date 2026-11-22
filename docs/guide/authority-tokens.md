@@ -1,3 +1,7 @@
+---
+description: "Enable the RFC 9447 tkauth-01 Authority Token challenge for STIR certificates (RFC 9448) and 5G network function certificates in go-acme-server."
+---
+
 # Authority Token challenges
 
 The `tkauth-01` challenge of RFC 9447 proves authority through a token instead of control of a

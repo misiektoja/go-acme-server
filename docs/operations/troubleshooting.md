@@ -1,3 +1,7 @@
+---
+description: "Troubleshoot go-acme-server symptoms such as stuck challenges, badNonce, badCSR, invalidProfile and alreadyReplaced, with the check for each cause."
+---
+
 # Troubleshooting
 
 Symptoms, ordered by how often they come up, with the check that finds the cause. Most problems

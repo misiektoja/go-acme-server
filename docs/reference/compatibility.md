@@ -1,3 +1,7 @@
+---
+description: "The go-acme-server compatibility policy: semantic versioning, the public API surface, rules for each release and the supported Go version."
+---
+
 # Compatibility policy
 
 The module uses semantic versioning. The public API is every exported identifier of the root

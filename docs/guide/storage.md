@@ -1,3 +1,7 @@
+---
+description: "Implement the go-acme-server Store interface over your own database, covering revisions, tasks and leases. Verify it with the storetest suite."
+---
+
 # Storage
 
 The `Store` interface is how the server persists accounts, orders, authorizations, challenges,

@@ -1,3 +1,7 @@
+---
+description: "Configure ACME accounts in go-acme-server: directory metadata, terms of service, external account binding, rate limits and pre-approved identifiers."
+---
+
 # Accounts and policy
 
 This page covers what a host controls about who may register, what an account may order and what

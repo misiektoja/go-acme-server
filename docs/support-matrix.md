@@ -1,3 +1,7 @@
+---
+description: "Support matrix for go-acme-server listing implemented RFCs, challenge types, identifiers, key algorithms and host interfaces, plus what is out of scope."
+---
+
 # Support matrix
 
 What the library implements, what a configuration field turns on and what is out of scope. [Known limitations](known-limitations.md) explains the consequences of the gaps.

@@ -1,3 +1,7 @@
+---
+description: "ACME clients tested against go-acme-server, including Certbot, lego, acmez, Go crypto/acme and cert-manager, with versions and scenarios."
+---
+
 # Tested clients
 
 Independent ACME clients issue, revoke and replace certificates against the server in the
