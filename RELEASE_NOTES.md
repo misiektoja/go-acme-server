@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.8.1] - 22 Nov 2026
+
+This version requires Go 1.27.4, which fixes an HTTP/1 server crash in net/http, and updates the Go dependencies. It was tested with Certbot 5.10.0 and Go crypto/acme v0.59.0.
+
+### Host integration
+
+* **Go 1.27.4 or newer** is required. It carries the net/http fix for GO-2026-6859.
+* **Dependencies.** **golang.org/x/net v0.62.0** clears GO-2026-6860 and GO-2026-6866, which the library does not reach but dependency scanners report. **go-composite-mldsa v0.2.2** refuses composite keys with an RSA exponent that `crypto/rsa` cannot verify with. golang.org/x/crypto moves to v0.59.0.
+
+### Verification
+
+* **Tested clients:** acmez v3.1.7, Certbot 5.10.0, lego v4.35.2 and Go crypto/acme v0.59.0.
+
 ## [0.8.0] - 26 Oct 2026
 
 This release stops one account from monopolizing the validation workers and closes two ways for anonymous clients to spend server resources without a limit. **`Config.MaxPendingValidations`** bounds the validations an account may have waiting or running. The `Limiter` is asked about **challenge responses**, **renewal information lookups** and the nonces that **error answers** hand out. **`Ready`** no longer fails because clients keep the workers busy. Custom stores need two new counting methods. The module now requires Go 1.27.3.
