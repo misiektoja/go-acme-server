@@ -45,7 +45,7 @@ import (
 )
 
 // Names the Certbot version every required Certbot run must use.
-const certbotVersion = "certbot 5.8.0"
+const certbotVersion = "certbot 5.10.0"
 
 // Maps the Go clients the tests report to their modules, whose versions come from go.mod through the build.
 var clientModules = map[string]string{
