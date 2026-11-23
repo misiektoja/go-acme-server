@@ -10,7 +10,7 @@ require (
 	github.com/misiektoja/go-acme-server v0.0.0
 	github.com/misiektoja/go-composite-mldsa v0.2.2
 	golang.org/x/crypto v0.59.0
-	golang.org/x/net v0.62.0
+	golang.org/x/net v0.63.0
 	modernc.org/sqlite v1.62.0
 )
 
